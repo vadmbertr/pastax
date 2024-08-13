@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sealagrangiax"
+authors = [
+    { name = "Vadim Bertrand", email = "vadim.bertrand@univ-grenoble-alpes.fr" },
+]
+description = "A (stochastic) Lagrangian trajectories sampler for ocean surface drifters"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["stochastic", "lagrangian", "trajectory", "sampler", "simulator", "ocean", "sea", "drifter", "jax"]
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = {file = ["requirements.txt"]}
+dynamic = ["version"]
+
+[project.urls]
+"Homepage" = "https://github.com/vadmbertr/sealagrangiax"
+"Bug Tracker" = "https://github.com/vadmbertr/sealagrangiax/issues"
+
+[tool.setuptools.packages]
+find = {}

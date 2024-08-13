@@ -1,0 +1,194 @@
+import math
+from typing import Dict, Sequence
+
+import jax.numpy as jnp
+from jaxtyping import Array, Float
+from matplotlib.collections import LineCollection
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator, NullFormatter
+
+from ..trajectory import Batch, WHAT, Timeseries, TimeseriesEnsemble
+from ..utils import UNIT
+from ..utils.unit import meters_to_kilometers, sq_meters_to_sq_kilometers, seconds_to_days
+
+
+class Evaluation(Batch):
+    _members: Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
+    size: int
+
+    def __init__(
+            self,
+            states: Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
+    ):
+        self._members = states
+        self.size = len(states)
+
+    def get(self, key: str) -> Timeseries | Sequence[TimeseriesEnsemble | Timeseries]:
+        return self._members.get(key)
+
+    def items(self) -> ((str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]), ...):
+        return self._members.items()
+
+    def keys(self) -> (str, ...):
+        return self._members.keys()
+
+    def values(self) -> (Timeseries | Sequence[TimeseriesEnsemble | Timeseries], ...):
+        return self._members.values()
+
+    def plot(self, fig: plt.Axes, ti: int = None):
+        if ti is None:
+            ti = next(iter(self.values())).length
+
+        n_metrics = self.size
+
+        n_rows, n_cols = self.__guess_metrics_fig_layout(n_metrics)
+        axs = fig.subplots(n_rows, n_cols)
+
+        for i, metric in zip(range(n_metrics), self.values()):
+            rowi = i // n_cols
+            coli = i % n_cols
+            add_xlabel = rowi == n_rows - 1
+            add_legend = (rowi == 0 and coli == n_cols - 1)
+            self._plot_metric(ti, metric, add_xlabel, add_legend, axs[rowi, coli])
+
+    def _plot_metric(
+        self,
+        ti: int,
+        metric: Timeseries | Sequence[TimeseriesEnsemble | Timeseries],
+        add_xlabel: bool,
+        add_legend: bool,
+        ax: plt.Axes
+    ):
+        min_values, max_values, timedelta, unit, what = self.__do_plot_metric(ti, metric, add_legend, ax)
+        self.__set_axis_limits_labels(min_values, max_values, timedelta, unit, what, add_xlabel, ax)
+
+    def __do_plot_metric(
+        self,
+        ti: int,
+        metric: Timeseries | Sequence[TimeseriesEnsemble | Timeseries],
+        add_legend: bool,
+        ax: plt.Axes,
+        has_label: bool = False
+    ) -> (Float[Array, ""], Float[Array, ""], Float[Array, "time"], str, str):
+        if isinstance(metric, Timeseries) or isinstance(metric, TimeseriesEnsemble):
+            values, timedelta, unit = self.__parse_metric(metric)
+
+            values_ti = values[..., :ti]
+            timedelta_ti = timedelta[:ti]
+
+            min_values = jnp.nanmin(values[values != -jnp.inf])
+            max_values = jnp.nanmax(values[values != jnp.inf])
+
+            if isinstance(metric, Timeseries):
+                what = None
+                label = WHAT[metric.what] if has_label else None
+                self.__plot_pair_metric(values_ti, timedelta_ti, ax, label=label)
+            else:
+                what = WHAT[metric.what]
+                self.__plot_ensemble_metric(values_ti, timedelta_ti, ax)
+        else:
+            min_values, max_values, timedelta, unit, what = jnp.inf, -jnp.inf, None, None, None
+            for _metric in metric:
+                _min_values, _max_values, timedelta, unit, _what = self.__do_plot_metric(
+                    ti, _metric, add_legend, ax, has_label=True
+                )
+
+                if _min_values < min_values:
+                    min_values = _min_values
+                if _max_values > max_values:
+                    max_values = _max_values
+
+                if _what is not None:
+                    what = _what
+
+            if add_legend:
+                ax.legend()
+
+        return min_values, max_values, timedelta, unit, what
+
+    @staticmethod
+    def __guess_metrics_fig_layout(n_metrics: int) -> (int, int):
+        min_n_cells = float("inf")
+        best_layout = (0, 0)
+        for n_rows in range(1, int(math.ceil(n_metrics ** 0.5)) + 1):
+            n_cols = math.ceil(n_metrics / n_rows)
+            if n_rows * n_cols >= n_metrics:
+                n_cells = n_rows + n_cols
+                if n_cells < min_n_cells:
+                    min_n_cells = n_cells
+                    best_layout = (n_rows, n_cols)
+        return best_layout
+
+    @staticmethod
+    def __parse_metric(
+        metric: Timeseries | TimeseriesEnsemble
+    ) -> (Float[Array, "time"] | Float[Array, "member time"], Float[Array, "time"], str):
+        if isinstance(metric, Timeseries):
+            values = metric.states[1:]
+        else:
+            values = metric.states[:, 1:]
+        unit = metric.unit
+
+        if unit == UNIT.meters:
+            values = meters_to_kilometers(values)  # to km
+            unit = UNIT.kilometers
+        elif unit == UNIT.square_meters:
+            values = sq_meters_to_sq_kilometers(values)
+            unit = UNIT.square_kilometers
+
+        times = metric.times
+        timedelta = seconds_to_days(times - times[0])
+        timedelta = timedelta[1:]
+
+        return values, timedelta, UNIT[unit]
+
+    def __plot_ensemble_metric(
+        self,
+        values: Float[Array, "member time"],
+        timedelta: Float[Array, "time"],
+        ax: plt.Axes
+    ):
+        timedelta_extended = jnp.tile(timedelta, (values.shape[0], 1))
+        segments = jnp.concat([timedelta_extended[..., None], values[..., None]], axis=2)
+        alpha = jnp.clip(1 / ((self.size / 10) ** (1 / 2)), .1, 1).item() / 2
+        lc = LineCollection(segments, alpha=alpha, color="black")  # noqa
+        ax.add_collection(lc)
+
+    @staticmethod
+    def __plot_pair_metric(
+        values: Float[Array, "time"],
+        timedelta: Float[Array, "time"],
+        ax: plt.Axes,
+        label: str = None
+    ):
+        kwargs = {}
+        if label is not None:
+            kwargs["label"] = label
+
+        ax.plot(timedelta, values, **kwargs)
+
+    @staticmethod
+    def __set_axis_limits_labels(
+        min_states: Float[Array, ""],
+        max_states: Float[Array, ""],
+        timedelta: Float[Array, "time"],
+        unit: str,
+        what: str,
+        add_xlabel: bool,
+        ax: plt.Axes
+    ):
+        ax.set_xlim([0, timedelta[-1] + timedelta[0]])
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        if add_xlabel:
+            ax.set_xlabel("Elapsed days")
+        else:
+            ax.xaxis.set_major_formatter(NullFormatter())
+
+        ax.set_ylim([min_states - abs(min_states * .1), max_states + abs(max_states * .1)])
+        ylabel = f"{what}"
+        if unit != "":
+            ylabel += f" (${unit}$)"
+        ax.set_ylabel(ylabel)
+
+    def __getitem__(self, key: str) -> Timeseries | TimeseriesEnsemble:
+        return self._members[key]
