@@ -287,10 +287,10 @@ class SmagorinskyDiffrax(StochasticDiffrax):
 
         smag_k = smag_ds.interp_spatial("smag_k", latitude=x.latitude, longitude=x.longitude)[0]  # m^2/s
         smag_k = jnp.squeeze(smag_k)  # scalar
-        smag_k = (2 * smag_k) ** (1 / 2)  # m/s
+        smag_k = (2 * smag_k) ** (1 / 2)  # m/s^(1/2)
 
         dlatlon = Displacement(jnp.full(2, smag_k), UNIT.meters)
-        dlatlon = dlatlon.convert_to(UNIT.degrees, x.latitude)  # °/s
+        dlatlon = dlatlon.convert_to(UNIT.degrees, x.latitude)  # °/s^(1/2)
 
         return lnx.DiagonalLinearOperator(dlatlon)
 
