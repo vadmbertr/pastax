@@ -17,8 +17,12 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
+
+dynamic = ["version", "dependencies"]
+
+[tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
-dynamic = ["version"]
+version = {attr = "sealagrangiax.version.__version__"}
 
 [project.urls]
 "Homepage" = "https://github.com/vadmbertr/sealagrangiax"
