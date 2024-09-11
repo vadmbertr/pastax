@@ -17,6 +17,24 @@ from ...utils import UNIT
 from .._simulator import Simulator
 
 
+def wrap_solver(solver_class: Callable, field_transform: Callable):
+    class WrappedSolver(solver_class):
+        def step(self, terms, t0, t1, y0, args, solver_state, made_jump):
+            aux = field_transform(t0, y0, args)
+            y, y_error, dense_info, solver_state, solver_result = super().step(
+                terms,
+                t0,
+                t1,
+                (y0, aux),
+                args,
+                solver_state,
+                made_jump
+            )  # maybe y needs to be of the form (y0, aux)
+            return y, y_error, dense_info, solver_state, solver_result
+
+    return WrappedSolver
+
+
 class Diffrax(Simulator):
     dataset_variables: Dict[str, str]
     dataset_coordinates: Dict[str, str]
@@ -186,7 +204,7 @@ class StochasticDiffrax(Diffrax):
 
         @jax.vmap
         def _solve(subkey: jrd.PRNGKey) -> Float[Array, "time 2"]:
-            eps = 1e-4
+            eps = 1e-3
             brownian_motion = dfx.VirtualBrownianTree(t0, t1 + eps, tol=eps, shape=(2,), key=subkey)
 
             return dfx.diffeqsolve(
@@ -246,18 +264,26 @@ class SmagorinskyDiffrax(StochasticDiffrax):
             dataset_variables,
             dataset_coordinates,
             dataset_interpolation_method,
-            solver
+            wrap_solver(solver, SmagorinskyDiffrax.field_transform)
         )
 
     @staticmethod
     @eqx.filter_jit
-    def diffusion_term(t: int, y: Float[Array, "2"], args: Dataset) -> lnx.DiagonalLinearOperator:
+    def field_transform(t: int, y: Float[Array, "2"], args: Dataset) -> (Dataset, Dataset):
         t = jnp.asarray(t)
         dataset = args
         x = Location(y)
 
         neighborhood = SmagorinskyDiffrax._neighborhood(t, x, dataset)
         smag_ds = SmagorinskyDiffrax._smagorinsky_coefficients(t, neighborhood)  # m^2/s "1 x_width-2 x_width-2"
+
+        return neighborhood, smag_ds
+
+    @staticmethod
+    @eqx.filter_jit
+    def diffusion_term(t: int, y: Float[Array, "2"], args: Dataset) -> lnx.DiagonalLinearOperator:
+        y, (neighborhood, smag_ds) = y
+        x = Location(y)
 
         smag_k = smag_ds.interp_spatial("smag_k", latitude=x.latitude, longitude=x.longitude)[0]  # m^2/s
         smag_k = jnp.squeeze(smag_k)  # scalar
@@ -272,11 +298,9 @@ class SmagorinskyDiffrax(StochasticDiffrax):
     @eqx.filter_jit
     def drift_term(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
         t = jnp.asarray(t)
-        dataset = args
+        y, (neighborhood, smag_ds) = y
         x = Location(y)
 
-        neighborhood = SmagorinskyDiffrax._neighborhood(t, x, dataset)
-        smag_ds = SmagorinskyDiffrax._smagorinsky_coefficients(t, neighborhood)  # m^2/s "1 x_width-2 x_width-2"
         smag_k = jnp.squeeze(smag_ds.variables["smag_k"].values)  # "x_width-2 x_width-2"
 
         # $\mathbf{u}(t, \mathbf{X}(t))$ term
