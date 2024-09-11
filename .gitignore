@@ -1,11 +1,15 @@
 # general
+**/__pycache__
+.pytest_cache
 .ipynb_checkpoints
 *.DS_Store
-**/__pycache__
-.env
 
-# data
-**/data/*
+# build stuff
+build
+dist
+*.egg-info
+junit
+docs/_build
 
 # IDE related
 .idea
