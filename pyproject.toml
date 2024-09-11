@@ -7,6 +7,7 @@ name = "sealagrangiax"
 authors = [
     { name = "Vadim Bertrand", email = "vadim.bertrand@univ-grenoble-alpes.fr" },
 ]
+
 description = "A (stochastic) Lagrangian trajectories sampler for ocean surface drifters"
 readme = "README.md"
 requires-python = ">=3.10"
