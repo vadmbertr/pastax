@@ -1,7 +1,7 @@
 from typing import Dict
 
 import equinox as eqx
-import jax.numpy as npx
+import jax.numpy as jnp
 import jax.random as jrd
 from jaxtyping import Array, Int
 
@@ -29,9 +29,9 @@ class Simulator(eqx.Module):
         min_time = t0 - one_day
         max_time = ts[-1] + one_day  # this way we can always interpolate in time
 
-        max_travel_distance = max_time - min_time  # m - assuming max speed is 1m/s
+        max_travel_distance = max_time - min_time - 2 * one_day  # m - assuming max speed is 1m/s
         max_travel_distance = Displacement(
-            npx.full(2, max_travel_distance, dtype=float), unit=UNIT.meters
+            jnp.full(2, max_travel_distance, dtype=float), unit=UNIT.meters
         ).convert_to(UNIT.degrees, x0.latitude)
 
         min_corner = Location(x0 - max_travel_distance)
