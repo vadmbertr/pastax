@@ -17,10 +17,10 @@ from ...utils import UNIT
 from .._simulator import Simulator
 
 
-def wrap_solver(solver_class: Callable, field_transform: Callable):
+def wrap_solver(solver_class: Callable, aux_fn: Callable):
     class WrappedSolver(solver_class):
         def step(self, terms, t0, t1, y0, args, solver_state, made_jump):
-            aux = field_transform(t0, y0, args)
+            aux = aux_fn(t0, y0, args)
             y, y_error, dense_info, solver_state, solver_result = super().step(
                 terms,
                 t0,
@@ -264,12 +264,12 @@ class SmagorinskyDiffrax(StochasticDiffrax):
             dataset_variables,
             dataset_coordinates,
             dataset_interpolation_method,
-            wrap_solver(solver, SmagorinskyDiffrax.field_transform)
+            wrap_solver(solver, SmagorinskyDiffrax.aux_fn)
         )
 
     @staticmethod
     @eqx.filter_jit
-    def field_transform(t: int, y: Float[Array, "2"], args: Dataset) -> (Dataset, Dataset):
+    def aux_fn(t: int, y: Float[Array, "2"], args: Dataset) -> (Dataset, Dataset):
         t = jnp.asarray(t)
         dataset = args
         x = Location(y)
