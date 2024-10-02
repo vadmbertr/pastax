@@ -18,11 +18,32 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+    "cartopy",
+    "clouddrift",
+    "cmocean",
+    "copernicusmarine",
+    "diffrax",
+    "equinox",
+    "interpax",
+    "jax",
+    "jaxparrow",
+    "jaxtyping",
+    "lineax",
+    "matplotlib",
+    "numpy",
+    "parcels",
+    "python-dotenv",
+    "s3fs",
+    "xarray",
+    "xgcm"
+]
 
-dynamic = ["version", "dependencies"]
+# dynamic = ["version", "dependencies"]
+dynamic = ["version"]
 
 [tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+# dependencies = {file = ["requirements.txt"]}
 version = {attr = "sealagrangiax.version.__version__"}
 
 [project.urls]
