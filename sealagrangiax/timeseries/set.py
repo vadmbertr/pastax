@@ -5,20 +5,20 @@ import equinox as eqx
 from jaxtyping import Array, Float, Int
 
 from ..utils import UNIT
-from ._batch import Batch
+from ._set import Set
 from ._state import State, WHAT
 from .ensemble import TrajectoryEnsemble
 from .state import Time
 from .timeseries import Timeseries, Trajectory
 
 
-class StateBatch(Batch):
+class StateBatch(Set):
     _members: dict[str, State]
     size: int
 
     def __init__(
-            self,
-            states: dict[str, State]
+        self,
+        states: dict[str, State]
     ):
         self._members = states
         self.size = len(states)
@@ -42,17 +42,17 @@ class StateBatch(Batch):
         return self._members[index]
 
 
-class TimeseriesBatch(Batch):
+class TimeseriesBatch(Set):
     _members: dict[str, Timeseries]
     _times: Time = eqx.field(static=True)
     size: int
 
     def __init__(
-            self,
-            timeseries: dict[str, Timeseries]
+        self,
+        timeseries: dict[str, Timeseries]
     ):
         self._members = timeseries
-        self._times = next(iter(timeseries.values()))._times  # noqa
+        self._times = next(iter(timeseries.values()))._times
         self.size = len(timeseries)
 
     @property
@@ -85,16 +85,16 @@ class TrajectoryBatch(TrajectoryEnsemble):
 
     @eqx.filter_jit
     def batch_dispersion(
-            self,
-            distance_func: Callable[[Trajectory, Trajectory], Float[Array, "times"]] = Trajectory.separation_distance
+        self,
+        distance_func: Callable[[Trajectory, Trajectory], Float[Array, "times"]] = Trajectory.separation_distance
     ) -> Float[Array, "times"]:
-        return self.ensemble_dispersion(distance_func)  # noqa
+        return self.ensemble_dispersion(distance_func)
 
     @eqx.filter_jit
     def crps(
-            self,
-            other: Trajectory,
-            distance_func: Callable[[Trajectory, Trajectory], Float[Array, "time"]] = None
+        self,
+        other: Trajectory,
+        distance_func: Callable[[Trajectory, Trajectory], Float[Array, "time"]] = None
     ) -> Float[Array, "time"]:
         raise NotImplementedError
 

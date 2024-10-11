@@ -1,2 +1,2 @@
 from .parcels import DeterministicParcels
-from .diffrax import SmagorinskyDiffrax
+from .diffrax import SmagorinskyDiffusion

@@ -6,44 +6,26 @@ build-backend = "setuptools.build_meta"
 name = "sealagrangiax"
 authors = [
     { name = "Vadim Bertrand", email = "vadim.bertrand@univ-grenoble-alpes.fr" },
+    { name = "Emmanuel Cosme", email = "emmanuel.cosme@univ-grenoble-alpes.fr" },
+    { name = "Adeline Leclercq Samson", email = "adeline.leclercq-samson@univ-grenoble-alpes.fr" },
+    { name = "Julien Le Sommer", email = "julien.lesommer@univ-grenoble-alpes.fr" },
 ]
 
-description = "A (stochastic) Lagrangian trajectories sampler for ocean surface drifters"
+description = "Stochastic and differentiable simulators for ocean surface drifting objects trajectories"
 readme = "README.md"
-requires-python = ">=3.10"
-keywords = ["stochastic", "lagrangian", "trajectory", "sampler", "simulator", "ocean", "sea", "drifter", "jax"]
+requires-python = ">=3.11"
+keywords = ["stochastic", "lagrangian", "trajectory", "sampler", "simulator", "ocean", "sea", "drift", "diffrentiable", "jax"]
 license = {text = "Apache-2.0"}
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "cartopy",
-    "clouddrift",
-    "cmocean",
-    "copernicusmarine",
-    "diffrax",
-    "equinox",
-    "interpax",
-    "jax",
-    "jaxparrow",
-    "jaxtyping",
-    "lineax",
-    "matplotlib",
-    "numpy",
-    "parcels",
-    "python-dotenv",
-    "s3fs",
-    "xarray",
-    "xgcm"
-]
 
-# dynamic = ["version", "dependencies"]
-dynamic = ["version"]
+dynamic = ["version", "dependencies"]
 
 [tool.setuptools.dynamic]
-# dependencies = {file = ["requirements.txt"]}
+dependencies = {file = ["requirements.txt"]}
 version = {attr = "sealagrangiax.version.__version__"}
 
 [project.urls]

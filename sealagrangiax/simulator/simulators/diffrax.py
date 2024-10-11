@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable, Dict
+from typing import Dict, Tuple
 
 import diffrax as dfx
 import equinox as eqx
@@ -10,75 +10,42 @@ import jax.random as jrd
 from jaxtyping import Array, Float, Int
 import lineax as lnx
 
-from ...input import Field
-from ...gridded import Dataset, derivative_spatial
-from ...trajectory import Displacement, Location, Trajectory, TrajectoryEnsemble
+from ...grid import Dataset, spatial_derivative
+from ...timeseries import Displacement, Location, Trajectory, TrajectoryEnsemble
 from ...utils import UNIT
 from .._simulator import Simulator
 
 
-def wrap_solver(solver_class: Callable, aux_fn: Callable):
-    class WrappedSolver(solver_class):
-        def step(self, terms, t0, t1, y0, args, solver_state, made_jump):
-            aux = aux_fn(t0, y0, args)
-            y, y_error, dense_info, solver_state, solver_result = super().step(
-                terms,
-                t0,
-                t1,
-                (y0, aux),
-                args,
-                solver_state,
-                made_jump
-            )  # maybe y needs to be of the form (y0, aux)
-            return y, y_error, dense_info, solver_state, solver_result
-
-    return WrappedSolver
-
-
 class Diffrax(Simulator):
-    dataset_variables: Dict[str, str]
-    dataset_coordinates: Dict[str, str]
-    dataset_interpolation_method: str
-    solver: Callable
+    """
+    A class used to simulate trajectories using diffrax library.
 
-    def __init__(
-        self,
-        fields: Dict[str, Field],
-        simulator_id: str,
-        dataset_variables: Dict[str, str],
-        dataset_coordinates: Dict[str, str],
-        dataset_interpolation_method: str,
-        solver: Callable
-    ):
-        super().__init__(fields, simulator_id)
-        self.dataset_variables = dataset_variables
-        self.dataset_coordinates = dataset_coordinates
-        self.dataset_interpolation_method = dataset_interpolation_method
-        self.solver = solver
-
-    def _get_dataset(self, x0: Location, t0: Int[Array, ""], ts: Int[Array, "time-1"]) -> Dataset:
-        min_time, max_time, min_point, max_point = self._get_minmax(x0, t0, ts)
-
-        self.fields["ssc"].load_data(
-            min_time.item(), max_time.item(),
-            min_point.latitude.item(), max_point.latitude.item(),
-            min_point.longitude.item(), max_point.longitude.item()
-        )
-
-        dataset = Dataset.from_xarray(
-            self.fields["ssc"].dataset,
-            variables=self.dataset_variables,
-            coordinates=self.dataset_coordinates,
-            interpolation_method=self.dataset_interpolation_method
-        )
-
-        return dataset
+    Methods
+    -------
+    _transform_times(t0, ts)
+        Transforms the initial time and time steps for the simulation.
+    """
 
     @staticmethod
     @jax.jit
     def _transform_times(
             t0: Int[Array, ""], ts: Int[Array, "time-1"]
-    ) -> (Float[Array, "time"], Int[Array, ""]):
+    ) -> Tuple[Float[Array, "time"], Int[Array, ""]]:
+        """
+        Transforms the initial time and time steps for the simulation.
+
+        Parameters
+        ----------
+        t0 : Int[Array, ""]
+            The initial time.
+        ts : Int[Array, "time-1"]
+            The time steps for the simulation.
+
+        Returns
+        -------
+        Tuple[Float[Array, "time"], Int[Array, ""]]
+            The transformed time steps and the final time.
+        """
         ts = jnp.pad(ts, (1, 0), constant_values=t0)
         t1 = ts[-1]
 
@@ -86,27 +53,39 @@ class Diffrax(Simulator):
 
 
 class DeterministicDiffrax(Diffrax):
-    def __init__(
-        self,
-        fields: Dict[str, Field],
-        simulator_id: str,
-        dataset_variables: Dict[str, str],
-        dataset_coordinates: Dict[str, str],
-        dataset_interpolation_method: str,
-        solver: Callable = dfx.Tsit5
-    ):
-        super().__init__(
-            fields,
-            simulator_id,
-            dataset_variables,
-            dataset_coordinates,
-            dataset_interpolation_method,
-            solver
-        )
+    """
+    A class used to simulate deterministic trajectories using diffrax library.
+
+    Methods
+    -------
+    drift_term(t, y, args)
+        Computes the drift term for the differential equation.
+    solve(x0, t0, ts, dt0=30*60, solver=dfx.Heun())
+        Solves the differential equation to simulate the trajectory.
+    __call__(x0, t0, ts, dt0=30*60, solver=dfx.Heun(), n_samples=None, key=None)
+        Simulates the trajectory based on the initial location, time, and time steps.
+    """
 
     @staticmethod
     @eqx.filter_jit
     def drift_term(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+        """
+        Computes the drift term for the differential equation.
+
+        Parameters
+        ----------
+        t : int
+            The current time.
+        y : Float[Array, "2"]
+            The current state (latitude and longitude).
+        args : Dataset
+            The dataset containing the physical fields (only u and v here).
+
+        Returns
+        -------
+        Float[Array, "2"]
+            The drift term (change in latitude and longitude).
+        """
         t = jnp.asarray(t)
         dataset = args
         x = Location(y)
@@ -124,20 +103,41 @@ class DeterministicDiffrax(Diffrax):
         self,
         x0: Location,
         t0: Int[Array, ""],
-        t1: Int[Array, ""],
-        ts: Int[Array, "time"],
-        dataset: Dataset
-    ) -> Float[Array, "time"]:
-        print("Simulating trajectory...")
+        ts: Int[Array, "time-1"],
+        dt0: int,  # 30 minutes in seconds
+        solver: dfx.AbstractSolver
+    ) -> Float[Array, "time 2"]:
+        """
+        Solves the differential equation to simulate the trajectory.
+
+        Parameters
+        ----------
+        x0 : Location
+            The initial location.
+        t0 : Int[Array, ""]
+            The initial time.
+        ts : Int[Array, "time-1"]
+            The time steps for the simulation outputs.
+        dt0 : int
+            The initial time step in seconds.
+        solver : dfx.AbstractSolver
+            The solver function to use for the simulation.
+
+        Returns
+        -------
+        Float[Array, "time 2"]
+            The simulated trajectory (latitude and longitude) at each time step.
+        """
+        ts, t1 = self._transform_times(t0, ts)
 
         return dfx.diffeqsolve(
-            dfx.ODETerm(self.drift_term),  # noqa
-            self.solver(),
+            dfx.ODETerm(self.drift_term),
+            solver,
             t0=t0,
             t1=t1,
-            dt0=5 * 60,  # 5 minutes in seconds
+            dt0=dt0,
             y0=x0.value,
-            args=dataset,
+            args=self.datasets,
             saveat=dfx.SaveAt(ts=ts)
         ).ys
 
@@ -146,44 +146,128 @@ class DeterministicDiffrax(Diffrax):
         x0: Location,
         t0: Int[Array, ""],
         ts: Int[Array, "time-1"],
+        dt0: int = 30 * 60,  # 30 minutes in seconds
+        solver: dfx.AbstractSolver = dfx.Heun(),
         n_samples: int = None,
         key: jrd.PRNGKey = None
     ) -> Trajectory:
-        ts, t1 = self._transform_times(t0, ts)
-        dataset = self._get_dataset(x0, t0, ts)
+        """
+        Simulates the trajectory based on the initial location, time, and time steps.
 
-        ys = self.solve(x0, t0, t1, ts, dataset)
+        Parameters
+        ----------
+        x0 : Location
+            The initial location.
+        t0 : Int[Array, ""]
+            The initial time.
+        ts : Int[Array, "time-1"]
+            The time steps for the simulation outputs.
+        dt0 : int, optional
+            The initial time step in seconds (default is 30 * 60 seconds).
+        solver : dfx.AbstractSolver, optional
+            The solver function to use for the simulation (default is dfx.Heun()).
+        n_samples : int, optional
+            The number of samples to generate (default is None, meaning a single trajectory).
+        key : jrd.PRNGKey, optional
+            The random key for sampling (default is None, useless for the deterministic simulator).
 
+        Returns
+        -------
+        Trajectory
+            The simulated trajectory, including the initial conditions (x0, t0).
+        """
+        ys = self.solve(x0, t0, ts, dt0, solver)
         return Trajectory(ys, ts)
 
 
-class StochasticDiffrax(Diffrax):
-    def __init__(
-        self,
-        fields: Dict[str, Field],
-        simulator_id: str,
-        dataset_variables: Dict[str, str],
-        dataset_coordinates: Dict[str, str],
-        dataset_interpolation_method: str,
-        solver: Callable = dfx.StratonovichMilstein
-    ):
-        super().__init__(
-            fields,
-            simulator_id,
-            dataset_variables,
-            dataset_coordinates,
-            dataset_interpolation_method,
-            solver
+class SDEControl(dfx.AbstractPath):
+    """
+    A class used to represent a diffrax control for Stochastic Differential Equation (SDE).
+
+    Attributes
+    ----------
+    t0 : int
+        The initial time.
+    t1 : int
+        The final time.
+    brownian_motion : dfx.VirtualBrownianTree
+        The Brownian motion used in the SDE simulation.
+
+    Methods
+    -------
+    evaluate(t0, t1=None, left=True, use_levy=False)
+        Evaluates the control at the given time points.
+    """
+
+    t0 = None
+    t1 = None
+    brownian_motion: dfx.VirtualBrownianTree
+
+    def evaluate(self, t0: int, t1: int = None, left: bool = True, use_levy: bool = False) -> Float[Array, "x+1"]:
+        """
+        Evaluates the control at the given time points.
+
+        Parameters
+        ----------
+        t0 : int
+            The initial time.
+        t1 : int, optional
+            The final time (default is None).
+        left : bool, optional
+            Whether to use the left limit (default is True).
+        use_levy : bool, optional
+            Whether to use the Levy area (default is False).
+
+        Returns
+        -------
+        Float[Array, "x+1"]
+            The evaluated control.
+        """
+        return jnp.concatenate(
+            [jnp.asarray([t1 - t0]), self.brownian_motion.evaluate(t0=t0, t1=t1, left=left, use_levy=use_levy)]
         )
 
-    @staticmethod
-    @eqx.filter_jit
-    def diffusion_term(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "4"] | lnx.DiagonalLinearOperator:
-        raise NotImplementedError
+
+class StochasticDiffrax(Diffrax):
+    """
+    A class used to simulate stochastic ensembles of trajectories using diffrax library.
+
+    Methods
+    -------
+    drift_and_diffusion_term(t, y, args)
+        Computes the drift and diffusion terms for the stochastic differential equation.
+    solve(x0, t0, ts, dt0, solver, n_samples, key)
+        Solves the stochastic differential equation to simulate the trajectory.
+    _neighborhood(t, x, dataset)
+        Restricts the dataset to the neighborhood around the given location and time.
+    __call__(x0, t0, ts, dt0=30*60, solver=dfx.Heun(), n_samples=100, key=jrd.PRNGKey(0))
+        Simulates the trajectory based on the initial location, time, and time steps.
+    """
 
     @staticmethod
     @eqx.filter_jit
-    def drift_term(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+    def drift_and_diffusion_term(
+        t: int, 
+        y: Float[Array, "2"], 
+        args: Dict[str, Dataset] | Dataset
+    ) -> lnx.PyTreeLinearOperator:
+        """
+        Computes the drift and diffusion terms of the SDE.
+
+        Parameters
+        ----------
+        t : int
+            The current time.
+        y : Float[Array, "2"]
+            The current state (latitude and longitude).
+        args : Dataset
+            The dataset(s) containing the physical fields.
+
+        Returns
+        -------
+        lnx.PyTreeLinearOperator
+            The drift and diffusion terms.
+        """
         raise NotImplementedError
 
     @eqx.filter_jit
@@ -191,30 +275,57 @@ class StochasticDiffrax(Diffrax):
         self,
         x0: Location,
         t0: Int[Array, ""],
-        t1: Int[Array, ""],
-        ts: Int[Array, "time"],
+        ts: Int[Array, "time-1"],
+        dt0: int,  # 30 minutes in seconds
+        solver: dfx.AbstractSolver,
         n_samples: int,
-        key: jrd.PRNGKey,
-        dataset: Dataset
-    ) -> Float[Array, "member time"]:
-        print("Simulating trajectories...")
+        key: jrd.PRNGKey
+    ) -> Float[Array, "member time 2"]:
+        """
+        Solves the stochastic differential equation to simulate the trajectory.
 
+        Parameters
+        ----------
+        x0 : Location
+            The initial location.
+        t0 : Int[Array, ""]
+            The initial time.
+        ts : Int[Array, "time-1"]
+            The time steps for the simulation outputs.
+        dt0 : int
+            The initial time step in seconds.
+        solver : dfx.AbstractSolver
+            The solver function to use for the simulation.
+        n_samples : int
+            The number of samples to generate.
+        key : jrd.PRNGKey
+            The random key for sampling.
+
+        Returns
+        -------
+        Float[Array, "member time 2"]
+            The simulated trajectory (latitude and longitude) at each time step.
+        """
         y0 = x0.value
+        ts, t1 = self._transform_times(t0, ts)
+
         keys = jrd.split(key, n_samples)
 
         @jax.vmap
         def _solve(subkey: jrd.PRNGKey) -> Float[Array, "time 2"]:
             eps = 1e-3
             brownian_motion = dfx.VirtualBrownianTree(t0, t1 + eps, tol=eps, shape=(2,), key=subkey)
+            sde_control = SDEControl(brownian_motion=brownian_motion)
+            sde_term = dfx.ControlTerm(self.drift_and_diffusion_term, sde_control)
 
             return dfx.diffeqsolve(
-                dfx.MultiTerm(dfx.ODETerm(self.drift_term), dfx.ControlTerm(self.diffusion_term, brownian_motion)),  # noqa
-                self.solver(),
+                sde_term,
+                solver,
                 t0=t0,
                 t1=t1,
-                dt0=5 * 60,  # 5 minutes in seconds
+                dt0=dt0,
                 y0=y0,
-                args=dataset,
+                args=self.datasets,
                 saveat=dfx.SaveAt(ts=ts)
             ).ys
 
@@ -223,6 +334,23 @@ class StochasticDiffrax(Diffrax):
     @staticmethod
     @eqx.filter_jit
     def _neighborhood(t: Int[Array, ""], x: Location, dataset: Dataset) -> Dataset:
+        """
+        Restricts the dataset to the neighborhood around the given location and time.
+
+        Parameters
+        ----------
+        t : Int[Array, ""]
+            The current time.
+        x : Location
+            The current location.
+        dataset : Dataset
+            The dataset containing the physical fields.
+
+        Returns
+        -------
+        Dataset
+            The neighborhood dataset.
+        """
         # restrict dataset to the neighborhood around X(t)
         neighborhood = dataset.neighborhood(
             "u", "v",
@@ -237,68 +365,125 @@ class StochasticDiffrax(Diffrax):
         x0: Location,
         t0: Int[Array, ""],
         ts: Int[Array, "time-1"],
-        n_samples: int = 1,
-        key: jrd.PRNGKey = None
+        dt0: int = 30 * 60,  # 30 minutes in seconds
+        solver: dfx.AbstractSolver = dfx.Heun(),
+        n_samples: int = 100,
+        key: jrd.PRNGKey = jrd.PRNGKey(0)
     ) -> TrajectoryEnsemble:
-        ts, t1 = self._transform_times(t0, ts)
-        dataset = self._get_dataset(x0, t0, ts)
+        """
+        Simulates the trajectory based on the initial location, time, and time steps.
 
-        ys = self.solve(x0, t0, t1, ts, n_samples, key, dataset)
+        Parameters
+        ----------
+        x0 : Location
+            The initial location.
+        t0 : Int[Array, ""]
+            The initial time.
+        ts : Int[Array, "time-1"]
+            The time steps for the simulation outputs.
+        dt0 : int, optional
+            The initial time step in seconds (default is 30 * 60 seconds).
+        solver : dfx.AbstractSolver, optional
+            The solver function to use for the simulation (default is dfx.Heun()).
+        n_samples : int, optional
+            The number of samples to generate (default is 100).
+        key : jrd.PRNGKey, optional
+            The random key for sampling (default is jrd.PRNGKey(0)).
+
+        Returns
+        -------
+        TrajectoryEnsemble
+            The simulated ensemble of trajectories.
+        """
+        ys = self.solve(x0, t0, ts, dt0, solver, n_samples, key)
 
         return TrajectoryEnsemble(ys, ts)
 
 
-class SmagorinskyDiffrax(StochasticDiffrax):
-    def __init__(
-        self,
-        fields: Dict[str, Field],
-        simulator_id: str = "smagorinsky_diffrax",
-        dataset_variables: Dict[str, str] = {"u": "u", "v": "v"},  # noqa
-        dataset_coordinates: Dict[str, str] = {"time": "time", "latitude": "lat_t", "longitude": "lon_t"},  # noqa
-        dataset_interpolation_method: str = "linear",
-        solver: Callable = dfx.StratonovichMilstein
-    ):
-        super().__init__(
-            fields,
-            simulator_id,
-            dataset_variables,
-            dataset_coordinates,
-            dataset_interpolation_method,
-            wrap_solver(solver, SmagorinskyDiffrax.aux_fn)
-        )
+class SmagorinskyDiffusion(StochasticDiffrax):
+    """
+    A class used to simulate stochastic trajectories using the Smagorinsky model with the Diffrax library.
+
+    Attributes
+    ----------
+    id : str
+        The identifier for the SmagorinskyDiffrax model.
+
+    Methods
+    -------
+    drift_and_diffusion_term(t, y, args)
+        Computes the drift and diffusion terms of the SDE.
+    _drift_term(t, y, neighborhood, smag_ds)
+        Computes the drift term of the SDE.
+    _diffusion_term(y, smag_ds)
+        Computes the diffusion term of the SDE.
+    _smagorinsky_coefficients(t, neighborhood)
+        Computes the Smagorinsky coefficients.
+    """
+
+    id: str = "smagorinsky_diffusion"
 
     @staticmethod
     @eqx.filter_jit
-    def aux_fn(t: int, y: Float[Array, "2"], args: Dataset) -> (Dataset, Dataset):
+    def drift_and_diffusion_term(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2 3"]:
+        """
+        Computes the drift and diffusion terms of the SDE.
+
+        Parameters
+        ----------
+        t : int
+            The current time.
+        y : Float[Array, "2"]
+            The current state (latitude and longitude).
+        args : Dataset
+            The dataset containing the physical fields.
+
+        Returns
+        -------
+        Float[Array, "2 3"]
+            The drift and diffusion terms.
+        """
         t = jnp.asarray(t)
         dataset = args
         x = Location(y)
 
-        neighborhood = SmagorinskyDiffrax._neighborhood(t, x, dataset)
-        smag_ds = SmagorinskyDiffrax._smagorinsky_coefficients(t, neighborhood)  # m^2/s "1 x_width-2 x_width-2"
+        neighborhood = SmagorinskyDiffusion._neighborhood(t, x, dataset)
+        smag_ds = SmagorinskyDiffusion._smagorinsky_coefficients(t, neighborhood)  # m^2/s "1 x_width-2 x_width-2"
 
-        return neighborhood, smag_ds
+        dlatlon_drift = SmagorinskyDiffusion._drift_term(t, y, neighborhood, smag_ds)
+        dlatlon_diffusion = SmagorinskyDiffusion._diffusion_term(y, smag_ds)
 
-    @staticmethod
-    @eqx.filter_jit
-    def diffusion_term(t: int, y: Float[Array, "2"], args: Dataset) -> lnx.DiagonalLinearOperator:
-        y, (neighborhood, smag_ds) = y
-        x = Location(y)
+        dlatlon = jnp.column_stack([dlatlon_drift, dlatlon_diffusion])
 
-        smag_k = smag_ds.interp_spatial("smag_k", latitude=x.latitude, longitude=x.longitude)[0]  # m^2/s
-        smag_k = jnp.squeeze(smag_k)  # scalar
-        smag_k = (2 * smag_k) ** (1 / 2)  # m/s^(1/2)
-
-        dlatlon = Displacement(jnp.full(2, smag_k), UNIT.meters)
-        dlatlon = dlatlon.convert_to(UNIT.degrees, x.latitude)  # °/s^(1/2)
-
-        return lnx.DiagonalLinearOperator(dlatlon)
+        return dlatlon
 
     @staticmethod
     @eqx.filter_jit
-    def drift_term(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
-        t = jnp.asarray(t)
-        y, (neighborhood, smag_ds) = y
+    def _drift_term(
+        t: Float[Array, ""],
+        y: Float[Array, "2"],
+        neighborhood: Dataset,
+        smag_ds: Dataset
+    ) -> Float[Array, "2"]:
+        """
+        Computes the drift term of the SDE.
+
+        Parameters
+        ----------
+        t : Float[Array, ""]
+            The current time.
+        y : Float[Array, "2"]
+            The current state (latitude and longitude).
+        neighborhood : Dataset
+            The dataset containing the physical fields in the neighborhood.
+        smag_ds : Dataset
+            The dataset containing the Smagorinsky coefficients for the given fields.
+
+        Returns
+        -------
+        Float[Array, "2"]
+            The drift term (change in latitude and longitude).
+        """
         x = Location(y)
 
         smag_k = jnp.squeeze(smag_ds.variables["smag_k"].values)  # "x_width-2 x_width-2"
@@ -308,7 +493,7 @@ class SmagorinskyDiffrax(StochasticDiffrax):
         vu = jnp.asarray([v, u])  # "2"
 
         # $(\nabla \cdot \mathbf{K})(t, \mathbf{X}(t))$ term
-        dkdx, dkdy = derivative_spatial(
+        dkdx, dkdy = spatial_derivative(
             smag_k, dx=smag_ds.dx, dy=smag_ds.dy, is_land=smag_ds.is_land
         )  # m/s - "x_width-4 x_width-4"
         dkdx = inx.interp2d(
@@ -330,12 +515,59 @@ class SmagorinskyDiffrax(StochasticDiffrax):
 
         return dlatlon
 
-    # TODO: compute the derivatives "within the cell" using interpolated values?
+    @staticmethod
+    @eqx.filter_jit
+    def _diffusion_term(y: Float[Array, "2"], smag_ds: Dataset) -> Float[Array, "2 2"]:
+        """
+        Computes the diffusion term of the SDE.
+
+        Parameters
+        ----------
+        y : Float[Array, "2"]
+            The current state (latitude and longitude).
+        smag_ds : Dataset
+            The dataset containing the Smagorinsky coefficients.
+
+        Returns
+        -------
+        Float[Array, "2 2"]
+            The diffusion term (change in latitude and longitude).
+        """
+        x = Location(y)
+
+        smag_k = smag_ds.interp_spatial("smag_k", latitude=x.latitude, longitude=x.longitude)[0]  # m^2/s
+        smag_k = jnp.squeeze(smag_k)  # scalar
+        smag_k = (2 * smag_k) ** (1 / 2)  # m/s^(1/2)
+
+        dlatlon = Displacement(jnp.full(2, smag_k), UNIT.meters)
+        dlatlon = dlatlon.convert_to(UNIT.degrees, x.latitude)  # °/s^(1/2)
+
+        return jnp.eye(2) * dlatlon
+
     @staticmethod
     @eqx.filter_jit
     def _smagorinsky_coefficients(t: Int[Array, ""], neighborhood: Dataset) -> Dataset:
+        """
+        Computes the Smagorinsky coefficients for the given fields.
+
+        Parameters
+        ----------
+        t : Int[Array, ""]
+            The simulation time.
+        neighborhood : Dataset
+            The dataset containing the physical fields.
+
+        Returns
+        -------
+        Dataset
+            The dataset containing the Smagorinsky coefficients.
+
+        Notes
+        -----
+        The physical fields are first interpolated in time and then spatial derivatives are computed using finite central difference.
+        """
         u, v = neighborhood.interp_temporal("u", "v", time=t)  # "x_width x_width"
-        dudx, dudy, dvdx, dvdy = derivative_spatial(
+        dudx, dudy, dvdx, dvdy = spatial_derivative(
             u, v, dx=neighborhood.dx, dy=neighborhood.dy, is_land=neighborhood.is_land
         )  # "x_width-2 x_width-2"
 
@@ -347,8 +579,8 @@ class SmagorinskyDiffrax(StochasticDiffrax):
         smag_ds = Dataset.from_arrays(
             {"smag_k": smag_k[None, ...]},
             time=t[None],
-            latitude=neighborhood.coordinates.latitude[1:-1],
-            longitude=neighborhood.coordinates.longitude[1:-1] - 180,
+            latitude=neighborhood.coordinates.latitude.values[1:-1],
+            longitude=neighborhood.coordinates.longitude.values[1:-1],
             interpolation_method="linear"
         )
 

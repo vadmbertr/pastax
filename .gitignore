@@ -10,6 +10,7 @@ dist
 *.egg-info
 junit
 docs/_build
+docs/*.rst
 
 # IDE related
 .idea
