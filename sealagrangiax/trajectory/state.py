@@ -9,7 +9,7 @@ import numpy as np
 
 from ..utils.unit import (
     degrees_to_meters, degrees_to_kilometers, kilometers_to_degrees, kilometers_to_meters,
-    longitude_in_0_360_degrees, meters_to_degrees, meters_to_kilometers
+    longitude_in_180_180_degrees, meters_to_degrees, meters_to_kilometers
 )
 from ..utils import UNIT, WHAT
 from ..utils.geo import earth_distance
@@ -18,7 +18,7 @@ from ._state import State
 
 @jax.jit
 def location_converter(latlon: Float[Array, "2"]):
-    return latlon.at[..., 1].set(longitude_in_0_360_degrees(latlon[..., 1]))
+    return latlon.at[..., 1].set(longitude_in_180_180_degrees(latlon[..., 1]))
 
 
 class Location(State):

@@ -75,6 +75,7 @@ class Timeseries(eqx.Module):
         **_
             Additional keyword arguments.
         """
+        assert values.ndim > 1, f"values {values} should have 2 dimensions: time and state"
         assert values.shape[0] == times.shape[0], f"values {values} and times {times} have incompatible shapes"
 
         self._states = eqx.filter_vmap(

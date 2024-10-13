@@ -8,9 +8,8 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator, NullFormatter
 import xarray as xr
 
-from ..trajectory import Set, Timeseries, TimeseriesEnsemble, WHAT
-from ..utils import UNIT
-from ..utils.unit import meters_to_kilometers, sq_meters_to_sq_kilometers, seconds_to_days
+from ..trajectory import Set, Timeseries, TimeseriesEnsemble
+from ..utils import UNIT, WHAT, meters_to_kilometers, sq_meters_to_sq_kilometers, seconds_to_days
 
 
 class Evaluation(Set):

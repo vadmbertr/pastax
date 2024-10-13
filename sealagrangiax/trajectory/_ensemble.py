@@ -79,6 +79,8 @@ class TimeseriesEnsemble(eqx.Module):
         **kwargs
             Additional keyword arguments.
         """
+        assert values.ndim > 2, f"values {values} should have 3 dimensions: member, time, and state"
+
         self._members = eqx.filter_vmap(
             lambda s: self._members_type(s, times, what=what, unit=unit, **kwargs),
             out_axes=eqx._vmap_pmap.if_mapped(0)
