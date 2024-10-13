@@ -10,7 +10,7 @@ from ..utils import UNIT, WHAT
 
 class State(eqx.Module):
     """
-    A class used to represent a state with a value, type, and unit.
+    Class representing a state with a value, type, and unit.
 
     Attributes
     ----------

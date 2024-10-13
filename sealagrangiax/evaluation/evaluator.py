@@ -1,6 +1,6 @@
 import equinox as eqx
 
-from ..timeseries import Timeseries, TimeseriesEnsemble, Trajectory, TrajectoryEnsemble
+from ..trajectory import Timeseries, TimeseriesEnsemble, Trajectory, TrajectoryEnsemble
 from ..utils import WHAT
 from ._evaluation import Evaluation
 from ._evaluator import Evaluator
@@ -60,12 +60,15 @@ class EnsembleEvaluator(Evaluator):
         
         Parameters
         ----------
-            reference_trajectory (Trajectory): The reference trajectory to compare against.
-            simulated_trajectory (Trajectory): The simulated ensemble of trajectories to be evaluated.
+        reference_trajectory (Trajectory)
+            The reference trajectory to compare against.
+        simulated_trajectory (Trajectory)
+            The simulated ensemble of trajectories to be evaluated.
         
         Returns
         -------
-            Evaluation: The result of the evaluation.
+        Evaluation
+            The result of the evaluation.
         """
         metrics = {}
         for metric in self.metrics:

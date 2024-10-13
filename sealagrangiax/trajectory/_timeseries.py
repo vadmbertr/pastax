@@ -13,7 +13,7 @@ from .state import Time
 
 class Timeseries(eqx.Module):
     """
-    A class used to represent a timeseries of states.
+    Base class representing a timeseries of states.
 
     Attributes
     ----------

@@ -1,3 +1,3 @@
 # sealagrangiax
 
-A (stochastic) Lagrangian trajectories sampler for ocean surface drifters.
+Differentiable (and stochastic) simulators of sea surface drifting objects trajectories.

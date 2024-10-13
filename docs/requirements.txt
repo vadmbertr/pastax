@@ -1,3 +1,11 @@
-sphinx
-myst_parser
-sphinx-book-theme
+mkdocs
+mkdocs-material
+mkdocs-include-markdown-plugin
+mkdocs-pymdownx-material-extras
+mkdocs_include_exclude_files
+mkdocstrings[python]
+mknotebooks
+nbconvert
+pygments
+pymdown-extensions
+pytkdocs_tweaks

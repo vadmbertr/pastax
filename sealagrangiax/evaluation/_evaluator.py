@@ -2,7 +2,7 @@ from typing import List
 
 import equinox as eqx
 
-from ..timeseries import TrajectoryEnsemble, Trajectory
+from ..trajectory import TrajectoryEnsemble, Trajectory
 from ._evaluation import Evaluation
 from ._metric import LiuIndex, Mae, Metric, Rmse, SeparationDistance
 

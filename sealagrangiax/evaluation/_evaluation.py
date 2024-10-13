@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator, NullFormatter
 import xarray as xr
 
-from ..timeseries import Set, Timeseries, TimeseriesEnsemble, WHAT
+from ..trajectory import Set, Timeseries, TimeseriesEnsemble, WHAT
 from ..utils import UNIT
 from ..utils.unit import meters_to_kilometers, sq_meters_to_sq_kilometers, seconds_to_days
 
@@ -58,7 +58,8 @@ class Evaluation(Set):
 
         Parameters
         ----------
-            states (Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]): The initial metrics dictionary.
+        states (Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]])
+            The initial metrics dictionary.
         """
         self._members = states
         self.size = len(states)
@@ -69,11 +70,13 @@ class Evaluation(Set):
 
         Parameters
         ----------
-            key (str): The key of the metric to retrieve.
+        key (str)
+            The key of the metric to retrieve.
 
         Returns
         -------
-            Timeseries | Sequence[TimeseriesEnsemble | Timeseries]: The metrics corresponding to the key.
+        Timeseries | Sequence[TimeseriesEnsemble | Timeseries]
+            The metrics corresponding to the key.
         """
         return self._members.get(key)
 
@@ -83,7 +86,8 @@ class Evaluation(Set):
 
         Returns
         -------
-            Tuple[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]: The items of the metrics dictionary.
+        Tuple[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
+            The items of the metrics dictionary.
         """
         return self._members.items()
 
@@ -93,7 +97,8 @@ class Evaluation(Set):
 
         Returns
         -------
-            Tuple[str]: The keys of the metrics dictionary.
+        Tuple[str]
+            The keys of the metrics dictionary.
         """
         return self._members.keys()
 
@@ -103,7 +108,8 @@ class Evaluation(Set):
 
         Returns
         -------
-            Tuple[Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]: The values of the metrics dictionary.
+        Tuple[Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
+            The values of the metrics dictionary.
         """
         return self._members.values()
 
@@ -135,8 +141,10 @@ class Evaluation(Set):
 
         Parameters
         ----------
-            fig (plt.Figure): The figure to plot on.
-            ti (int, optional): The time index up to which to plot. If None, plots the full metric timeseries.
+        fig (plt.Figure)
+            The figure to plot on.
+        ti (int, optional)
+            The time index up to which to plot. If None, plots the full metric timeseries.
         """
         if ti is None:
             ti = next(iter(self.values())).length

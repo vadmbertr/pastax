@@ -17,7 +17,7 @@ from .state import Location
 
 class Trajectory(Timeseries):
     """
-    A class used to represent a trajectory with 2D geographical locations over time.
+    Class representing a trajectory with 2D geographical locations over time.
 
     Attributes
     ----------

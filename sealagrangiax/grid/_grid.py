@@ -9,7 +9,7 @@ from jaxtyping import Float, Int, Array
 
 class Grid(eqx.Module):
     """
-    Class that represents a grid of values, which can be either floating-point or integer arrays.
+    Base class for representing a grid of values, which can be either floating-point or integer arrays.
 
     Attributes
     ----------

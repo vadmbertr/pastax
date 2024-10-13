@@ -1,2 +1,5 @@
-from .parcels import DeterministicParcels
-from .diffrax import SmagorinskyDiffusion
+from .naive import Naive
+from .smagorinsky_diffusion import SmagorinskyDiffusion
+
+
+__all__ = ["Naive", "SmagorinskyDiffusion"]

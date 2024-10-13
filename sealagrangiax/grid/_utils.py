@@ -22,17 +22,21 @@ def spatial_derivative(
 
     Parameters
     ----------
-        fields (Tuple[Float[Array, "(time) lat lon"], ...]): Variable number of fields for which the spatial derivatives
-            are to be computed. Each field is a 2D or 3D array with dimensions (latitude, longitude) or
-            (time, latitude, longitude).
-        dx (Float[Array, "lat lon-1"]): Grid spacing in the longitude direction.
-        dy (Float[Array, "lat-1 lon"]): Grid spacing in the latitude direction.
-        is_land (Bool[Array, "lat lon"]): Boolean array indicating the presence of land at each grid point.
+    fields (Tuple[Float[Array, "(time) lat lon"], ...])
+        Variable number of fields for which the spatial derivatives are to be computed. 
+        Each field is a 2D or 3D array with dimensions (latitude, longitude) or (time, latitude, longitude).
+    dx (Float[Array, "lat lon-1"])
+        Grid spacing in the longitude direction.
+    dy (Float[Array, "lat-1 lon"])
+        Grid spacing in the latitude direction.
+    is_land (Bool[Array, "lat lon"])
+        Boolean array indicating the presence of land at each grid point.
 
     Returns
     -------
-        Tuple[Float[Array, "..."], ...]: A tuple containing the spatial derivatives of the input fields. Each derivative
-            is a 2D or 3D array with dimensions (latitude, longitude) or (time, latitude, longitude).
+    Tuple[Float[Array, "..."], ...]
+        A tuple containing the spatial derivatives of the input fields. Each derivative is a 2D or 3D array with
+        dimensions (latitude, longitude) or (time, latitude, longitude).
     """
     def central_finite_difference(
             _f: Float[Array, "(time) lat lon"], _axis: int

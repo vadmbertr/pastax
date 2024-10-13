@@ -14,7 +14,7 @@ from ._timeseries import Timeseries
 
 class TimeseriesEnsemble(eqx.Module):
     """
-    A class used to represent an ensemble of timeseries data.
+    Base class representing an ensemble of timeseries data.
 
     Attributes
     ----------

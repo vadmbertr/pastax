@@ -6,13 +6,13 @@ import jax.random as jrd
 from jaxtyping import Array, Int
 
 from ..grid import Dataset
-from ..timeseries import Displacement, Location, Trajectory, TrajectoryEnsemble
+from ..trajectory import Displacement, Location, Trajectory, TrajectoryEnsemble
 from ..utils import UNIT
 
 
 class Simulator(eqx.Module):
     """
-    A class used to simulate trajectories from various physical fields.
+    Base class for simulating trajectories from various physical fields.
 
     Attributes
     ----------

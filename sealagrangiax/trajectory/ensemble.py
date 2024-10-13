@@ -16,7 +16,7 @@ from .timeseries import Timeseries, Trajectory
 
 class TrajectoryEnsemble(TimeseriesEnsemble):
     """
-    A class used to represent an ensemble of trajectories.
+    Class representing an ensemble of trajectories.
 
     Attributes
     ----------

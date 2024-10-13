@@ -23,7 +23,7 @@ def location_converter(latlon: Float[Array, "2"]):
 
 class Location(State):
     """
-    A class used to represent a geographical location with latitude and longitude.
+    Class representing a geographical location with latitude and longitude.
 
     Attributes
     ----------
@@ -169,7 +169,7 @@ class Location(State):
 
 class Displacement(State):
     """
-    A class used to represent a displacement with latitude and longitude components.
+    Class representing a displacement with latitude and longitude components.
 
     Attributes
     ----------
@@ -368,7 +368,7 @@ class Displacement(State):
 
 class Time(State):
     """
-    A class used to represent a time value.
+    Class representing a time value.
 
     Attributes
     ----------

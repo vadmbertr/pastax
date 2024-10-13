@@ -8,10 +8,10 @@ authors = [
     { name = "Vadim Bertrand", email = "vadim.bertrand@univ-grenoble-alpes.fr" },
     { name = "Emmanuel Cosme", email = "emmanuel.cosme@univ-grenoble-alpes.fr" },
     { name = "Adeline Leclercq Samson", email = "adeline.leclercq-samson@univ-grenoble-alpes.fr" },
-    { name = "Julien Le Sommer", email = "julien.lesommer@univ-grenoble-alpes.fr" },
+    { name = "Julien Le Sommer", email = "julien.lesommer@univ-grenoble-alpes.fr" }
 ]
 
-description = "Stochastic and differentiable simulators for ocean surface drifting objects trajectories"
+description = "Differentiable (and stochastic) simulators of sea surface drifting objects trajectories"
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["stochastic", "lagrangian", "trajectory", "sampler", "simulator", "ocean", "sea", "drift", "diffrentiable", "jax"]
@@ -26,7 +26,7 @@ dynamic = ["version", "dependencies"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
-version = {attr = "sealagrangiax.version.__version__"}
+version = {attr = "sealagrangiax._version.version"}
 
 [project.urls]
 "Homepage" = "https://github.com/vadmbertr/sealagrangiax"
