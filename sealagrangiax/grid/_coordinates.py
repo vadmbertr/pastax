@@ -4,7 +4,7 @@ from typing import Tuple
 import equinox as eqx
 from jaxtyping import Array, Float, Int
 
-from ._grid import Coordinate
+from ._grid import Coordinate, LongitudeCoordinate
 
 
 class Coordinates(eqx.Module):
@@ -30,9 +30,8 @@ class Coordinates(eqx.Module):
     """
     time: Coordinate
     latitude: Coordinate
-    longitude: Coordinate
+    longitude: LongitudeCoordinate
 
-    @eqx.filter_jit
     def indices(
         self,
         time: Int[Array, "..."],
@@ -58,9 +57,9 @@ class Coordinates(eqx.Module):
         """
         return self.time.index(time), self.latitude.index(latitude), self.longitude.index(longitude)
 
-    @staticmethod
-    @eqx.filter_jit
+    @classmethod
     def from_arrays(
+        cls,
         time: Int[Array, "time"],
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"]
@@ -84,6 +83,6 @@ class Coordinates(eqx.Module):
         """
         t = Coordinate.from_array(time, extrap=True)
         lat = Coordinate.from_array(latitude, extrap=True)
-        lon = Coordinate.from_array(longitude, is_circular=True, extrap=True, period=360)
+        lon = LongitudeCoordinate.from_array(longitude, extrap=True, period=360)
 
-        return Coordinates(time=t, latitude=lat, longitude=lon)
+        return cls(time=t, latitude=lat, longitude=lon)

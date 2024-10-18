@@ -1,3 +1,0 @@
-# sealagrangiax.trajectory
-
-::: sealagrangiax.trajectory

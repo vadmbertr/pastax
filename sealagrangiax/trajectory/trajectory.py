@@ -8,11 +8,11 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 import xarray as xr
 
-from ..utils import UNIT
-from ..utils.geo import earth_distance
-from ._timeseries import Timeseries
-from ._state import WHAT
-from .state import Location
+from ..utils.geo import distance_on_earth
+from ..utils.unit import UNIT, units_to_str
+from ._state import State
+from .state import Location, Time
+from ._timeseries import _in_axes_func, Timeseries
 
 
 class Trajectory(Timeseries):
@@ -21,7 +21,7 @@ class Trajectory(Timeseries):
 
     Attributes
     ----------
-    _states : Location
+    states : Location
         The locations of the trajectory.
     _states_type : ClassVar
         The type of the states in the trajectory (set to Location).
@@ -30,7 +30,7 @@ class Trajectory(Timeseries):
 
     Methods
     -------
-    __init__(locations, times, trajectory_id=None, **_)
+    __init__(locations, times, id=None, **_)
         Initializes the Trajectory with given locations, times, and optional trajectory ID.
     latitudes
         Returns the latitudes of the trajectory.
@@ -40,127 +40,114 @@ class Trajectory(Timeseries):
         Returns the longitudes of the trajectory.
     origin
         Returns the origin of the trajectory.
-    _locations
-        Returns the locations of the trajectory as Location objects.
-    lengths
+    lengths()
         Returns the cumulative lengths of the trajectory.
     liu_index(other)
-        Computes the Liu Index for the trajectory.
+        Computes the Liu Index between this trajectory and another trajectory.
     mae(other)
-        Computes the Mean Absolute Error (MAE) for the trajectory.
+        Computes the Mean Absolute Error (MAE) between this trajectory and another trajectory.
     plot(ax, label, color, ti=None)
         Plots the trajectory on a given matplotlib axis.
     rmse(other)
-        Computes the Root Mean Square Error (RMSE) for the trajectory.
+        Computes the Root Mean Square Error (RMSE) between this trajectory and another trajectory.
     separation_distance(other)
         Computes the separation distance between this trajectory and another trajectory.
-    steps
+    steps()
         Returns the steps of the trajectory.
+    from_array(values, times, id=None)
+        Creates a Trajectory from an array of values and time points.
+    to_dataarray()
+        Converts the trajectory locations to a dict of xarray DataArray.
+    to_dataset()
+        Converts the trajectory to a xarray Dataset.
     """
 
-    _states: Location
+    states: Location
     _states_type: ClassVar = Location
     id: Int[Array, ""] = None
 
     def __init__(
-        self, locations: Float[Array, "time 2"], times: Int[Array, "time"], trajectory_id: Int[Array, ""] = None, **_
+        self,
+        locations: Location,
+        times: Time,
+        id: Int[Array, ""] = None,
+        *_,
+        **__
     ):
         """
         Initializes the Trajectory with given locations, times, and optional trajectory ID.
 
         Parameters
         ----------
-        locations : Float[Array, "time 2"]
+        locations : Float[Array, "... time 2"]
             The locations for the trajectory.
-        times : Int[Array, "time"]
+        times : Int[Array, "... time"]
             The time points for the trajectory.
-        trajectory_id : Int[Array, ""], optional
-            The ID of the trajectory (default is None).
-        **_
-            Additional keyword arguments.
         """
-        super().__init__(locations, times, what=WHAT.location, unit=UNIT.degrees)
-        self.id = trajectory_id
+        super().__init__(locations, times)
+        self.id = id
 
     @property
-    @eqx.filter_jit
-    def latitudes(self) -> Float[Array, "time"]:
+    def latitudes(self) -> State:
         """
         Returns the latitudes of the trajectory.
 
         Returns
         -------
-        Float[Array, "time"]
+        State
             The latitudes of the trajectory.
         """
-        return self.locations[:, 0]
+        return self.locations.latitude
 
     @property
-    @eqx.filter_jit
-    def locations(self) -> Float[Array, "time 2"]:
+    def locations(self) -> Location:
         """
         Returns the locations of the trajectory.
 
         Returns
         -------
-        Float[Array, "time 2"]
+        Location
             The locations of the trajectory.
         """
         return self.states
 
     @property
-    @eqx.filter_jit
-    def longitudes(self) -> Float[Array, "time"]:
+    def longitudes(self) -> State:
         """
         Returns the longitudes of the trajectory.
 
         Returns
         -------
-        Float[Array, "time"]
+        State
             The longitudes of the trajectory.
         """
-        return self.locations[:, 1]
+        return self.locations.longitude
 
     @property
-    @eqx.filter_jit
-    def origin(self) -> Float[Array, "2"]:
+    def origin(self) -> State:
         """
         Returns the origin of the trajectory.
 
         Returns
         -------
-        Float[Array, "2"]
+        State
             The origin of the trajectory.
         """
-        return self.locations[0]
+        return State(self.locations.value[..., 0, :], unit=self.unit, name="Origin in [latitude, longitude]")
 
-    @property
-    @eqx.filter_jit
-    def _locations(self) -> Location:
-        """
-        Returns the locations of the trajectory as Location objects.
-
-        Returns
-        -------
-        Location
-            The locations of the trajectory as Location objects.
-        """
-        return self._states
-
-    @eqx.filter_jit
-    def lengths(self) -> Float[Array, "time"]:
+    def lengths(self) -> Timeseries:
         """
         Returns the cumulative lengths of the trajectory.
 
         Returns
         -------
-        Float[Array, "time"]
+        Timeseries
             The cumulative lengths of the trajectory.
         """
-        return jnp.cumsum(self.steps())
+        lengths = self.steps().cumsum()
+        return Timeseries.from_array(lengths.value, self.times.value, unit=lengths.unit, name="Cumulative lengths")
 
-    @eqx.filter_jit
-    def liu_index(self, other: Trajectory) -> Float[Array, "time"]:
+    def liu_index(self, other: Trajectory) -> Timeseries:
         """
         Computes the Liu Index (over time) between this trajectory and another trajectory.
 
@@ -171,17 +158,16 @@ class Trajectory(Timeseries):
 
         Returns
         -------
-        Float[Array, "time"]
+        Timeseries
             The Liu Index between the two trajectories.
         """
         error = self.separation_distance(other).cumsum()
         cum_lengths = self.lengths().cumsum()
         liu_index = error / cum_lengths
 
-        return liu_index
+        return Timeseries.from_array(liu_index.value, self.times.value, name="Liu index")
 
-    @eqx.filter_jit
-    def mae(self, other: Trajectory) -> Float[Array, "time"]:
+    def mae(self, other: Trajectory) -> Timeseries:
         """
         Computes the Mean Absolute Error (MAE) (over time) between this trajectory and another trajectory.
 
@@ -192,14 +178,14 @@ class Trajectory(Timeseries):
 
         Returns
         -------
-        Float[Array, "time"]
+        Timeseries
             The MAE between the two trajectories.
         """
         error = self.separation_distance(other).cumsum()
         length = jnp.arange(self.length)  # we consider that traj starts from the same x0
         mae = error / length
 
-        return mae
+        return Timeseries.from_array(mae.value, self.times.value, mae.unit, name="MAE")
 
     def plot(self, ax: plt.Axes, label: str, color: str, ti: int = None) -> plt.Axes:
         """
@@ -226,7 +212,7 @@ class Trajectory(Timeseries):
 
         alpha = jnp.geomspace(.25, 1, ti)
 
-        locations = self.locations[:ti, None, ::-1]
+        locations = self.locations.value[:ti, None, ::-1]
         segments = jnp.concat([locations[:-1], locations[1:]], axis=1)
 
         lc = LineCollection(segments)
@@ -238,8 +224,7 @@ class Trajectory(Timeseries):
 
         return ax
 
-    @eqx.filter_jit
-    def rmse(self, other: Trajectory) -> Float[Array, "time"]:
+    def rmse(self, other: Trajectory) -> Timeseries:
         """
         Computes the Root Mean Square Error (RMSE) (over time) between this trajectory and another trajectory.
 
@@ -250,17 +235,16 @@ class Trajectory(Timeseries):
 
         Returns
         -------
-        Float[Array, "time"]
+        Timeseries
             The RMSE between the two trajectories.
         """
         error = (self.separation_distance(other) ** 2).cumsum()
         length = jnp.arange(self.length)  # we consider that traj starts from the same x0
         rmse = (error / length) ** (1 / 2)
 
-        return rmse
+        return Timeseries.from_array(rmse.value, self.times.value, rmse.unit, name="RMSE")
 
-    @eqx.filter_jit
-    def separation_distance(self, other: Trajectory) -> Float[Array, "time"]:
+    def separation_distance(self, other: Trajectory) -> Timeseries:
         """
         Computes the separation distance (over time) between this trajectory and another trajectory.
 
@@ -271,65 +255,85 @@ class Trajectory(Timeseries):
 
         Returns
         -------
-        Float[Array, "time"]
+        Timeseries
             The separation distance between the two trajectories.
         """
-        def axes_func(leaf):
-            axes = None
-            if eqx.is_array(leaf) and leaf.ndim > 0:
-                axes = 0
-            return axes
-
-        separation_distance = eqx.filter_vmap(lambda p1, p2: p1.earth_distance(p2), in_axes=axes_func)(
-            self._locations, other._locations
+        separation_distance = eqx.filter_vmap(lambda p1, p2: p1.distance_on_earth(p2), in_axes=_in_axes_func)(
+            self.locations, other.locations
         )
 
-        return separation_distance
+        return Timeseries.from_array(
+            separation_distance.value, 
+            self.times.value, 
+            separation_distance.unit, 
+            name="Separation distance"
+        )
 
-    @eqx.filter_jit
-    def steps(self) -> Float[Array, "time"]:
+    def steps(self) -> Timeseries:
         """
         Returns the steps of the trajectory.
 
         Returns
         -------
-        Float[Array, "time"]
+        Timeseries
             The steps of the trajectory.
         """
-        def axes_func(leaf):
-            axes = None
-            if eqx.is_array(leaf) and leaf.ndim > 0:
-                axes = 0
-            return axes
-
-        steps = eqx.filter_vmap(lambda p1, p2: earth_distance(p1, p2), in_axes=axes_func)(
-            self.locations[1:], self.locations[:-1]
+        steps = eqx.filter_vmap(lambda p1, p2: distance_on_earth(p1, p2), in_axes=_in_axes_func)(
+            self.locations.value[1:], self.locations.value[:-1]
         )
+
         steps = jnp.pad(steps, (1, 0), constant_values=0.)  # adds a 1st 0 step
 
-        return steps
+        return Timeseries.from_array(steps, self.times.value, UNIT["m"], name="Trajectory steps")
+    
+    @classmethod
+    def from_array(
+        cls, 
+        values: Float[Array, "... time 2"], 
+        times: Float[Array, "... time"],
+        id: Int[Array, ""] = None,
+        **__: Dict
+    ) -> Trajectory:
+        """
+        Creates a trajectory from an array of values and time points.
+
+        Parameters
+        ----------
+        values : Float[Array, "... time 2"]
+            The array of values for the trajectory.
+        times : Float[Array, "... time"]
+            The time points for the trajectory.
+        id : Int[Array, ""], optional
+            The ID of the trajectory (default is None).
+
+        Returns
+        -------
+        Trajectory
+            The trajectory created from the array of values and time points.
+        """
+        return super().from_array(values, times, unit=UNIT["°"], name="Location in [latitude, longitude]", id=id)
 
     def to_dataarray(self) -> Dict[str, xr.DataArray]:
         """
-        Converts the timeseries states to a dictionary of xarray DataArrays.
+        Converts the trajectory location to a dictionary of xarray DataArrays.
 
         Returns
         -------
         Dict[str, xr.DataArray]
             A dictionary where keys are the variable names and values are the corresponding xarray DataArrays.
         """
-        times = self._times.to_datetime()
-        unit = UNIT[self.unit]
+        times = self.times.to_datetime()
+        unit = units_to_str(self.unit)
 
         latitude_da = xr.DataArray(
-            data=self.latitudes,
+            data=self.latitudes.value,
             dims=["time"],
             coords={"time": times},
             name="latitude",
             attrs={"units": unit}
         )
         longitude_da = xr.DataArray(
-            data=self.longitudes,
+            data=self.longitudes.value,
             dims=["time"],
             coords={"time": times},
             name="longitude",
@@ -340,7 +344,7 @@ class Trajectory(Timeseries):
 
     def to_dataset(self) -> xr.Dataset:
         """
-        Converts the timeseries states to an xarray Dataset.
+        Converts the trajectory to an xarray Dataset.
 
         Returns
         -------

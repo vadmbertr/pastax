@@ -1,17 +1,19 @@
+from __future__ import annotations
 from typing import Callable, ClassVar, Dict
 
-import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, ArrayLike, Float, Int
 from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
-from ..utils import UNIT
-from ._ensemble import TimeseriesEnsemble
-from ._state import WHAT
-from .timeseries import Timeseries, Trajectory
+from ..utils.unit import units_to_str
+from ._state import State
+from .state import Location
+from ._timeseries_ensemble import TimeseriesEnsemble
+from .trajectory import Timeseries, Trajectory
+from ._unitful import Unitful
 
 
 class TrajectoryEnsemble(TimeseriesEnsemble):
@@ -20,15 +22,13 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
 
     Attributes
     ----------
-    _members : Trajectory
+    members : Trajectory
         The members of the trajectory ensemble.
     _members_type : ClassVar
         The type of the members in the ensemble (set to Trajectory).
 
     Methods
     -------
-    __init__(locations, times, **_)
-        Initializes the TrajectoryEnsemble with given locations and times.
     id
         Returns the IDs of the trajectories.
     latitudes
@@ -43,7 +43,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         Computes the Continuous Ranked Probability Score (CRPS) for the ensemble.
     liu_index(other)
         Computes the Liu Index for each ensemble trajectory.
-    lengths
+    lengths()
         Returns the lengths of the trajectories.
     mae(other)
         Computes the Mean Absolute Error (MAE) for each ensemble trajectory.
@@ -53,35 +53,20 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         Computes the Root Mean Square Error (RMSE) for each ensemble trajectory.
     separation_distance(other)
         Computes the separation distance for each ensemble trajectory.
-    steps
+    steps()
         Returns the steps of the trajectories.
+    from_array(values, times, id=None)
+        Creates a TrajectoryEnsemble from an array of values and time points.
+    to_dataarray()
+        Converts the trajectory ensemble locations to a dict of xarray DataArray.
+    to_dataset()
+        Converts the trajectory ensemble to a xarray Dataset.
     """
 
-    _members: Trajectory
+    members: Trajectory
     _members_type: ClassVar = Trajectory
 
-    def __init__(
-            self,
-            locations: Float[Array, "member time 2"],
-            times: Int[Array, "time"],
-            **_
-    ):
-        """
-        Initializes the TrajectoryEnsemble with given locations and times.
-
-        Parameters
-        ----------
-        locations : Float[Array, "member time 2"]
-            The locations for the members of the ensemble.
-        times : Int[Array, "time"]
-            The time points for the trajectories.
-        **_
-            Additional keyword arguments.
-        """
-        super().__init__(locations, times, what=WHAT.location, unit=UNIT.degrees)
-
     @property
-    @eqx.filter_jit
     def id(self) -> Int[Array, "member"]:
         """
         Returns the IDs of the trajectories.
@@ -91,66 +76,61 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         Int[Array, "member"]
             The IDs of the trajectories.
         """
-        return self._members.id
+        return self.members.id
 
     @property
-    @eqx.filter_jit
-    def latitudes(self) -> Float[Array, "member time"]:
+    def latitudes(self) -> State:
         """
         Returns the latitudes of the trajectories.
 
         Returns
         -------
-        Float[Array, "member time"]
+        State
             The latitudes of the trajectories.
         """
-        return self.states[..., 0]
+        return self.members.latitudes
 
     @property
-    @eqx.filter_jit
-    def locations(self) -> Float[Array, "member time 2"]:
+    def locations(self) -> Location:
         """
         Returns the locations of the trajectories.
 
         Returns
         -------
-        Float[Array, "member time 2"]
+        Location
             The locations of the trajectories.
         """
-        return self.states
+        return self.members.locations
 
     @property
-    @eqx.filter_jit
-    def longitudes(self) -> Float[Array, "member time"]:
+    def longitudes(self) -> State:
         """
         Returns the longitudes of the trajectories.
 
         Returns
         -------
-        Float[Array, "member time"]
+        State
             The longitudes of the trajectories.
         """
-        return self.states[..., 1]
+        return self.members.longitudes
 
     @property
-    @eqx.filter_jit
-    def origin(self) -> Float[Array, "2"]:
+    def origin(self) -> State:
         """
         Returns the origin of the trajectories.
 
         Returns
         -------
-        Float[Array, "2"]
+        State
             The origin of the trajectories.
         """
-        return self.locations[..., 0, 0]
+        return self.members.origin
 
-    @eqx.filter_jit
     def crps(
-            self,
-            other: Trajectory,
-            distance_func: Callable[[Trajectory, Trajectory], Float[Array, "time"]] = Trajectory.separation_distance
-    ) -> Float[Array, "time"] | Timeseries:
+        self,
+        other: Trajectory,
+        distance_func: Callable[[Trajectory, Trajectory], Unitful | ArrayLike] = Trajectory.separation_distance
+    ) -> Timeseries:
         """
         Computes the Continuous Ranked Probability Score (CRPS) for the ensemble.
 
@@ -158,18 +138,17 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         ----------
         other : Trajectory
             The other trajectory to compare against.
-        distance_func : Callable[[Trajectory, Trajectory], Float[Array, "time"]], optional
+        distance_func : Callable[[Trajectory, Trajectory], Unitful | ArrayLike], optional
             The distance function to use (default is Trajectory.separation_distance).
 
         Returns
         -------
-        Float[Array, "time"] | Timeseries
+        Timeseries
             The CRPS for the ensemble.
         """
         return super().crps(other, distance_func)
 
-    @eqx.filter_jit
-    def liu_index(self, other: Trajectory) -> Float[Array, "member time"]:
+    def liu_index(self, other: Trajectory) -> TimeseriesEnsemble:
         """
         Computes the Liu Index for each ensemble trajectory.
 
@@ -180,25 +159,23 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
 
         Returns
         -------
-        Float[Array, "member time"]
+        TimeseriesEnsemble
             The Liu Index for each ensemble trajectory.
         """
         return self.map(lambda trajectory: other.liu_index(trajectory))
 
-    @eqx.filter_jit
-    def lengths(self) -> Float[Array, "member time"]:
+    def lengths(self) -> TimeseriesEnsemble:
         """
         Returns the lengths of the trajectories.
 
         Returns
         -------
-        Float[Array, "member time"]
+        TimeseriesEnsemble
             The lengths of the trajectories.
         """
         return self.map(lambda trajectory: trajectory.lengths())
 
-    @eqx.filter_jit
-    def mae(self, other: Trajectory) -> Float[Array, "member time"]:
+    def mae(self, other: Trajectory) -> TimeseriesEnsemble:
         """
         Computes the Mean Absolute Error (MAE) for each ensemble trajectory.
 
@@ -209,7 +186,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
 
         Returns
         -------
-        Float[Array, "member time"]
+        TimeseriesEnsemble
             The MAE for each ensemble trajectory.
         """
         return self.map(lambda trajectory: other.mae(trajectory))
@@ -240,7 +217,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         alpha_factor = jnp.clip(1 / ((self.size / 10) ** 0.5), .05, 1).item()
         alpha = jnp.geomspace(.25, 1, ti) * alpha_factor
 
-        locations = self.locations.swapaxes(0, 1)[:ti, :, None, ::-1]
+        locations = self.locations.value.swapaxes(0, 1)[:ti, :, None, ::-1]
         segments = jnp.concat([locations[:-1], locations[1:]], axis=2).reshape(-1, 2, 2)
         alpha = jnp.repeat(alpha, self.size)
 
@@ -250,12 +227,11 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         lc = LineCollection(segments[-self.size:, ...], color=color, alpha=alpha_factor)
         ax.add_collection(lc)
 
-        ax.plot(self.longitudes[0, -1], self.latitudes[0, -1], label=label, color=color)  # for label display
+        ax.plot(self.longitudes.value[0, -1], self.latitudes.value[0, -1], label=label, color=color)  # for label display
 
         return ax
 
-    @eqx.filter_jit
-    def rmse(self, other: Trajectory) -> Float[Array, "member time"]:
+    def rmse(self, other: Trajectory) -> TimeseriesEnsemble:
         """
         Computes the Root Mean Square Error (RMSE) for each ensemble trajectory.
 
@@ -266,13 +242,12 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
 
         Returns
         -------
-        Float[Array, "member time"]
+        TimeseriesEnsemble
             The RMSE for each ensemble trajectory.
         """
         return self.map(lambda trajectory: other.rmse(trajectory))
 
-    @eqx.filter_jit
-    def separation_distance(self, other: Trajectory) -> Float[Array, "member time"]:
+    def separation_distance(self, other: Trajectory) -> TimeseriesEnsemble:
         """
         Computes the separation distance for each ensemble trajectory.
 
@@ -283,22 +258,47 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
 
         Returns
         -------
-        Float[Array, "member time"]
+        TimeseriesEnsemble
             The separation distance for each ensemble trajectory.
         """
         return self.map(lambda trajectory: other.separation_distance(trajectory))
 
-    @eqx.filter_jit
-    def steps(self) -> Float[Array, "member time"]:
+    def steps(self) -> TimeseriesEnsemble:
         """
         Returns the steps of the trajectories.
 
         Returns
         -------
-        Float[Array, "member time"]
+        TimeseriesEnsemble
             The steps of the trajectories.
         """
         return self.map(lambda trajectory: trajectory.steps())
+
+    @classmethod
+    def from_array(
+        cls,
+        values: Float[Array, "member time 2"],
+        times: Float[Array, "time"],
+        id: Int[Array, ""] = None
+    ) -> TrajectoryEnsemble:
+        """
+        Creates a TrajectoryEnsemble from an array of values and time points.
+
+        Parameters
+        ----------
+        values : Float[Array, "member time 2"]
+            The values for the members of the trajectory ensemble.
+        times : Float[Array, "time"]
+            The time points for the timeseries.
+        id : Int[Array, ""], optional
+            The ID of the trajectory (default is None).
+
+        Returns
+        -------
+        TrajectoryEnsemble
+            The TrajectoryEnsemble created from the array of values and time points.
+        """
+        return super().from_array(values, times, id=id)
 
     def to_dataarray(self) -> Dict[str, xr.DataArray]:
         """
@@ -310,8 +310,8 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
             A dictionary where keys are the variable names and values are the corresponding xarray DataArrays.
         """
         member = np.arange(self.size)
-        times = self._members._times.to_datetime()
-        unit = UNIT[self.unit]
+        times = self.members.times.to_datetime()
+        unit = units_to_str(self.unit)
 
         id_da = xr.DataArray(
             data=self.id,

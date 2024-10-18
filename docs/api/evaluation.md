@@ -1,3 +1,0 @@
-# sealagrangiax.evaluation
-
-::: sealagrangiax.evaluation

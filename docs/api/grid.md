@@ -1,3 +1,0 @@
-# sealagrangiax.grid
-
-::: sealagrangiax.grid

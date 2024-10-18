@@ -8,9 +8,10 @@ from jaxtyping import Array, Bool, Float, Int, Scalar
 import numpy as np
 import xarray as xr
 
-from ..utils.geo import EARTH_RADIUS
+from ..utils.geo import longitude_in_180_180_degrees
+from ..utils.unit import meters_to_degrees
 from ._coordinates import Coordinates
-from ._grid import SpatioTemporal
+from ._grid import SpatioTemporalField
 
 
 class Dataset(eqx.Module):
@@ -42,24 +43,23 @@ class Dataset(eqx.Module):
         Interpolates the specified variables spatially at the given latitude and longitude.
     interp_spatiotemporal(*variables: Tuple[str, ...], time: Float[Array, "..."], latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Tuple[Float[Array, "... ... ..."], ...]
         Interpolates the specified variables spatiotemporally at the given time, latitude, and longitude.
-    neighborhood(*variables: Tuple[str, ...], time: Int[Array, ""], latitude: Float[Array, ""], longitude: Float[Array, ""], t_width: int = 2, x_width: int = 7) -> Fields
+    neighborhood(*variables: Tuple[str, ...], time: Int[Array, ""], latitude: Float[Array, ""], longitude: Float[Array, ""], t_width: int = 2, x_width: int = 7) -> Dataset
         Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`, 
         `longitude`.
-    from_arrays(variables: Dict[str, Float[Array, "time lat lon"]], time: Int[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str) -> Fields
-        Constructs a `Fields` object from arrays of variables and coordinates `time`, `latitude`, `longitude`.
-    from_xarray(dataset: xr.Dataset, variables: Dict[str, str], coordinates: Dict[str, str], interpolation_method: str) -> Fields
-        Constructs a `Fields` object from an `xarray.Dataset`.
+    from_arrays(variables: Dict[str, Float[Array, "time lat lon"]], time: Int[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str = "linear", velocity_in_mps: bool = True) -> Dataset
+        Constructs a `Dataset` object from arrays of variables and coordinates `time`, `latitude`, `longitude`.
+    from_xarray(dataset: xr.Dataset, variables: Dict[str, str], coordinates: Dict[str, str], interpolation_method: str = "linear", velocity_in_mps: bool = False) -> Dataset
+        Constructs a `Dataset` object from an `xarray.Dataset`.
     to_xarray() -> xr.Dataset
-        Returns the `Fields` object as an `xarray.Dataset`.
+        Returns the `Dataset` object as an `xarray.Dataset`.
     """
-    variables: Dict[str, SpatioTemporal]
+    variables: Dict[str, SpatioTemporalField]
     is_land: Bool[Array, "lat lon"]
     dx: Float[Array, "lat lon-1"]  # m
     dy: Float[Array, "lat-1 lon"]  # m
     cell_area: Bool[Array, "lat lon"]  # m^2
     coordinates: Coordinates
 
-    @eqx.filter_jit
     def indices(
         self,
         time: Int[Scalar, ""],
@@ -84,7 +84,6 @@ class Dataset(eqx.Module):
         """
         return self.coordinates.indices(time, latitude, longitude)
 
-    @eqx.filter_jit
     def interp_temporal(
         self,
         *variables: Tuple[str, ...],
@@ -107,7 +106,6 @@ class Dataset(eqx.Module):
         """
         return tuple(self.variables[var_name].interp_temporal(time) for var_name in variables)
 
-    @eqx.filter_jit
     def interp_spatial(
         self,
         *variables: Tuple[str, ...],
@@ -136,7 +134,6 @@ class Dataset(eqx.Module):
             for var_name in variables
         )
     
-    @eqx.filter_jit
     def interp_spatiotemporal(
         self,
         *variables: Tuple[str, ...],
@@ -149,7 +146,6 @@ class Dataset(eqx.Module):
             for var_name in variables
         )
 
-    @eqx.filter_jit
     def neighborhood(
         self,
         *variables: Tuple[str, ...],
@@ -207,13 +203,15 @@ class Dataset(eqx.Module):
         return Dataset.from_arrays(variables, t, lat, lon, interpolation_method="linear")
 
     # construct a `Dataset` from `Array`s of `variables` and coordinates `time`, `latitude`, `longitude`
-    @staticmethod
+    @classmethod
     def from_arrays(
+        cls,
         variables: Dict[str, Float[Array, "time lat lon"]],
         time: Int[Array, "time"],
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"],
-        interpolation_method: str
+        interpolation_method: str = "linear",
+        convert_uv_to_dps: bool = False
     ) -> Dataset:
         """
         Create a Fields object from arrays of variables, time, latitude, and longitude.
@@ -223,14 +221,17 @@ class Dataset(eqx.Module):
         variables : Dict[str, Float[Array, "time lat lon"]]
             A dictionary where keys are variable names and values are 3D arrays representing 
             the variable data over time, latitude, and longitude.
+            We expect at least "u" and "v" to be provided as variables names.
         time : Int[Array, "time"]
             A 1D array representing the time dimension.
         latitude : Float[Array, "lat"]
             A 1D array representing the latitude dimension.
         longitude : Float[Array, "lon"]
             A 1D array representing the longitude dimension.
-        interpolation_method : str
-            The method to use for latter possible interpolation of the variables.
+        interpolation_method : str, optional
+            The method to use for latter possible interpolation of the variables (default is "linear").
+        convert_uv_to_dps : bool, optional
+            Whether the velocity data is in m/s (default is False) and should be converted to °/s.
 
         Returns
         -------
@@ -238,11 +239,25 @@ class Dataset(eqx.Module):
             A Fields object containing the processed variables, land mask, grid spacing in 
             meters, cell area in square meters, and coordinates.
         """
-        @jax.jit
+        def convert_velocity_to_dps(
+                u_mps: Float[Array, "time lat lon"], 
+                v_mps: Float[Array, "time lat lon"]
+        ) -> Tuple[Float[Array, "time lat lon"], Float[Array, "time lat lon"]]:
+            vu_mps = jnp.stack((v_mps, u_mps), axis=-1)
+            original_shape = vu_mps.shape
+            vu_mps = vu_mps.reshape(vu_mps.shape[0], -1, 2)
+
+            _, lat_grid = jnp.meshgrid(longitude, latitude)
+            lat_grid = lat_grid.ravel()
+            
+            vu_dps = eqx.filter_vmap(lambda x: meters_to_degrees(x, lat_grid))(vu_mps)
+            vu_dps = vu_dps.reshape(original_shape)
+
+            return vu_dps[..., 1], vu_dps[..., 0]
+
         def compute_dlatlon(latlon: Float[Array, "latlon"]) -> Float[Array, "latlon-1"]:
             return latlon[1:] - latlon[:-1]
 
-        @jax.jit
         def compute_cell_dlatlon(dright: Float[Array, "latlon-1"]) -> Float[Array, "latlon"]:
             dcentered = (dright[1:] + dright[:-1]) / 2
             dlatlon = jnp.pad(
@@ -252,21 +267,7 @@ class Dataset(eqx.Module):
             )
             return dlatlon
 
-        @jax.jit
-        def dlat_to_meters(_dlat: Float[Array, "lat-1"]) -> Float[Array, "lat-1 lon"]:
-            return jnp.einsum("i,j->ij", jnp.radians(_dlat), jnp.full_like(longitude, EARTH_RADIUS))
-
-        @jax.jit
-        def dlon_to_meters(_dlon: Float[Array, "lon-1"]) -> Float[Array, "lat lon-1"]:
-            return jnp.einsum(
-                "i,j->ij",
-                jnp.cos(jnp.radians(latitude)) * EARTH_RADIUS, jnp.radians(_dlon)
-            )
-
-        longitude = (longitude + 180) % 360 - 180  # force conversion to [-180, 180]
-
         is_land = jnp.zeros((latitude.size, longitude.size), dtype=bool)
-
         for variable in variables.values():
             _is_land = jnp.isnan(variable).sum(axis=0, dtype=bool)
             is_land = jnp.logical_or(is_land, _is_land)
@@ -276,12 +277,16 @@ class Dataset(eqx.Module):
             variable = jnp.where(is_land, 0, variable)
             variables[var_name] = variable
 
+        if convert_uv_to_dps:
+            variables["u"], variables["v"] = convert_velocity_to_dps(variables["u"], variables["v"])
+
+        longitude = longitude_in_180_180_degrees(longitude)
         coordinates = Coordinates.from_arrays(time, latitude, longitude)
 
         variables = dict(
             (
                 variable_name,
-                SpatioTemporal.from_array(
+                SpatioTemporalField.from_array(
                     values,
                     coordinates.time.values, coordinates.latitude.values, coordinates.longitude.values,
                     interpolation_method=interpolation_method
@@ -289,20 +294,20 @@ class Dataset(eqx.Module):
             ) for variable_name, values in variables.items()
         )
 
-        dlat = compute_dlatlon(latitude)  # degrees
-        dlon = compute_dlatlon(longitude)  # degrees
+        dlat = compute_dlatlon(latitude)  # °
+        dlon = compute_dlatlon(longitude)  # °
 
-        cell_dlat = compute_cell_dlatlon(dlat)  # degrees
-        cell_dlon = compute_cell_dlatlon(dlon)  # degrees
+        cell_dlat = compute_cell_dlatlon(dlat)  # °
+        cell_dlon = compute_cell_dlatlon(dlon)  # °
 
-        dlat = dlat_to_meters(dlat)  # meters
-        dlon = dlon_to_meters(dlon)  # meters
+        _, dlat = jnp.meshgrid(longitude, dlat)
+        dlon, _ = jnp.meshgrid(dlon, latitude)
+        _, cell_dlat = jnp.meshgrid(longitude, cell_dlat)
+        cell_dlon, _ = jnp.meshgrid(cell_dlon, latitude)
 
-        cell_dlat = dlat_to_meters(cell_dlat)  # meters
-        cell_dlon = dlon_to_meters(cell_dlon)  # meters
-        cell_area = cell_dlat * cell_dlon  # m^2
+        cell_area = cell_dlat * cell_dlon  # °^2
 
-        return Dataset(
+        return cls(
             variables=variables, 
             is_land=is_land, 
             dx=dlon, 
@@ -311,12 +316,14 @@ class Dataset(eqx.Module):
             coordinates=coordinates
         )
 
-    @staticmethod
+    @classmethod
     def from_xarray(
-            dataset: xr.Dataset,
-            variables: Dict[str, str],
-            coordinates: Dict[str, str],
-            interpolation_method: str
+        cls,
+        dataset: xr.Dataset,
+        variables: Dict[str, str],
+        coordinates: Dict[str, str],
+        interpolation_method: str = "linear",
+        convert_uv_to_dps: bool = False
     ) -> Dataset:
         """
         Create a Fields object from an xarray Dataset.
@@ -327,20 +334,23 @@ class Dataset(eqx.Module):
             The xarray Dataset containing the data.
         variables : Dict[str, str]
             A dictionary mapping the target variable names (keys) to the source variable names in the dataset (values).
+            We expect at least "u" and "v" to be provided as target variables names.
         coordinates : Dict[str, str]
             A dictionary mapping the coordinate names ('time', 'latitude', 'longitude') to their corresponding names in
             the dataset.
-        interpolation_method : str
-            The method to use for latter possible interpolation of the data.
+        interpolation_method : str, optional
+            The method to use for latter possible interpolation of the variables (default is "linear").
+        convert_uv_to_dps : bool, optional
+            Whether the velocity data is in m/s (default is False) and should be converted to °/s.
 
         Returns
         -------
         Fields
             An instance of the Fields class created from the provided xarray Dataset.
         """
-        variables, t, lat, lon = Dataset.to_arrays(dataset, variables, coordinates, to_jax=True)
+        variables, t, lat, lon = cls.to_arrays(dataset, variables, coordinates, to_jax=True)
 
-        return Dataset.from_arrays(variables, t, lat, lon, interpolation_method)
+        return cls.from_arrays(variables, t, lat, lon, interpolation_method, convert_uv_to_dps)
 
     @staticmethod
     def to_arrays(

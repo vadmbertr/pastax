@@ -1,23 +1,20 @@
-from typing import Callable, Dict, Tuple
+from typing import Callable, Tuple
 
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jrd
-from jaxtyping import Array, Int
+from jaxtyping import Array, Int, PyTree
 
-from ..grid import Dataset
 from ..trajectory import Displacement, Location, Trajectory, TrajectoryEnsemble
-from ..utils import UNIT
+from ..utils.unit import UNIT
 
 
 class Simulator(eqx.Module):
     """
-    Base class for simulating trajectories from various physical fields.
+    Base class for defining differentiable trajectories or ensembles of trajectories simulators.
 
     Attributes
     ----------
-    datasets : Dict[str, Dataset] | Dataset
-        One or several datasets of gridded physical fields (SSC, SSH, SST, etc.) used by the simulator.
     id : str
         The identifier for the simulator.
 
@@ -25,19 +22,16 @@ class Simulator(eqx.Module):
     -------
     get_domain(x0, t0, ts)
         Computes the minimum and maximum time and location bounds of the simulation space-time domain.
-    __call__(x0, t0, ts, n_samples=None, key=None)
-        Simulates trajectories based on the initial location, time, and time steps.
+    __call__(args, x0, ts, n_samples=None, key=None)
+        Simulates a trajectory or ensemble of trajectories based on the initial location and time steps (including t0).
     """
 
-    datasets: Dict[str, Dataset]
     id: str
 
     @staticmethod
-    @eqx.filter_jit
     def get_domain(
-            x0: Location,
-            t0: Int[Array, ""],
-            ts: Int[Array, "time-1"]
+        x0: Location,
+        ts: Int[Array, "time"]
     ) -> Tuple[Int[Array, ""], Int[Array, ""], Location, Location]:
         """
         Computes the minimum and maximum time and location bounds of the simulation space-time domain.
@@ -46,9 +40,7 @@ class Simulator(eqx.Module):
         ----------
         x0 : Location
             The initial location.
-        t0 : Int[Array, ""]
-            The initial time.
-        ts : Int[Array, "time-1"]
+        ts : Int[Array, "time"]
             The time steps for the simulation.
 
         Returns
@@ -57,14 +49,14 @@ class Simulator(eqx.Module):
             The minimum time, maximum time, minimum location, and maximum location bounds.
         """
         one_day = 60 * 60 * 24
-        min_time = t0 - one_day
+        min_time = ts[0] - one_day
         max_time = ts[-1] + one_day  # this way we can always interpolate in time
         n_days = (max_time - min_time) / one_day
 
         max_travel_distance = .5  # in °/day ; inferred from data
         max_travel_distance *= (n_days - 2)  # in °
         max_travel_distance = Displacement(
-            jnp.full(2, max_travel_distance, dtype=float), unit=UNIT.degrees
+            jnp.full(2, max_travel_distance, dtype=float), unit=UNIT["°"]
         )
 
         min_corner = Location(x0 - max_travel_distance)
@@ -74,29 +66,30 @@ class Simulator(eqx.Module):
 
     def __call__(
         self,
+        args: PyTree,
         x0: Location,
-        t0: Int[Array, ""],
-        ts: Int[Array, "time-1"],
-        dt0: int = 30 * 60,  # 30 minutes in seconds
+        ts: Int[Array, "time"],
+        dt0: int,
         solver: Callable = None,
         n_samples: int = None,
         key: jrd.PRNGKey = None
     ) -> Trajectory | TrajectoryEnsemble:
         """
-        Simulates the trajectory based on the initial location, time, and time steps.
+        Simulates a trajectory or ensemble of trajectories based on the initial location and time steps (including t0).
 
         This method must be implemented by its subclasses.
 
         Parameters
         ----------
+        args : PyTree
+            Any PyTree of argument(s) used by the simulator.
+            Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
             The initial location.
-        t0 : Int[Array, ""]
-            The initial time.
-        ts : Int[Array, "time-1"]
-            The time steps for the simulation outputs.
+        ts : Int[Array, "time"]
+            The time steps for the simulation outputs (including t0).
         dt0 : int, optional
-            The initial time step in seconds (default is 30 * 60 seconds).
+            The initial time step of the solver, in seconds.
         solver : Callable, optional
             The solver function to use for the simulation (default is None).
         n_samples : int, optional
@@ -112,7 +105,6 @@ class Simulator(eqx.Module):
         Raises
         ------
         NotImplementedError
-            If the method is not implemented.
+            If the method is not implemented by the subclass.
         """
-        # must return the full trajectory, including (x0, t0)
         raise NotImplementedError()

@@ -9,7 +9,7 @@ from matplotlib.ticker import MaxNLocator, NullFormatter
 import xarray as xr
 
 from ..trajectory import Set, Timeseries, TimeseriesEnsemble
-from ..utils import UNIT, WHAT, meters_to_kilometers, sq_meters_to_sq_kilometers, seconds_to_days
+from ..utils import UNIT, seconds_to_days, units_to_str
 
 
 class Evaluation(Set):
@@ -168,8 +168,8 @@ class Evaluation(Set):
         add_legend: bool,
         ax: plt.Axes
     ):
-        min_values, max_values, timedelta, unit, what = self.__do_plot_metric(ti, metric, add_legend, ax)
-        self.__set_axis_limits_labels(min_values, max_values, timedelta, unit, what, add_xlabel, ax)
+        min_values, max_values, timedelta, unit, name = self.__do_plot_metric(ti, metric, add_legend, ax)
+        self.__set_axis_limits_labels(min_values, max_values, timedelta, unit, name, add_xlabel, ax)
 
     def __do_plot_metric(
         self,
@@ -189,16 +189,16 @@ class Evaluation(Set):
             max_values = jnp.nanmax(values[values != jnp.inf])
 
             if isinstance(metric, Timeseries):
-                what = None
-                label = WHAT[metric.what] if has_label else None
+                name = None
+                label = metric.name if has_label else None
                 self.__plot_pair_metric(values_ti, timedelta_ti, ax, label=label)
             else:
-                what = WHAT[metric.what]
+                name = metric.name
                 self.__plot_ensemble_metric(values_ti, timedelta_ti, ax)
         else:
-            min_values, max_values, timedelta, unit, what = jnp.inf, -jnp.inf, None, None, None
+            min_values, max_values, timedelta, unit, name = jnp.inf, -jnp.inf, None, None, None
             for _metric in metric:
-                _min_values, _max_values, timedelta, unit, _what = self.__do_plot_metric(
+                _min_values, _max_values, timedelta, unit, _name = self.__do_plot_metric(
                     ti, _metric, add_legend, ax, has_label=True
                 )
 
@@ -207,13 +207,13 @@ class Evaluation(Set):
                 if _max_values > max_values:
                     max_values = _max_values
 
-                if _what is not None:
-                    what = _what
+                if _name is not None:
+                    name = _name
 
             if add_legend:
                 ax.legend()
 
-        return min_values, max_values, timedelta, unit, what
+        return min_values, max_values, timedelta, unit, name
 
     @staticmethod
     def __guess_metrics_fig_layout(n_metrics: int) -> Tuple[int, int]:
@@ -232,24 +232,22 @@ class Evaluation(Set):
     def __parse_metric(
         metric: Timeseries | TimeseriesEnsemble
     ) -> Tuple[Float[Array, "time"] | Float[Array, "member time"], Float[Array, "time"], str]:
-        if isinstance(metric, Timeseries):
-            values = metric.states[1:]
-        else:
-            values = metric.states[:, 1:]
-        unit = metric.unit
+        values = metric.states.value[..., 1:, :]
 
-        if unit == UNIT.meters:
-            values = meters_to_kilometers(values)  # to km
-            unit = UNIT.kilometers
-        elif unit == UNIT.square_meters:
-            values = sq_meters_to_sq_kilometers(values)
-            unit = UNIT.square_kilometers
+        unit = {}
+        for k, v in metric.unit.items():
+            unit[k] = v
+            if k == UNIT["m"]:
+                values = UNIT["m"].convert_to(UNIT["km"], values, v)  # to km for visualization
+                unit[UNIT["m"]] = v
+            else:
+                unit[k] = v
 
-        times = metric.times
-        timedelta = seconds_to_days(times - times[0])
-        timedelta = timedelta[1:]
+        times = metric.times.value
+        timedelta = seconds_to_days(times - times[..., 0])
+        timedelta = timedelta[..., 1:]
 
-        return values, timedelta, UNIT[unit]
+        return values, timedelta, units_to_str(unit)
 
     def __plot_ensemble_metric(
         self,
@@ -282,7 +280,7 @@ class Evaluation(Set):
         max_states: Float[Array, ""],
         timedelta: Float[Array, "time"],
         unit: str,
-        what: str,
+        name: str,
         add_xlabel: bool,
         ax: plt.Axes
     ):
@@ -294,7 +292,7 @@ class Evaluation(Set):
             ax.xaxis.set_major_formatter(NullFormatter())
 
         ax.set_ylim([min_states - abs(min_states * .1), max_states + abs(max_states * .1)])
-        ylabel = f"{what}"
+        ylabel = f"{name}"
         if unit != "":
             ylabel += f" (${unit}$)"
         ax.set_ylabel(ylabel)

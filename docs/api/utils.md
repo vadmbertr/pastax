@@ -1,3 +1,0 @@
-# sealagrangiax.utils
-
-::: sealagrangiax.utils

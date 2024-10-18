@@ -1,186 +1,240 @@
 from __future__ import annotations
-from numbers import Number
-from typing import Callable, ClassVar
+from typing import Callable, ClassVar, Dict
 
 import equinox as eqx
-from jaxtyping import Array, Float, Int
+import jax.numpy as jnp
+from jaxtyping import Array, ArrayLike, Float
 import xarray as xr
 
-from ..utils import UNIT
-from ._state import State, WHAT
+from ..utils.unit import Unit, units_to_str
+from ._state import State
 from .state import Time
+from ._unitful import Unitful
 
 
-class Timeseries(eqx.Module):
+def _in_axes_func(leaf):
+    axes = None
+    if eqx.is_array(leaf) and leaf.ndim > 0:
+        axes = 0
+    return axes
+
+
+class Timeseries(Unitful):
     """
-    Base class representing a timeseries of states.
+    Class representing a timeseries of states.
 
     Attributes
     ----------
-    _states : State
+    states : State
         The states of the timeseries.
     _states_type : ClassVar
         The type of the states in the timeseries.
-    _times : Time
+    times : Time
         The time points of the timeseries.
     length : int
         The length of the timeseries.
 
     Methods
     -------
-    __init__(values, times, what=WHAT.unknown, unit=UNIT.dimensionless, **_)
-        Initializes the Timeseries with given values, times, and optional parameters.
-    states
-        Returns the states of the timeseries.
-    times
-        Returns the time points of the timeseries.
+    __init__(states, times, **__)
+        Initializes the Timeseries with given states, times, and optional parameters.
+    value
+        Returns the value of the timeseries.
     unit
         Returns the unit of the timeseries.
-    what
-        Returns the type of the timeseries.
+    name
+        Returns the name of the timeseries.
+    attach_name(name)
+        Attaches a name to the timeseries.
     euclidean_distance(other)
         Computes the Euclidean distance between this timeseries and another timeseries.
     map(func)
         Applies a function to each state in the timeseries.
+    from_array(values, times, unit={}, name=None, **kwargs)
+        Creates a Timeseries from an array of values and time points.
+    to_dataarray()
+        Converts the timeseries states to an xarray DataArray.
+    to_dataset()
+        Converts the timeseries to a xarray Dataset.
     __sub__(other)
-        Subtracts another timeseries or value from this timeseries.
+        Subtracts another ensemble, timeseries, state or array like from this timeseries.
     """
 
-    _states: State
+    states: State
     _states_type: ClassVar = State
-    _times: Time
-    length: int
+    times: Time = eqx.field(static=True)  # TODO: not sure if this is correct
+    length: int = eqx.field(static=True)
+    value: None = eqx.field(static=True, default_factory=lambda: None)
+    unit: None = eqx.field(static=True, default_factory=lambda: None)
 
     def __init__(
         self,
-        values: Float[Array, "time state"],
-        times: Int[Array, "time"],
-        what: WHAT = WHAT.unknown,
-        unit: UNIT = UNIT.dimensionless,
-        **_
+        states: State,
+        times: Time,
+        **__: Dict
     ):
         """
-        Initializes the Timeseries with given values, times, and optional parameters.
+        Initializes the Timeseries with given states, times, and optional parameters.
 
         Parameters
         ----------
-        values : Float[Array, "time state"]
-            The values for the states of the timeseries.
-        times : Int[Array, "time"]
-            The time points for the timeseries.
-        what : WHAT, optional
-            The type of the timeseries (default is WHAT.unknown).
-        unit : UNIT, optional
-            The unit of the timeseries (default is UNIT.dimensionless).
-        **_
-            Additional keyword arguments.
-        """
-        assert values.ndim > 1, f"values {values} should have 2 dimensions: time and state"
-        assert values.shape[0] == times.shape[0], f"values {values} and times {times} have incompatible shapes"
-
-        self._states = eqx.filter_vmap(
-            lambda value: self._states_type(value, what=what, unit=unit),
-            out_axes=eqx._vmap_pmap.if_mapped(0)
-        )(values)
-        self._times = eqx.filter_vmap(
-            lambda time: Time(time),
-            out_axes=eqx._vmap_pmap.if_mapped(0)
-        )(times)
-        self.length = times.size
-
-    @property
-    def states(self) -> Float[Array, "time state"]:
-        """
-        Returns the states of the timeseries.
-
-        Returns
-        -------
-        Float[Array, "time state"]
+        states : Float[Array, "... time state"]
             The states of the timeseries.
+        times : Float[Array, "time"]
+            The time points for the timeseries.
         """
-        return self._states.value
+        self.states = states
+        self.times = times
+        self.length = times.value.shape[-1]
 
     @property
-    def times(self) -> Int[Array, "time"]:
+    def value(self) -> Float[Array, "... time state"]:
         """
-        Returns the time points of the timeseries.
+        Returns the value of the timeseries.
 
         Returns
         -------
-        Int[Array, "time"]
-            The time points of the timeseries.
+        Float[Array, "... time state"]
+            The value of the timeseries.
         """
-        return self._times.value
+        return self.states.value
 
     @property
-    def unit(self) -> UNIT:
+    def unit(self) -> Dict[Unit, int | float]:
         """
         Returns the unit of the timeseries.
 
         Returns
         -------
-        UNIT
+        Dict[Unit, int | float]
             The unit of the timeseries.
         """
-        return self._states.unit
+        return self.states.unit
 
     @property
-    def what(self) -> WHAT:
+    def name(self) -> str:
         """
-        Returns the type of the timeseries.
+        Returns the name of the timeseries.
 
         Returns
         -------
-        WHAT
-            The type of the timeseries.
+        name
+            The name of the timeseries.
         """
-        return self._states.what
+        return self.states.name
+    
+    def attach_name(self, name: str) -> Timeseries:
+        """
+        Attaches a name to the timeseries.
 
-    @eqx.filter_jit
-    def euclidean_distance(self, other: Timeseries) -> Float[Array, "time"]:
+        Parameters
+        ----------
+        name : str
+            The name to attach to the timeseries.
+
+        Returns
+        -------
+        Timeseries
+            A new timeseries with the attached name.
+        """
+        return self.__class__(self.states.value, self.times.value, unit=self.unit, name=name)
+    
+    def euclidean_distance(self, other: Timeseries | ArrayLike) -> Timeseries:
         """
         Computes the Euclidean distance between this timeseries and another timeseries.
 
         Parameters
         ----------
-        other : Timeseries
+        other : Timeseries | ArrayLike
             The other timeseries to compute the distance to.
 
         Returns
         -------
-        Float[Array, "time"]
+        Timeseries
             The Euclidean distance between the two timeseries.
         """
-        def axes_func(leaf):
-            axes = None
-            if eqx.is_array(leaf) and leaf.ndim > 0:
-                axes = 0
-            return axes
+        if isinstance(other, Timeseries):
+            other = other.states
+        
+        res = eqx.filter_vmap(
+            lambda p1, p2: p1.euclidean_distance(p2), 
+            in_axes=_in_axes_func,
+            out_axes=eqx._vmap_pmap.if_mapped(0)  # TODO: not sure if this is correct (remove?)
+        )(self.states, other)
 
-        return eqx.filter_vmap(lambda p1, p2: p1.euclidean_distance(p2), in_axes=axes_func)(self._states, other._states)
+        return Timeseries.from_array(res.value, self.times.value, self.unit, name="Euclidean distance")
 
-    @eqx.filter_jit
-    def map(self, func: Callable[[State], Float[Array, "..."]]) -> Float[Array, "time ..."]:
+    def map(self, func: Callable[[State], Unitful | ArrayLike]) -> Timeseries:
         """
         Applies a function to each state in the timeseries.
 
         Parameters
         ----------
-        func : Callable[[State], Float[Array, "..."]]
+        func : Callable[[State], Unitful | ArrayLike]
             The function to apply to each state.
 
         Returns
         -------
-        Float[Array, "time ..."]
+        Timeseries
             The result of applying the function to each state.
         """
-        def axes_func(leaf):
-            axes = None
-            if eqx.is_array(leaf) and leaf.ndim > 0:
-                axes = 0
-            return axes
+        unit = {}
+        res = eqx.filter_vmap(
+            func, 
+            in_axes=_in_axes_func,
+            out_axes=eqx._vmap_pmap.if_mapped(0)  # TODO: not sure if this is correct (remove?)
+        )(self.states)
 
-        return eqx.filter_vmap(func, in_axes=axes_func)(self._states)
+        if isinstance(res, Unitful):
+            unit = res.unit
+            res = res.value
+
+        return Timeseries.from_array(res, self.times.value, unit)
+    
+    @classmethod
+    def from_array(
+        cls, 
+        values: Float[Array, "time state"], 
+        times: Float[Array, "time"],
+        unit: Unit | Dict[Unit, int | float] = {},
+        name: str = None,
+        **kwargs: Dict
+    ) -> Timeseries:
+        """
+        Creates a timeseries from an array of values and time points.
+
+        Parameters
+        ----------
+        values : Float[Array, "time state"]
+            The array of values for the timeseries.
+        times : Float[Array, "time"]
+            The time points for the timeseries.
+        unit : Unit | Dict[Unit, int | float], optional
+            The unit of the timeseries (default is an empty Dict).
+        name : str, optional
+            The name of the timeseries (default is None).
+        **kwargs : Dict
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Timeseries
+            The timeseries created from the array of values and time points.
+        """
+        values = jnp.asarray(values)
+        times = jnp.asarray(times)
+        
+        values = eqx.filter_vmap(
+            lambda value: cls._states_type(value, unit=unit, name=name),
+            out_axes=eqx._vmap_pmap.if_mapped(0)
+        )(values)
+
+        times = eqx.filter_vmap(
+            lambda time: Time(time),
+            out_axes=eqx._vmap_pmap.if_mapped(0)
+        )(times)
+
+        return cls(values, times, **kwargs)
 
     def to_dataarray(self) -> xr.DataArray:
         """
@@ -192,11 +246,11 @@ class Timeseries(eqx.Module):
             An xarray DataArray containing the timeseries states.
         """
         da = xr.DataArray(
-            data=self.states,
+            data=self.states.value,
             dims=["time"],
-            coords={"time": self._times.to_datetime()},
-            name=WHAT[self.what],
-            attrs={"units": UNIT[self.unit]}
+            coords={"time": self.times.to_datetime()},
+            name=self.name,
+            attrs={"units": units_to_str(self.unit)}
         )
 
         return da
@@ -214,30 +268,3 @@ class Timeseries(eqx.Module):
         ds = da.to_dataset()
 
         return ds
-
-    @eqx.filter_jit
-    def __sub__(
-        self,
-        other: "TimeseriesEnsemble" | Timeseries | Float[Array, "time state"] | Float[Array, "state"] | Float[Array, ""] | Number
-    ) -> Float[Array, "time state"]:
-        """
-        Subtracts another timeseries or value from this timeseries.
-
-        Parameters
-        ----------
-        other : TimeseriesEnsemble or Timeseries or Float[Array, "time state"] or Float[Array, "state"] or Float[Array, ""] or Number
-            The other operand to subtract.
-
-        Returns
-        -------
-        Float[Array, "time state"]
-            The result of the subtraction.
-        """
-        from ._ensemble import TimeseriesEnsemble
-        if isinstance(other, TimeseriesEnsemble):
-            return other.map(lambda other_ts: self.__sub__(other_ts))
-
-        if isinstance(other, Timeseries):
-            other = other._states
-
-        return self._states.__sub__(other)

@@ -1,3 +1,0 @@
-# sealagrangiax.simulator
-
-::: sealagrangiax.simulator

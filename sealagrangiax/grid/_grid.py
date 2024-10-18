@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Any
 
 import equinox as eqx
-import interpax as inx
+import interpax as ipx
 import jax.numpy as jnp
 from jaxtyping import Float, Int, Array
 
@@ -13,7 +13,7 @@ class Grid(eqx.Module):
 
     Attributes
     ----------
-    values : Float[Array, "..."] | Int[Array, "..."]
+    _values : Float[Array, "..."] | Int[Array, "..."]
         The grid values stored as either floating-point or integer arrays.
 
     Methods
@@ -21,7 +21,19 @@ class Grid(eqx.Module):
     __getitem__(item: Any) -> Float[Array, "..."] | Int[Array, "..."]
         Retrieves the value(s) at the specified index or slice from the grid.
     """
-    values: Float[Array, "..."] | Int[Array, "..."]
+    _values: Float[Array, "..."] | Int[Array, "..."]
+
+    @property
+    def values(self) -> Float[Array, "dim"]:
+        """
+        Returns the grid values.
+# 
+        Returns
+        -------
+        Float[Array, "dim"]
+            The grid values.
+        """
+        return self._values
 
     def __getitem__(self, item: Any) -> Float[Array, "..."] | Int[Array, "..."]:
         """
@@ -46,42 +58,34 @@ class Coordinate(Grid):
 
     Attributes
     ----------
-    values : Float[Array, "dim"]
+    _values : Float[Array, "dim"]
         1D array of coordinate values.
-    indices : inx.Interpolator1D
+    indices : ipx.Interpolator1D
         Interpolator for nearest index interpolation.
-    is_circular : boolean, default=False
-        Indicates if the coordinate system is circular.
 
     Methods
     -------
     index(query: Float[Array, "..."]) -> Int[Array, "..."]
         Returns the nearest index for the given query coordinates.
         
-    from_array(values: Float[Array, "coord"], is_circular: bool = False, **interpolator_kwargs: Any) -> Coordinate
+    from_array(values: Float[Array, "coord"], **interpolator_kwargs: Any) -> Coordinate
         Creates a Coordinate instance from an array of values.
     """
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
-    indices: inx.Interpolator1D
-    is_circular: bool = False
+    indices: ipx.Interpolator1D
 
     @property
     def values(self) -> Float[Array, "dim"]:
         """
         Returns the coordinate values.
-
+# 
         Returns
         -------
         Float[Array, "dim"]
             The coordinate values.
         """
-        values = self._values
-        if self.is_circular:
-            values -= 180
+        return self._values
 
-        return values
-
-    @eqx.filter_jit
     def index(self, query: Float[Array, "..."]) -> Int[Array, "..."]:
         """
         Returns the nearest index interpolation for the given query.
@@ -96,16 +100,12 @@ class Coordinate(Grid):
         Int[Array, "..."]
             An array of integers representing the nearest indices.
         """
-        if self.is_circular:
-            query += 180
-        
         return self.indices(query).astype(int)
 
-    @staticmethod
-    @eqx.filter_jit
+    @classmethod
     def from_array(
+        cls,
         values: Float[Array, "dim"],
-        is_circular: bool = False,
         **interpolator_kwargs: Any
     ) -> Coordinate:
         """
@@ -118,8 +118,6 @@ class Coordinate(Grid):
         ----------
         values : Float[Array, "dim"]
             An array of coordinate values.
-        is_circular : bool, optional
-            Indicates if the coordinate system is circular, by default False.
         **interpolator_kwargs : Any
             Additional keyword arguments for the interpolator.
 
@@ -128,24 +126,103 @@ class Coordinate(Grid):
         Coordinate
             A Coordinate object containing the provided values and corresponding indices interpolator.
         """
-        if is_circular:
-            values += 180
+        interpolator_kwargs["method"] = "nearest"
+        indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
+
+        return cls(_values=values, indices=indices)
+
+class LongitudeCoordinate(Coordinate):
+    """
+    Class for handling 1D longitude coordinates (i.e. of rectilinear grids).
+    This class handles the circular nature of longitudes coordinates.
+
+    Attributes
+    ----------
+    _values : Float[Array, "dim"]
+        1D array of longitude coordinate values.
+    indices : ipx.Interpolator1D
+        Interpolator for nearest index interpolation.
+
+    Methods
+    -------
+    index(query: Float[Array, "..."]) -> Int[Array, "..."]
+        Returns the nearest index for the given query coordinates.
+        
+    from_array(values: Float[Array, "coord"], **interpolator_kwargs: Any) -> LongitudeCoordinate
+        Creates a LongitudeCoordinate instance from an array of values.
+    """
+    _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
+    indices: ipx.Interpolator1D
+
+    @property
+    def values(self) -> Float[Array, "dim"]:
+        """
+        Returns the coordinate values.
+# 
+        Returns
+        -------
+        Float[Array, "dim"]
+            The coordinate values.
+        """
+        return self._values - 180
+
+    def index(self, query: Float[Array, "..."]) -> Int[Array, "..."]:
+        """
+        Returns the nearest index interpolation for the given query.
+
+        Parameters
+        ----------
+        query : Float[Array, "..."]
+            The query array for which the nearest indices are to be found.
+
+        Returns
+        -------
+        Int[Array, "..."]
+            An array of integers representing the nearest indices.
+        """
+        return self.indices(query + 180).astype(int)
+
+    @classmethod
+    def from_array(
+        cls,
+        values: Float[Array, "dim"],
+        **interpolator_kwargs: Any
+    ) -> LongitudeCoordinate:
+        """
+        Create a LongitudeCoordinate object from an array of values.
+
+        This method initializes a LongitudeCoordinate object using the provided array of values.
+        It uses a 1D interpolator to generate indices from values, with the interpolation method set to "nearest".
+
+        Parameters
+        ----------
+        values : Float[Array, "dim"]
+            An array of coordinate values.
+        **interpolator_kwargs : Any
+            Additional keyword arguments for the interpolator.
+
+        Returns
+        -------
+        LongitudeCoordinate
+            A LongitudeCoordinate object containing the provided values and corresponding indices interpolator.
+        """
+        values += 180
 
         interpolator_kwargs["method"] = "nearest"
-        indices = inx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
+        indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
 
-        return Coordinate(_values=values, indices=indices, is_circular=is_circular)
+        return cls(_values=values, indices=indices)
 
 
-class Spatial(Grid):
+class SpatialField(Grid):
     """
     Class representing a spatial field with interpolation capabilities.
 
     Attributes
     ----------
-    values : Float[Array, "lat lon"]
+    _values : Float[Array, "lat lon"]
         The gridded data values.
-    spatial_field : inx.Interpolator2D
+    spatial_field : ipx.Interpolator2D
         The interpolator for spatial data.
 
     Methods
@@ -153,14 +230,13 @@ class Spatial(Grid):
     interp_spatial(latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Float[Array, "... ..."]:
         Interpolates the spatial data at the given latitude and longitude.
         
-    from_array(values: Float[Array, "lat lon"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str) -> Spatial:
-        Creates a Spatial instance from the given array of values, latitude, and longitude using the specified
+    from_array(values: Float[Array, "lat lon"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str) -> SpatialField:
+        Creates a SpatialField instance from the given array of values, latitude, and longitude using the specified
         interpolation method.
     """
-    values: Float[Array, "lat lon"]
-    spatial_field: inx.Interpolator2D
+    _values: Float[Array, "lat lon"]
+    spatial_field: ipx.Interpolator2D
 
-    @eqx.filter_jit
     def interp_spatial(
         self,
         latitude: Float[Array, "..."],
@@ -185,16 +261,16 @@ class Spatial(Grid):
 
         return self.spatial_field(latitude, longitude)
 
-    @staticmethod
-    @eqx.filter_jit
+    @classmethod
     def from_array(
+        cls,
         values: Float[Array, "lat lon"],
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"],
         interpolation_method: str
-    ) -> Spatial:
+    ) -> SpatialField:
         """
-        Create a Spatial object from given arrays of values, latitude, and longitude.
+        Create a SpatialField object from given arrays of values, latitude, and longitude.
 
         Parameters
         ----------
@@ -209,19 +285,19 @@ class Spatial(Grid):
 
         Returns
         -------
-        Spatial
-            A Spatial object containing the values and the interpolated spatial field.
+        SpatialField
+            A SpatialField object containing the values and the interpolated spatial field.
         """
-        spatial_field = inx.Interpolator2D(
+        spatial_field = ipx.Interpolator2D(
             latitude, longitude + 180,  # circular domain
             values,
             method=interpolation_method, extrap=True, period=(None, 360)
         )
 
-        return Spatial(values=values, spatial_field=spatial_field)
+        return cls(_values=values, spatial_field=spatial_field)
 
 
-class SpatioTemporal(Grid):
+class SpatioTemporalField(Grid):
     """
     Class representing a spatiotemporal field with interpolation capabilities.
 
@@ -229,11 +305,11 @@ class SpatioTemporal(Grid):
     ----------
     values : Float[Array, "time lat lon"]
         The values of the spatiotemporal field.
-    temporal_field : inx.Interpolator1D
+    temporal_field : ipx.Interpolator1D
         Interpolator for the temporal dimension.
-    spatial_field : inx.Interpolator2D
+    spatial_field : ipx.Interpolator2D
         Interpolator for the spatial dimensions (latitude and longitude).
-    spatiotemporal_field : inx.Interpolator3D
+    spatiotemporal_field : ipx.Interpolator3D
         Interpolator for the spatiotemporal dimensions.
 
     Methods
@@ -247,15 +323,14 @@ class SpatioTemporal(Grid):
     interp_spatiotemporal(time: Float[Array, "..."], latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Float[Array, "... ... ..."]
         Interpolates the spatiotemporal field at the given times, latitudes, and longitudes.
     
-    from_array(values: Float[Array, "time lat lon"], time: Float[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str) -> SpatioTemporal
-        Creates a SpatioTemporal instance from the given array of values and coordinates.
+    from_array(values: Float[Array, "time lat lon"], time: Float[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str) -> SpatioTemporalField
+        Creates a SpatioTemporalField instance from the given array of values and coordinates.
     """
-    values: Float[Array, "time lat lon"]
-    temporal_field: inx.Interpolator1D
-    spatial_field: inx.Interpolator2D
-    spatiotemporal_field: inx.Interpolator3D
+    _values: Float[Array, "time lat lon"]
+    temporal_field: ipx.Interpolator1D
+    spatial_field: ipx.Interpolator2D
+    spatiotemporal_field: ipx.Interpolator3D
 
-    @eqx.filter_jit
     def interp_temporal(self, tq: Float[Array, "..."]) -> Float[Array, "... ... ..."]:
         """
         Interpolates the spatiotemporal field at the given time points.
@@ -272,7 +347,6 @@ class SpatioTemporal(Grid):
         """
         return self.temporal_field(tq)
 
-    @eqx.filter_jit
     def interp_spatial(
         self,
         latitude: Float[Array, "..."],
@@ -297,7 +371,6 @@ class SpatioTemporal(Grid):
 
         return jnp.moveaxis(self.spatial_field(latitude, longitude), -1, 0)
 
-    @eqx.filter_jit
     def interp_spatiotemporal(
         self,
         time: Float[Array, "..."],
@@ -325,17 +398,17 @@ class SpatioTemporal(Grid):
 
         return self.spatiotemporal_field(time, latitude, longitude)
 
-    @staticmethod
-    @eqx.filter_jit
+    @classmethod
     def from_array(
+        cls,
         values: Float[Array, "time lat lon"],
         time: Float[Array, "time"],
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"],
         interpolation_method: str
-    ) -> SpatioTemporal:
+    ) -> SpatioTemporalField:
         """
-        Create a SpatioTemporal object from given arrays of values, time, latitude, and longitude.
+        Create a SpatioTemporalField object from given arrays of values, time, latitude, and longitude.
 
         Parameters
         ----------
@@ -352,27 +425,27 @@ class SpatioTemporal(Grid):
 
         Returns
         -------
-        SpatioTemporal
+        SpatioTemporalField
             An object containing the original values and temporal, spatial, and spatiotemporal interpolators.
         """
-        temporal_field = inx.Interpolator1D(
+        temporal_field = ipx.Interpolator1D(
             time,
             values,
             method=interpolation_method, extrap=True
         )
-        spatial_field = inx.Interpolator2D(
+        spatial_field = ipx.Interpolator2D(
             latitude, longitude + 180,  # circular domain
             jnp.moveaxis(values, 0, -1),
             method=interpolation_method, extrap=True, period=(None, 360)
         )
-        spatiotemporal_field = inx.Interpolator3D(
+        spatiotemporal_field = ipx.Interpolator3D(
             time, latitude, longitude + 180,  # circular domain
             values,
             method=interpolation_method, extrap=True, period=(None, None, 360)
         )
 
-        return SpatioTemporal(
-            values=values,                            
+        return cls(
+            _values=values,                            
             temporal_field=temporal_field,            
             spatial_field=spatial_field,              
             spatiotemporal_field=spatiotemporal_field,

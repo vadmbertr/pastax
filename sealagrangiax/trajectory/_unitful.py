@@ -1,0 +1,293 @@
+from __future__ import annotations
+from typing import Dict, Tuple, Type
+
+import equinox as eqx
+import jax.numpy as jnp
+from jaxtyping import ArrayLike
+
+from ..utils.unit import compose_units, Unit
+
+
+def unit_converter(x: Unit | Dict[Unit, int]) -> Dict[Unit, int]:
+    """
+    Converts a unit to a dictionary of units with their exponents if needed.
+
+    Parameters
+    ----------
+    x : Unit or Dict[Unit, int]
+        A unit or a dictionary of units with their exponents.
+
+    Returns
+    -------
+    Dict[Unit, int]
+        A dictionary of units with their exponents.
+    """
+    if isinstance(x, Unit):
+        return {x: 1}
+    else:
+        return x
+
+
+class Unitful(eqx.Module):
+    """
+    Class representing a quantity with a unit.
+
+    Attributes
+    ----------
+    value : Float[Array, "quantity"]
+        The value of the quantity.
+    unit : Dict[Unit, int | float], optional
+        The unit of the quantity (default is an empty Dict).
+
+    Methods
+    -------
+    __init__(value, unit={}, name=None)
+        Initializes the Unitful with given value, type, and unit.
+    cumsum(axis=None)
+        Computes the cumulative sum of the quantity along the specified axis.
+    euclidean_distance(other)
+        Computes the Euclidean distance between this quantity and another quantity.
+    mean(axis=None)
+        Computes the mean of the quantity along the specified axis.
+    sqrt()
+        Computes the square root of the quantity.
+    sum(axis=None)
+        Computes the sum of the quantity along the specified axis.
+    __extract_from_other(other, additive_op)
+        Extract value and unit from other operand if it is a Unitful instance, 
+        and guess the class of the result of the operation type between self and other.
+    __add__(other)
+        Adds another quantity or array like to this quantity.
+    __mul__(other)
+        Multiplies this quantity by another quantity or array like.
+    __truediv__(other)
+        Divides this quantity by another quantity or array like.
+    __sub__(other)
+        Subtracts another quantity or array like from this quantity.
+    """
+    
+    value: ArrayLike = eqx.field(converter=lambda x: jnp.asarray(x))
+    unit: Dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter, default_factory=lambda: {})
+
+    def __init__ (self, value: ArrayLike, unit: Unit | Dict[Unit, int | float] = {}, name: str = None):
+        """
+        Initializes the Unitful with given value and unit.
+
+        Parameters
+        ----------
+        value : ArrayLike
+            The value of the quantity.
+        unit : Unit | Dict[Unit, int | float], optional
+            The unit of the quantity (default is an empty Dict).
+        """
+        self.value = value
+        self.unit = unit
+    
+    def cumsum(self, axis: ArrayLike = None) -> Unitful:
+        """
+        Computes the cumulative sum of the quantity.
+
+        Parameters
+        ----------
+        axis : ArrayLike, optional
+            Axis along which the cumulative sum to be computed. If None (default), the cumulative sum is computed over the flattened array.
+
+        Returns
+        -------
+        Unitful
+            The cumulative sum of the quantity.
+        """
+        return Unitful(self.value.cumsum(axis), self.unit)
+
+    def euclidean_distance(self, other: Unitful | ArrayLike) -> Unitful:
+        """
+        Computes the Euclidean distance between this quantity and another quantity.
+
+        Parameters
+        ----------
+        other : Unitful | ArrayLike
+            The other quantity to compute the distance to.
+
+        Returns
+        -------
+        Unitful
+            The Euclidean distance between the two quantities.
+        """
+        return ((self - other) ** 2).sum().sqrt()
+    
+    def mean(self, axis: ArrayLike = None) -> Unitful:
+        """
+        Computes the mean of the quantity along the specified axis.
+
+        Parameters
+        ----------
+        axis : ArrayLike, optional
+            The axis along which to compute the mean (default is None, meaning along all axes).
+
+        Returns
+        -------
+        Unitful
+            The mean of the quantity along the specified axis.
+        """
+        return Unitful(self.value.mean(axis=axis), self.unit)
+
+    def sqrt(self) -> Unitful:
+        """
+        Computes the square root of the quantity.
+
+        Returns
+        -------
+        Unitful
+            The square root of the quantity.
+        """
+        return self**(1/2)
+    
+    def sum(self, axis: ArrayLike = None) -> Unitful:
+        """
+        Computes the sum of the quantity.
+
+        Parameters
+        ----------
+        axis : ArrayLike, optional
+            Axis along which the sum to be computed. If None (default), the sum is computed along all the axes.
+
+        Returns
+        -------
+        Unitful
+            The sum of the quantity.
+        """
+        return Unitful(self.value.sum(axis), self.unit)
+
+    def __extract_from_other(
+        self, 
+        other: Unitful | ArrayLike, 
+        additive_op: bool
+    ) -> Tuple[ArrayLike, str | None, Type]:
+        """
+        Extract value and unit from other operand if it is a Unitful instance, 
+        and guess the class of the result of the operation type between self and other.
+
+        Parameters
+        ----------
+        other : Unitful or ArrayLike
+            The other operand to extract value and unit from if it is a Unitful.
+        additive : bool
+            Type of operation perfomed with self and other.
+
+        Returns
+        -------
+        Tuple[ArrayLike, str | None, Type]
+            The value and unit of the other operand, and the class of the result of the operation type.
+
+        Raises
+        ------
+        ValueError
+            If the units of the quantities are different and additive is True.
+        """
+        other_value = other
+        other_unit = None
+
+        if isinstance(other, Unitful):
+            if additive_op:
+                if self.unit != other.unit:
+                    raise ValueError(
+                        "Cannot perform additive operation between quantities with incompatible units: "
+                        f"{self.unit} and {other.unit}"
+                    )
+            other_value = other.value
+            other_unit = other.unit
+
+        return other_value, other_unit
+
+    def __add__(self, other: Unitful | ArrayLike) -> Unitful:
+        """
+        Adds another quantity or array like to this quantity.
+
+        Parameters
+        ----------
+        other : Unitful | ArrayLike
+            The other operand to add.
+
+        Returns
+        -------
+        Unitful
+            The addition of the two operands.
+
+        Notes
+        -----
+        If the other operand is a quantity, the unit must match.
+        """
+        other_value, _ = self.__extract_from_other(other, additive_op=True)
+        return Unitful(self.value + other_value, self.unit)
+
+    def __mul__(self, other: Unitful | ArrayLike) -> Unitful:
+        """
+        Multiplies this quantity by another quantity or array like.
+
+        Parameters
+        ----------
+        other : Unitful | ArrayLike
+            The other operand to multiply.
+
+        Returns
+        -------
+        Unitful
+            The multiplication of the two operands.
+        """
+        other_value, other_unit = self.__extract_from_other(other, additive_op=False)
+        return Unitful(self.value * other_value, compose_units(self.unit, other_unit, 1))
+
+    def __pow__(self, pow: int | float) -> Unitful:
+        """
+        Raises this quantity to the power of pow.
+
+        Parameters
+        ----------
+        power : Number
+            The power to apply.
+
+        Returns
+        -------
+        Unitful
+            The power pow of the quantity.
+        """
+        unit = {k: v * pow for k, v in self.unit.items()}
+        return Unitful(self.value ** pow, unit)
+
+    def __truediv__(self, other: Unitful | ArrayLike) -> Unitful:
+        """
+        Divides this quantity by another quantity or array like.
+
+        Parameters
+        ----------
+        other : Unitful | ArrayLike
+            The other operand to divide by.
+
+        Returns
+        -------
+        Unitful
+            The division of the two operands.
+        """
+        other_value, other_unit = self.__extract_from_other(other, additive_op=False)
+        return Unitful(self.value / other_value, compose_units(self.unit, other_unit, -1))
+
+    def __sub__(self, other: Unitful | ArrayLike) -> Unitful:
+        """
+        Subtracts another quantity or array like from this quantity.
+
+        Parameters
+        ----------
+        other : Unitful | ArrayLike
+            The other operand to subtract.
+
+        Returns
+        -------
+        Unitful
+            The substraction of the two operands.
+
+        Notes
+        -----
+        If the other operand is a quantity, the units must match.
+        """
+        other_value, _ = self.__extract_from_other(other, additive_op=True)
+        return Unitful(self.value - other_value, self.unit)

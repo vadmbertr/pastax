@@ -1,10 +1,6 @@
-import equinox as eqx
-
-from ..trajectory import Timeseries, TimeseriesEnsemble, Trajectory, TrajectoryEnsemble
-from ..utils import WHAT
+from ..trajectory import Trajectory, TrajectoryEnsemble
 from ._evaluation import Evaluation
 from ._evaluator import Evaluator
-from ._metric import METRIC_FUN
 
 
 class PairEvaluator(Evaluator):
@@ -17,7 +13,6 @@ class PairEvaluator(Evaluator):
         Evaluates the `simulated_trajectory` against the `reference_trajectory` using the defined metrics.
     """
     
-    @eqx.filter_jit
     def __call__(self, reference_trajectory: Trajectory, simulated_trajectory: Trajectory) -> Evaluation:
         """
         Evaluates the `simulated_trajectory` against the `reference_trajectory` using the defined metrics.
@@ -33,12 +28,8 @@ class PairEvaluator(Evaluator):
         """
         metrics = {}
         for metric in self.metrics:
-            metric_name = METRIC_FUN[metric.metric_fun]
-
-            values = getattr(reference_trajectory, metric_name)(simulated_trajectory)
-            metrics[metric_name] = Timeseries(
-                values, reference_trajectory.times, metric.what, metric.unit
-            )
+            metric_fun = metric.metric_fun
+            metrics[metric_fun] = getattr(reference_trajectory, metric_fun)(simulated_trajectory)
 
         return Evaluation(metrics)
 
@@ -53,7 +44,6 @@ class EnsembleEvaluator(Evaluator):
         Evaluates the `simulated_trajectories` ensemble against the `reference_trajectory` using the defined metrics.
     """
 
-    @eqx.filter_jit
     def __call__(self, reference_trajectory: Trajectory, simulated_trajectories: TrajectoryEnsemble) -> Evaluation:
         """
         Evaluates the `simulated_trajectories` ensemble against the `reference_trajectory` using the defined metrics.
@@ -72,24 +62,16 @@ class EnsembleEvaluator(Evaluator):
         """
         metrics = {}
         for metric in self.metrics:
-            metric_fun = METRIC_FUN[metric.metric_fun]
+            metric_fun = metric.metric_fun
 
             ensemble = getattr(simulated_trajectories, metric_fun)(reference_trajectory)
-            ensemble = TimeseriesEnsemble(
-                ensemble, reference_trajectory.times, metric.what, metric.unit
-            )
+            ensemble = getattr(simulated_trajectories, metric_fun)(reference_trajectory)
 
             crps = simulated_trajectories.crps(
                 reference_trajectory, distance_func=getattr(Trajectory, metric_fun)
-            )
-            crps = Timeseries(
-                crps, reference_trajectory.times, WHAT.crps, metric.unit
-            )
+            ).attach_name("CRPS")
 
-            mean = ensemble.mean()
-            mean = Timeseries(
-                mean, reference_trajectory.times, WHAT.mean, metric.unit
-            )
+            mean = ensemble.mean(axis=0).attach_name("Mean")
 
             metrics[metric_fun] = (ensemble, crps, mean)
 

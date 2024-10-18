@@ -1,24 +1,18 @@
 from __future__ import annotations
-from numbers import Number
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, ArrayLike, Float
 import numpy as np
 
-from ..utils.unit import (
-    degrees_to_meters, degrees_to_kilometers, kilometers_to_degrees, kilometers_to_meters,
-    longitude_in_180_180_degrees, meters_to_degrees, meters_to_kilometers
-)
-from ..utils import UNIT, WHAT
-from ..utils.geo import earth_distance
+from ..utils.geo import distance_on_earth, longitude_in_180_180_degrees
+from ..utils.unit import Unit, UNIT
 from ._state import State
 
 
-@jax.jit
-def location_converter(latlon: Float[Array, "2"]):
-    return latlon.at[..., 1].set(longitude_in_180_180_degrees(latlon[..., 1]))
+def location_converter(x: Float[Array, "... 2"]) -> Float[Array, "... 2"]:
+    x = jnp.asarray(x)
+    return x.at[..., 1].set(longitude_in_180_180_degrees(x[..., 1]))
 
 
 class Location(State):
@@ -27,8 +21,12 @@ class Location(State):
 
     Attributes
     ----------
-    value : Float[Array, "2"]
+    value : Float[Array, "... 2"]
         The latitude and longitude of the location.
+    unit : Dict[Unit, int | float]
+        UNIT["°"].
+    name : str
+        "Location in [latitude, longitude]".
 
     Methods
     -------
@@ -40,17 +38,11 @@ class Location(State):
         Returns the longitude of the location.
     earth_distance(other)
         Computes the Earth distance between this location and another location.
-    _get_other_numeric(other)
-        Converts the other operand to a numeric type if it is a Displacement instance.
-    __add__(other)
-        Adds another state, array, or number to this location.
-    __sub__(other)
-        Subtracts another state, array, or number from this location.
     """
 
-    value: Float[Array, "2"] = eqx.field(converter=location_converter)
+    value: Float[Array, "... 2"] = eqx.field(converter=location_converter)
 
-    def __init__(self, value: Float[Array, "2"], **_):
+    def __init__(self, value: Float[Array, "... 2"], **_):
         """
         Initializes the Location with given latitude and longitude.
 
@@ -61,36 +53,35 @@ class Location(State):
         **_
             Additional keyword arguments.
         """
-        super().__init__(value, what=WHAT.location, unit=UNIT.degrees)
+        super().__init__(value, unit=UNIT["°"], name="Location in [latitude, longitude]")
 
     @property
-    def latitude(self) -> Float[Array, ""]:
+    def latitude(self) -> State:
         """
         Returns the latitude of the location.
 
         Returns
         -------
-        Float[Array, ""]
+        State
             The latitude of the location.
         """
-        return self.value[..., 0]
+        return State(self.value[..., 0], unit=UNIT["°"], name="Latitude")
 
     @property
-    def longitude(self) -> Float[Array, ""]:
+    def longitude(self) -> State:
         """
         Returns the longitude of the location.
 
         Returns
         -------
-        Float[Array, ""]
+        State
             The longitude of the location.
         """
-        return self.value[..., 1]
+        return State(self.value[..., 1], unit=UNIT["°"], name="Longitude")
 
-    @eqx.filter_jit
-    def earth_distance(self, other: Location) -> Float[Array, ""]:
+    def distance_on_earth(self, other: Location) -> State:
         """
-        Computes the Earth distance between this location and another location.
+        Computes the distance in meters between this location and another location.
 
         Parameters
         ----------
@@ -99,72 +90,14 @@ class Location(State):
 
         Returns
         -------
-        Float[Array, ""]
-            The Earth distance between the two locations.
-        """
-        return earth_distance(self.value, other.value)
-
-    @eqx.filter_jit
-    def _get_other_numeric(self, other: State | Array | Number) -> State | Array | Number:
-        """
-        Converts the other operand to a numeric type if it is a Displacement instance.
-
-        Parameters
-        ----------
-        other : State or Array or Number
-            The other operand to check and convert.
-
-        Returns
-        -------
-        State or Array or Number
-            The converted operand.
+        State
+            The Earth distance in meters between the two locations.
 
         Notes
         -----
-        If the other operand is a Displacement instance, it is converted to the same unit as the Location.
+        This function uses the Haversine formula to compute the distance between two points on the Earth surface.
         """
-        if isinstance(other, Displacement):
-            other = other.convert_to(self.unit, self.latitude)
-
-        return super()._get_other_numeric(other)
-
-    @eqx.filter_jit
-    def __add__(self, other: State | Array | Number) -> Float[Array, "state"]:
-        """
-        Adds another state, array, or number to this location.
-
-        Parameters
-        ----------
-        other : State or Array or Number
-            The other operand to add.
-
-        Returns
-        -------
-        Float[Array, "state"]
-            The result of the addition.
-        """
-        other = self._get_other_numeric(other)
-
-        return self.value + other
-
-    @eqx.filter_jit
-    def __sub__(self, other: State | Array | Number) -> Float[Array, "state"]:
-        """
-        Subtracts another state, array, or number from this location.
-
-        Parameters
-        ----------
-        other : State or Array or Number
-            The other operand to subtract.
-
-        Returns
-        -------
-        Float[Array, "state"]
-            The result of the subtraction.
-        """
-        other = self._get_other_numeric(other)
-
-        return self.value - other
+        return State(distance_on_earth(self.value, other.value), unit=UNIT["m"], name="Distance on Earth")
 
 
 class Displacement(State):
@@ -173,8 +106,12 @@ class Displacement(State):
 
     Attributes
     ----------
-    value : Float[Array, "2"]
+    value : Float[Array, "... 2"]
         The latitude and longitude components of the displacement.
+    unit : Dict[Unit, int | float], optional
+        Default is UNIT["°"].
+    name : str
+        "Displacement in [latitude, longitude]".
 
     Methods
     -------
@@ -184,19 +121,9 @@ class Displacement(State):
         Returns the latitude component of the displacement.
     longitude
         Returns the longitude component of the displacement.
-    convert_to(unit, latitude)
-        Converts the displacement to the specified unit.
-    _to_degrees(latitude)
-        Converts the displacement to degrees.
-    _to_meters(latitude)
-        Converts the displacement to meters.
-    _to_kilometers(latitude)
-        Converts the displacement to kilometers.
     """
 
-    value: Float[Array, "2"]
-
-    def __init__(self, value: Float[Array, "2"], unit: UNIT, **_):
+    def __init__(self, value: Float[Array, "... 2"], unit: Unit = UNIT["°"], **_):
         """
         Initializes the Displacement with given latitude and longitude components and unit.
 
@@ -204,166 +131,36 @@ class Displacement(State):
         ----------
         value : Float[Array, "2"]
             The latitude and longitude components of the displacement.
-        unit : UNIT
-            The unit of the displacement.
+        unit : Unit, optional
+            The unit of the displacement (default is LatLonDegrees()).
         **_
             Additional keyword arguments.
         """
-        super().__init__(value, what=WHAT.displacement, unit=unit)
+        super().__init__(value, unit=unit, name="Displacement in [latitude, longitude]")
 
     @property
-    def latitude(self) -> Float[Array, ""]:
+    def latitude(self) -> State:
         """
         Returns the latitude component of the displacement.
 
         Returns
         -------
-        Float[Array, ""]
+        State
             The latitude component of the displacement.
         """
-        return self.value[..., 0]
-
+        return State(self.value[..., 0], unit=self.unit, name="Displacement in latitude")
+    
     @property
-    def longitude(self) -> Float[Array, ""]:
+    def longitude(self) -> State:
         """
         Returns the longitude component of the displacement.
 
         Returns
         -------
-        Float[Array, ""]
+        State
             The longitude component of the displacement.
         """
-        return self.value[..., 1]
-
-    @eqx.filter_jit
-    def convert_to(self, unit: UNIT, latitude: Float[Array, ""]) -> Float[Array, "2"]:
-        """
-        Converts the displacement to the specified unit.
-
-        Parameters
-        ----------
-        unit : UNIT
-            The unit to convert to.
-        latitude : Float[Array, ""]
-            The latitude to use for accurate conversion.
-
-        Returns
-        -------
-        Float[Array, "2"]
-            The converted displacement.
-
-        Notes
-        -----
-        Conversions use the Haversine formula for accuracy.
-        """
-        value = jax.lax.cond(
-            unit == UNIT.degrees,
-            lambda: self._to_degrees(latitude),
-            lambda: jax.lax.cond(
-                unit == UNIT.meters,
-                lambda: self._to_meters(latitude),
-                lambda: jax.lax.cond(
-                    unit == UNIT.kilometers,
-                    lambda: self._to_kilometers(latitude),
-                    lambda: jnp.full_like(self.value, jnp.nan)
-                )
-            )
-        )
-
-        return value
-
-    @eqx.filter_jit
-    def _to_degrees(self, latitude: Float[Array, ""]) -> Float[Array, "2"]:
-        """
-        Converts the displacement to degrees.
-
-        Parameters
-        ----------
-        latitude : Float[Array, ""]
-            The latitude to use for conversion.
-
-        Returns
-        -------
-        Float[Array, "2"]
-            The displacement in degrees.
-        """
-        value = jax.lax.cond(
-            self.unit == UNIT.degrees,
-            lambda: self.value,
-            lambda: jax.lax.cond(
-                self.unit == UNIT.meters,
-                lambda: meters_to_degrees(self.value, latitude),
-                lambda: jax.lax.cond(
-                    self.unit == UNIT.kilometers,
-                    lambda: kilometers_to_degrees(self.value, latitude),
-                    lambda: jnp.full_like(self.value, jnp.nan)
-                )
-            )
-        )
-
-        return value
-
-    @eqx.filter_jit
-    def _to_meters(self, latitude: Float[Array, ""]) -> Float[Array, "2"]:
-        """
-        Converts the displacement to meters.
-
-        Parameters
-        ----------
-        latitude : Float[Array, ""]
-            The latitude to use for conversion.
-
-        Returns
-        -------
-        Float[Array, "2"]
-            The displacement in meters.
-        """
-        value = jax.lax.cond(
-            self.unit == UNIT.meters,
-            lambda: self.value,
-            lambda: jax.lax.cond(
-                self.unit == UNIT.degrees,
-                lambda: degrees_to_meters(self.value, latitude),
-                lambda: jax.lax.cond(
-                    self.unit == UNIT.kilometers,
-                    lambda: kilometers_to_meters(self.value),
-                    lambda: jnp.full_like(self.value, jnp.nan)
-                )
-            )
-        )
-
-        return value
-
-    @eqx.filter_jit
-    def _to_kilometers(self, latitude: Float[Array, ""]) -> Float[Array, "2"]:
-        """
-        Converts the displacement to kilometers.
-
-        Parameters
-        ----------
-        latitude : Float[Array, ""]
-            The latitude to use for conversion.
-
-        Returns
-        -------
-        Float[Array, "2"]
-            The displacement in kilometers.
-        """
-        value = jax.lax.cond(
-            self.unit == UNIT.kilometers,
-            lambda: self.value,
-            lambda: jax.lax.cond(
-                self.unit == UNIT.degrees,
-                lambda: degrees_to_kilometers(self.value, latitude),
-                lambda: jax.lax.cond(
-                    self.unit == UNIT.meters,
-                    lambda: meters_to_kilometers(self.value),
-                    lambda: jnp.full_like(self.value, jnp.nan)
-                )
-            )
-        )
-
-        return value
+        return State(self.value[..., 1], unit=self.unit, name="Displacement in longitude")
 
 
 class Time(State):
@@ -372,28 +169,33 @@ class Time(State):
 
     Attributes
     ----------
-    value : Int[Array, ""]
+    value : ArrayLike
         The time value.
+    unit : Dict[Unit, int | float], optional
+        Default is UNIT["s"].
+    name : str
+        "Time since epoch".
 
     Methods
     -------
     __init__(value)
         Initializes the Time with given time value.
+    to_datetime()
+        Converts the time value to a numpy array of datetime64[s].
     """
-    value: Int[Array, ""]
 
-    def __init__(self, value: Int[Array, ""]):
+    def __init__(self, value: ArrayLike, unit: Unit = UNIT["°"]):
         """
         Initializes the Time with given time value.
 
         Parameters
         ----------
-        value : Int[Array, ""]
+        value : ArrayLike
             The time value.
         """
-        super().__init__(value, what=WHAT.time, unit=UNIT.seconds)
+        super().__init__(value, unit=UNIT["s"], name="Time since epoch")
 
-    def to_datetime(self):
+    def to_datetime(self) -> np.ndarray:
         """
         Converts the time value to a numpy array of datetime64[s].
 

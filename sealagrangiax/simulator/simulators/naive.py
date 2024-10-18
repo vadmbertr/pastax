@@ -1,57 +1,56 @@
 from __future__ import annotations
+from typing import Callable
 
 import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from ...grid import Dataset
-from ...trajectory import Displacement, Location
-from ...utils import UNIT
 from .._diffrax_simulator import DeterministicDiffrax
+from ...grid import Dataset
+
+
+def naive_vf(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+    """
+    Computes the drift term of the solved Ordinary Differential Equation.
+
+    Parameters
+    ----------
+    t : int
+        The current time.
+    y : Float[Array, "2"]
+        The current state (latitude and longitude in degrees).
+    args : Dataset
+        The dataset containing the physical fields (only u and v here).
+
+    Returns
+    -------
+    Float[Array, "2"]
+        The drift term (change in latitude and longitude in degrees).
+    """
+    t = jnp.asarray(t)
+    dataset = args
+    latitude, longitude = y[0], y[1]
+
+    u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)  # °/s
+
+    return jnp.asarray([v, u])
 
 
 class Naive(DeterministicDiffrax):
     """
     Naive (consider only sea surface currents) deterministic simulator.
 
-    Methods
-    -------
-    drift_term(t, y, args)
-        Computes the drift term for the differential equation.
-    solve(x0, t0, ts, dt0=30*60, solver=dfx.Heun())
-        Solves the differential equation to simulate the trajectory.
-    __call__(x0, t0, ts, dt0=30*60, solver=dfx.Heun(), n_samples=None, key=None)
-        Simulates the trajectory based on the initial location, time, and time steps.
+    Attributes
+    ----------
+    ode_vf(t, y, args)
+        Computes the drift term of the solved Ordinary Differential Equation.
+    id : str
+        The identifier for the SmagorinskyDiffrax model (set to "naive").
+
+    Notes
+    -----
+    In this example, the `ode_vf` attribute is only a function as the simulator does not have parameter to optimise.
     """
 
-    @staticmethod
-    @eqx.filter_jit
-    def drift_term(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
-        """
-        Computes the drift term for the differential equation.
-
-        Parameters
-        ----------
-        t : int
-            The current time.
-        y : Float[Array, "2"]
-            The current state (latitude and longitude).
-        args : Dataset
-            The dataset containing the physical fields (only u and v here).
-
-        Returns
-        -------
-        Float[Array, "2"]
-            The drift term (change in latitude and longitude).
-        """
-        t = jnp.asarray(t)
-        dataset = args
-        x = Location(y)
-
-        u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=x.latitude, longitude=x.longitude)  # m/s
-        vu = jnp.asarray([v, u])  # scalars
-
-        dlatlon = Displacement(vu, UNIT.meters)  # m/s
-        dlatlon = dlatlon.convert_to(UNIT.degrees, x.latitude)  # °/s
-
-        return dlatlon
+    ode_vf: Callable[[int, Float[Array, "2"], Dataset], Float[Array, "2"]] = naive_vf
+    id: str = eqx.field(static=True, default_factory=lambda: "naive")
