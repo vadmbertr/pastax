@@ -3,7 +3,7 @@ from typing import Callable, Tuple
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jrd
-from jaxtyping import Array, Int, PyTree
+from jaxtyping import Array, Float, Int, PyTree, Scalar
 
 from ..trajectory import Displacement, Location, Trajectory, TrajectoryEnsemble
 from ..utils.unit import UNIT
@@ -31,8 +31,8 @@ class Simulator(eqx.Module):
     @staticmethod
     def get_domain(
         x0: Location,
-        ts: Int[Array, "time"]
-    ) -> Tuple[Int[Array, ""], Int[Array, ""], Location, Location]:
+        ts: Float[Array, "time"]
+    ) -> Tuple[Float[Array, ""], Float[Array, ""], Location, Location]:
         """
         Computes the minimum and maximum time and location bounds of the simulation space-time domain.
 
@@ -40,12 +40,12 @@ class Simulator(eqx.Module):
         ----------
         x0 : Location
             The initial location.
-        ts : Int[Array, "time"]
+        ts : Float[Array, "time"]
             The time steps for the simulation.
 
         Returns
         -------
-        Tuple[Int[Array, ""], Int[Array, ""], Location, Location]
+        Tuple[Float[Array, ""], Float[Array, ""], Location, Location]
             The minimum time, maximum time, minimum location, and maximum location bounds.
         """
         one_day = 60 * 60 * 24
@@ -68,10 +68,10 @@ class Simulator(eqx.Module):
         self,
         args: PyTree,
         x0: Location,
-        ts: Int[Array, "time"],
-        dt0: int,
+        ts: Float[Array, "time"],
+        dt0: Float[Scalar, ""],
         solver: Callable = None,
-        n_samples: int = None,
+        n_samples: Int[Scalar, ""] = None,
         key: jrd.PRNGKey = None
     ) -> Trajectory | TrajectoryEnsemble:
         """
@@ -86,13 +86,13 @@ class Simulator(eqx.Module):
             Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
             The initial location.
-        ts : Int[Array, "time"]
+        ts : Float[Array, "time"]
             The time steps for the simulation outputs (including t0).
-        dt0 : int, optional
+        dt0 : Float[Scalar, ""], optional
             The initial time step of the solver, in seconds.
         solver : Callable, optional
             The solver function to use for the simulation (default is None).
-        n_samples : int, optional
+        n_samples : Int[Scalar, ""], optional
             The number of samples to generate (default is None, meaning a single trajectory).
         key : jrd.PRNGKey, optional
             The random key for sampling (default is None).

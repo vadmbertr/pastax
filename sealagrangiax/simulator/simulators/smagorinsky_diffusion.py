@@ -4,7 +4,7 @@ from typing import List
 import equinox as eqx
 import interpax as ipx
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float, Scalar
 
 from ...grid import Dataset, spatial_derivative
 from ...trajectory import Location
@@ -15,7 +15,7 @@ class SmagorinskyDiffusionCVF(eqx.Module):
     """
     Attributes
     ----------
-    cs : Float[Array, ""], optional
+    cs : Float[Scalar, ""], optional
         The Smagorinsky constant, defaults to 0.1.
 
     Methods
@@ -36,16 +36,16 @@ class SmagorinskyDiffusionCVF(eqx.Module):
     As the class inherits from `eqx.Module`, its `cs` attribute can be treated as a trainable parameter.
     """
 
-    cs: Float[Array, ""] = eqx.field(static=True, default_factory=lambda: 0.1)
+    cs: Float[Scalar, ""] = eqx.field(static=True, default_factory=lambda: 0.1)
 
     @staticmethod
-    def _neighborhood(t: Int[Array, ""], x: Location, dataset: Dataset, *variables: List[str]) -> Dataset:
+    def _neighborhood(t: Float[Scalar, ""], x: Location, dataset: Dataset, *variables: List[str]) -> Dataset:
         """
         Restricts the dataset to a neighborhood around the given location and time.
 
         Parameters
         ----------
-        t : Int[Array, ""]
+        t : Float[Scalar, ""]
             The current time.
         x : Location
             The current location.
@@ -68,13 +68,13 @@ class SmagorinskyDiffusionCVF(eqx.Module):
 
         return neighborhood
 
-    def _smagorinsky_coefficients(self, t: Int[Array, ""], neighborhood: Dataset) -> Dataset:
+    def _smagorinsky_coefficients(self, t: Float[Scalar, ""], neighborhood: Dataset) -> Dataset:
         """
         Computes the Smagorinsky coefficients for the given fields.
 
         Parameters
         ----------
-        t : Int[Array, ""]
+        t : Float[Scalar, ""]
             The simulation time.
         neighborhood : Dataset
             The dataset containing the physical fields.
@@ -110,7 +110,7 @@ class SmagorinskyDiffusionCVF(eqx.Module):
 
     @staticmethod
     def _drift_term(
-        t: Float[Array, ""],
+        t: Float[Scalar, ""],
         y: Float[Array, "2"],
         neighborhood: Dataset,
         smag_ds: Dataset
@@ -120,7 +120,7 @@ class SmagorinskyDiffusionCVF(eqx.Module):
 
         Parameters
         ----------
-        t : Float[Array, ""]
+        t : Float[Scalar, ""]
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude in degrees).
@@ -189,13 +189,13 @@ class SmagorinskyDiffusionCVF(eqx.Module):
 
         return jnp.eye(2) * smag_k
 
-    def __call__(self, t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2 3"]:
+    def __call__(self, t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2 3"]:
         """
         Computes the drift and diffusion terms of the Stochastic Differential Equation.
 
         Parameters
         ----------
-        t : int
+        t : float
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude in degrees).

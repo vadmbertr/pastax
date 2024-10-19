@@ -3,19 +3,19 @@ from typing import Callable
 
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, Scalar
 
 from .._diffrax_simulator import DeterministicDiffrax
 from ...grid import Dataset
 
 
-def naive_vf(t: int, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+def naive_vf(t: Float[Scalar, ""], y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     """
     Computes the drift term of the solved Ordinary Differential Equation.
 
     Parameters
     ----------
-    t : int
+    t : Float[Scalar, ""]
         The current time.
     y : Float[Array, "2"]
         The current state (latitude and longitude in degrees).
@@ -52,5 +52,5 @@ class Naive(DeterministicDiffrax):
     In this example, the `ode_vf` attribute is only a function as the simulator does not have parameter to optimise.
     """
 
-    ode_vf: Callable[[int, Float[Array, "2"], Dataset], Float[Array, "2"]] = naive_vf
+    ode_vf: Callable[[Float[Scalar, ""], Float[Array, "2"], Dataset], Float[Array, "2"]] = naive_vf
     id: str = eqx.field(static=True, default_factory=lambda: "naive")

@@ -5,7 +5,7 @@ import diffrax as dfx
 import jax
 import jax.numpy as jnp
 import jax.random as jrd
-from jaxtyping import Array, Float, Int, PyTree
+from jaxtyping import Array, Float, Int, PyTree, Scalar
 
 from ..trajectory import Location, Trajectory, TrajectoryEnsemble
 from ._simulator import Simulator
@@ -25,10 +25,10 @@ class DiffraxSimulator(Simulator):
         self,
         args: PyTree,
         x0: Location,
-        ts: Int[Array, "time"],
-        dt0: int,
+        ts: Float[Array, "time"],
+        dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
-        n_samples: int = None,
+        n_samples: Int[Scalar, ""] = None,
         key: jrd.PRNGKey = None
     ) -> Trajectory:
         """
@@ -41,13 +41,13 @@ class DiffraxSimulator(Simulator):
             Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
             The initial location.
-        ts : Int[Array, "time"]
+        ts : Float[Array, "time"]
             The time steps for the simulation outputs.
-        dt0 : int
+        dt0 : Float[Scalar, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The solver function to use for the simulation (default is dfx.Heun()).
-        n_samples : int, optional
+        n_samples : Int[Scalar, ""], optional
             The number of samples to generate (default is None, meaning a single trajectory).
         key : jrd.PRNGKey, optional
             The random key for sampling (default is None, useless for the deterministic simulator).
@@ -106,10 +106,10 @@ class DeterministicDiffrax(DiffraxSimulator):
         self,
         args: PyTree,
         x0: Location,
-        ts: Int[Array, "time"],
-        dt0: int,
+        ts: Float[Array, "time"],
+        dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
-        n_samples: int = None,
+        n_samples: Int[Scalar, ""] = None,
         key: jrd.PRNGKey = None
     ) -> Trajectory:
         """
@@ -122,13 +122,13 @@ class DeterministicDiffrax(DiffraxSimulator):
             Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
             The initial location.
-        ts : Int[Array, "time"]
+        ts : Float[Array, "time"]
             The time steps for the simulation outputs.
-        dt0 : int
+        dt0 : Float[Scalar, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The solver function to use for the simulation (default is dfx.Heun()).
-        n_samples : int, optional
+        n_samples : Int[Scalar, ""], optional
             The number of samples to generate (default is None, meaning a single trajectory).
         key : jrd.PRNGKey, optional
             The random key for sampling (default is None, useless for the deterministic simulator).
@@ -162,9 +162,9 @@ class SDEControl(dfx.AbstractPath):
 
     Attributes
     ----------
-    t0 : int
+    t0 : Float[Scalar, ""]
         The initial time.
-    t1 : int
+    t1 : Float[Scalar, ""]
         The final time.
     brownian_motion : dfx.VirtualBrownianTree
         The Brownian motion used in the Stochastic Differential Equation.
@@ -179,15 +179,21 @@ class SDEControl(dfx.AbstractPath):
     t1 = None
     brownian_motion: dfx.VirtualBrownianTree
 
-    def evaluate(self, t0: int, t1: int = None, left: bool = True, use_levy: bool = False) -> Float[Array, "x+1"]:
+    def evaluate(
+        self,
+        t0: Float[Scalar, ""], 
+        t1: Float[Scalar, ""] = None, 
+        left: bool = True, 
+        use_levy: bool = False
+    ) -> Float[Array, "x+1"]:
         """
         Evaluates the control at the given time points.
 
         Parameters
         ----------
-        t0 : int
+        t0 : Float[Scalar, ""]
             The initial time.
-        t1 : int, optional
+        t1 : Float[Scalar, ""], optional
             The final time (default is None).
         left : bool, optional
             Whether to use the left limit (default is True).
@@ -210,13 +216,13 @@ class StochasticDiffrax(DiffraxSimulator):
 
     Attributes
     ----------
-    sde_cvf : Callable[[int, Float[Array, "2"], PyTree], lnx.PyTreeLinearOperator]
+    sde_cvf : Callable[[Float[Scalar, ""], Float[Array, "2"], PyTree], lnx.PyTreeLinearOperator]
         Any Callable (including another Equinox module with a __call__ method) that stacks and returns 
         the drift and diffusion terms of the solved Stochastic Differential Equation.
         
         Parameters
         ----------
-        t : int
+        t : Float[Scalar, ""]
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude in degrees).
@@ -235,16 +241,16 @@ class StochasticDiffrax(DiffraxSimulator):
         Simulates the trajectory ensemble based on the initial location and time steps (including t0).
     """
 
-    sde_cvf: Callable[[int, Float[Array, "2"], PyTree], PyTree]
+    sde_cvf: Callable[[Float[Scalar, ""], Float[Array, "2"], PyTree], PyTree]
 
     def __call__(
         self,
         args: PyTree,
         x0: Location,
-        ts: Int[Array, "time"],
-        dt0: int,
+        ts: Float[Array, "time"],
+        dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
-        n_samples: int = 100,
+        n_samples: Int[Scalar, ""] = 100,
         key: jrd.PRNGKey = jrd.PRNGKey(0)
     ) -> TrajectoryEnsemble:
         """
@@ -257,13 +263,13 @@ class StochasticDiffrax(DiffraxSimulator):
             Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
             The initial location.
-        ts : Int[Array, "time"]
+        ts : Float[Array, "time"]
             The time steps for the simulation outputs (including t0).
-        dt0 : int
+        dt0 : Float[Scalar, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The solver function to use for the simulation (default is dfx.Heun()).
-        n_samples : int, optional
+        n_samples : Int[Scalar, ""], optional
             The number of samples to generate (default is 100).
         key : jrd.PRNGKey, optional
             The random key for sampling (default is jrd.PRNGKey(0)).
