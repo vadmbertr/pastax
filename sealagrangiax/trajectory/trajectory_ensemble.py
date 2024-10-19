@@ -279,7 +279,8 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         cls,
         values: Float[Array, "member time 2"],
         times: Float[Array, "time"],
-        id: Int[Array, ""] = None
+        id: Int[Array, ""] = None,
+        **_: Dict
     ) -> TrajectoryEnsemble:
         """
         Creates a TrajectoryEnsemble from an array of values and time points.

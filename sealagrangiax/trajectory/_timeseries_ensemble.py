@@ -70,8 +70,9 @@ class TimeseriesEnsemble(Unitful):
     members: Timeseries
     _members_type: ClassVar = Timeseries
     size: int = eqx.field(static=True)
-    value: None = eqx.field(static=True, default_factory=lambda: None)
-    unit: None = eqx.field(static=True, default_factory=lambda: None)
+
+    _value: None = eqx.field(repr=False)
+    _unit: None = eqx.field(repr=False)
 
     def __init__(
         self,
@@ -85,6 +86,7 @@ class TimeseriesEnsemble(Unitful):
         members : Timeseries
             The members of the ensemble.
         """
+        super().__init__()
         self.members = members
         self.size = members.states.value.shape[0]
 

@@ -14,9 +14,9 @@ class State(Unitful):
 
     Attributes
     ----------
-    value : Float[Array, "state"]
+    _value : Float[Array, "state"]
         The value of the state.
-    unit : Dict[Unit, int | float], optional
+    _unit : Dict[Unit, int | float], optional
         The unit of the state (default is an empty Dict).
     name : str, optional
         The name of the state (default is None).
@@ -29,7 +29,7 @@ class State(Unitful):
         Attaches a name to the state.
     """
     
-    name: str = eqx.field(static=True, default_factory=lambda: None)
+    name: str = eqx.field(static=True)
 
     def __init__ (self, value: ArrayLike, unit: Unit | Dict[Unit, int | float] = {}, name: str = None):
         """
@@ -44,8 +44,7 @@ class State(Unitful):
         name : str, optional
             The type of the state (default is None).
         """
-        self.value = value
-        self.unit = unit
+        super().__init__(value, unit)
         self.name = name
     
     def attach_name(self, name: str) -> State:

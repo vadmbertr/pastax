@@ -62,16 +62,17 @@ class Timeseries(Unitful):
 
     states: State
     _states_type: ClassVar = State
-    times: Time = eqx.field(static=True)  # TODO: not sure if this is correct
+    times: Time #= eqx.field(static=True)  # TODO: not sure if this is correct
     length: int = eqx.field(static=True)
-    value: None = eqx.field(static=True, default_factory=lambda: None)
-    unit: None = eqx.field(static=True, default_factory=lambda: None)
+
+    _value: None = eqx.field(repr=False)
+    _unit: None = eqx.field(repr=False)
 
     def __init__(
         self,
         states: State,
         times: Time,
-        **__: Dict
+        **_: Dict
     ):
         """
         Initializes the Timeseries with given states, times, and optional parameters.
@@ -83,6 +84,7 @@ class Timeseries(Unitful):
         times : Float[Array, "time"]
             The time points for the timeseries.
         """
+        super().__init__()
         self.states = states
         self.times = times
         self.length = times.value.shape[-1]

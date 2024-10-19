@@ -292,7 +292,7 @@ class Trajectory(Timeseries):
         values: Float[Array, "... time 2"], 
         times: Float[Array, "... time"],
         id: Int[Array, ""] = None,
-        **__: Dict
+        **_: Dict
     ) -> Trajectory:
         """
         Creates a trajectory from an array of values and time points.

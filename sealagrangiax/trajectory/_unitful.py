@@ -34,15 +34,17 @@ class Unitful(eqx.Module):
 
     Attributes
     ----------
-    value : Float[Array, "quantity"]
+    _value : Float[Array, "quantity"]
         The value of the quantity.
-    unit : Dict[Unit, int | float], optional
+    _unit : Dict[Unit, int | float], optional
         The unit of the quantity (default is an empty Dict).
 
     Methods
     -------
     __init__(value, unit={}, name=None)
         Initializes the Unitful with given value, type, and unit.
+    value
+        Returns the value of the quantity.
     cumsum(axis=None)
         Computes the cumulative sum of the quantity along the specified axis.
     euclidean_distance(other)
@@ -66,10 +68,10 @@ class Unitful(eqx.Module):
         Subtracts another quantity or array like from this quantity.
     """
     
-    value: ArrayLike = eqx.field(converter=lambda x: jnp.asarray(x))
-    unit: Dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter, default_factory=lambda: {})
+    _value: ArrayLike = eqx.field(converter=lambda x: jnp.asarray(x))
+    _unit: Dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter)
 
-    def __init__ (self, value: ArrayLike, unit: Unit | Dict[Unit, int | float] = {}, name: str = None):
+    def __init__ (self, value: ArrayLike = jnp.nan, unit: Unit | Dict[Unit, int | float] = {}):
         """
         Initializes the Unitful with given value and unit.
 
@@ -80,8 +82,32 @@ class Unitful(eqx.Module):
         unit : Unit | Dict[Unit, int | float], optional
             The unit of the quantity (default is an empty Dict).
         """
-        self.value = value
-        self.unit = unit
+        self._value = value
+        self._unit = unit
+
+    @property
+    def value(self) -> ArrayLike:
+        """
+        Returns the value of the quantity.
+
+        Returns
+        -------
+        ArrayLike
+            The value of the quantity.
+        """
+        return self._value
+
+    @property
+    def unit(self) -> Dict[Unit, int | float]:
+        """
+        Returns the unit of the quantity.
+
+        Returns
+        -------
+        Dict[Unit, int | float]
+            The unit of the quantity.
+        """
+        return self._unit
     
     def cumsum(self, axis: ArrayLike = None) -> Unitful:
         """

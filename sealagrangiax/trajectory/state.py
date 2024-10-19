@@ -21,9 +21,9 @@ class Location(State):
 
     Attributes
     ----------
-    value : Float[Array, "... 2"]
+    _value : Float[Array, "... 2"]
         The latitude and longitude of the location.
-    unit : Dict[Unit, int | float]
+    _unit : Dict[Unit, int | float]
         UNIT["°"].
     name : str
         "Location in [latitude, longitude]".
@@ -40,9 +40,9 @@ class Location(State):
         Computes the Earth distance between this location and another location.
     """
 
-    value: Float[Array, "... 2"] = eqx.field(converter=location_converter)
+    _value: Float[Array, "... 2"] = eqx.field(converter=location_converter)
 
-    def __init__(self, value: Float[Array, "... 2"], **_):
+    def __init__(self, value: Float[Array, "... 2"], unit: Unit = UNIT["°"], **_):
         """
         Initializes the Location with given latitude and longitude.
 
@@ -50,10 +50,10 @@ class Location(State):
         ----------
         value : Float[Array, "2"]
             The latitude and longitude of the location.
-        **_
-            Additional keyword arguments.
+        unit : Unit | Dict[str, Unit], optional
+            The unit of the displacement (default is unit.LatLonDegrees()).
         """
-        super().__init__(value, unit=UNIT["°"], name="Location in [latitude, longitude]")
+        super().__init__(value, unit=unit, name="Location in [latitude, longitude]")
 
     @property
     def latitude(self) -> State:
@@ -106,16 +106,16 @@ class Displacement(State):
 
     Attributes
     ----------
-    value : Float[Array, "... 2"]
+    _value : Float[Array, "... 2"]
         The latitude and longitude components of the displacement.
-    unit : Dict[Unit, int | float], optional
-        Default is UNIT["°"].
+    _unit : Dict[Unit, int | float]
+        The unit of the displacement.
     name : str
         "Displacement in [latitude, longitude]".
 
     Methods
     -------
-    __init__(value, unit, **_)
+    __init__(value, unit)
         Initializes the Displacement with given latitude and longitude components and unit.
     latitude
         Returns the latitude component of the displacement.
@@ -131,10 +131,8 @@ class Displacement(State):
         ----------
         value : Float[Array, "2"]
             The latitude and longitude components of the displacement.
-        unit : Unit, optional
-            The unit of the displacement (default is LatLonDegrees()).
-        **_
-            Additional keyword arguments.
+        unit : Unit | Dict[str, Unit], optional
+            The unit of the displacement (default is unit.LatLonDegrees()).
         """
         super().__init__(value, unit=unit, name="Displacement in [latitude, longitude]")
 
@@ -169,22 +167,22 @@ class Time(State):
 
     Attributes
     ----------
-    value : ArrayLike
+    _value : ArrayLike
         The time value.
-    unit : Dict[Unit, int | float], optional
-        Default is UNIT["s"].
+    _unit : Dict[Unit, int | float]
+        The unit of the time (default is unit.Seconds()).
     name : str
         "Time since epoch".
 
     Methods
     -------
-    __init__(value)
+    __init__(value, unit)
         Initializes the Time with given time value.
     to_datetime()
         Converts the time value to a numpy array of datetime64[s].
     """
 
-    def __init__(self, value: ArrayLike, unit: Unit = UNIT["°"]):
+    def __init__(self, value: ArrayLike, unit: Unit = UNIT["s"], **_):
         """
         Initializes the Time with given time value.
 
@@ -192,8 +190,10 @@ class Time(State):
         ----------
         value : ArrayLike
             The time value.
+        _unit : Unit | Dict[Unit, int | float], optional
+            The unit of the time (default is unit.Seconds()).
         """
-        super().__init__(value, unit=UNIT["s"], name="Time since epoch")
+        super().__init__(value, unit=unit, name="Time since epoch")
 
     def to_datetime(self) -> np.ndarray:
         """
