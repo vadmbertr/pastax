@@ -36,7 +36,7 @@ class SmagorinskyDiffusionCVF(eqx.Module):
     As the class inherits from `eqx.Module`, its `cs` attribute can be treated as a trainable parameter.
     """
 
-    cs: Float[Scalar, ""] = eqx.field(static=True, default_factory=lambda: 0.1)
+    cs: Float[Scalar, ""] = eqx.field(converter=lambda x: jnp.asarray(x), default_factory=lambda: 0.1)
 
     @staticmethod
     def _neighborhood(t: Float[Scalar, ""], x: Location, dataset: Dataset, *variables: List[str]) -> Dataset:
@@ -232,10 +232,32 @@ class SmagorinskyDiffusion(StochasticDiffrax):
     id : str
         The identifier for the SmagorinskyDiffrax model (set to "smagorinsky_diffusion").
 
+    Methods
+    -------
+    from_param(cs)
+        Creates a SmagorinskyDiffusion simulator with the given Smagorinsky constant.
+
     Notes
     -----
     In this example, the `sde_cvf` attribute is an `eqx.Module` with the Smagorinsky constant as attribute, allowing to treat it as a trainable parameter.
     """
 
-    sde_cvf: SmagorinskyDiffusionCVF = SmagorinskyDiffusionCVF()
+    sde_cvf: SmagorinskyDiffusionCVF = SmagorinskyDiffusionCVF
     id: str = eqx.field(static=True, default_factory=lambda: "smagorinsky_diffusion")
+
+    @classmethod
+    def from_param(cls, cs: float) -> SmagorinskyDiffusion:
+        """
+        Creates a SmagorinskyDiffusion simulator with the given Smagorinsky constant.
+
+        Parameters
+        ----------
+        cs : float
+            The Smagorinsky constant.
+
+        Returns
+        -------
+        SmagorinskyDiffusion
+            The SmagorinskyDiffusion simulator.
+        """
+        return cls(sde_cvf=SmagorinskyDiffusionCVF(cs=cs))
