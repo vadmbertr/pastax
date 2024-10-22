@@ -138,7 +138,6 @@ class DeterministicDiffrax(DiffraxSimulator):
         Trajectory
             The simulated trajectory, including the initial conditions (x0, t0).
         """
-
         t0 = ts[0]
         t1 = ts[-1]
 
@@ -150,10 +149,10 @@ class DeterministicDiffrax(DiffraxSimulator):
             dt0=dt0,
             y0=x0.value,
             args=args,
-            saveat=dfx.SaveAt(ts=ts)
+            saveat=dfx.SaveAt(ts=ts[1:])
         ).ys
 
-        return Trajectory.from_array(ys, ts)
+        return Trajectory.from_array(jnp.concat((x0.value[None], ys), axis=0), ts)
 
 
 class SDEControl(dfx.AbstractPath):
@@ -206,7 +205,10 @@ class SDEControl(dfx.AbstractPath):
             The evaluated control.
         """
         return jnp.concatenate(
-            [jnp.asarray([t1 - t0]), self.brownian_motion.evaluate(t0=t0, t1=t1, left=left, use_levy=use_levy)]
+            [
+                jnp.asarray([t1 - t0], dtype=float), 
+                self.brownian_motion.evaluate(t0=t0, t1=t1, left=left, use_levy=use_levy)
+            ]
         )
 
 
@@ -279,7 +281,6 @@ class StochasticDiffrax(DiffraxSimulator):
         TrajectoryEnsemble
             The simulated ensemble of trajectories.
         """
-
         t0 = ts[0]  
         t1 = ts[-1]
 
@@ -300,9 +301,10 @@ class StochasticDiffrax(DiffraxSimulator):
                 dt0=dt0,
                 y0=x0.value,
                 args=args,
-                saveat=dfx.SaveAt(ts=ts)
+                saveat=dfx.SaveAt(ts=ts[1:])
             ).ys
 
         ys = solve(keys)
 
-        return TrajectoryEnsemble.from_array(ys, ts)
+        y0 = jnp.tile(x0.value, (n_samples, 1, 1))
+        return TrajectoryEnsemble.from_array(jnp.concat((y0, ys), axis=1), ts)

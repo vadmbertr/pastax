@@ -255,9 +255,6 @@ class Dataset(eqx.Module):
 
             return vu_dps[..., 1], vu_dps[..., 0]
 
-        def compute_dlatlon(latlon: Float[Array, "latlon"]) -> Float[Array, "latlon-1"]:
-            return latlon[1:] - latlon[:-1]
-
         def compute_cell_dlatlon(dright: Float[Array, "latlon-1"]) -> Float[Array, "latlon"]:
             dcentered = (dright[1:] + dright[:-1]) / 2
             dlatlon = jnp.pad(
@@ -294,8 +291,8 @@ class Dataset(eqx.Module):
             ) for variable_name, values in variables.items()
         )
 
-        dlat = compute_dlatlon(latitude)  # °
-        dlon = compute_dlatlon(longitude)  # °
+        dlat = jnp.diff(latitude)  # °
+        dlon = jnp.diff(longitude)  # °
 
         cell_dlat = compute_cell_dlatlon(dlat)  # °
         cell_dlon = compute_cell_dlatlon(dlon)  # °
@@ -383,9 +380,9 @@ class Dataset(eqx.Module):
             - The longitude coordinate array.
         """
         if to_jax:
-            transform_fn = lambda arr: jnp.asarray(arr)
+            transform_fn = lambda arr: jnp.asarray(arr, dtype=float)
         else:
-            transform_fn = lambda arr: np.asarray(arr)
+            transform_fn = lambda arr: np.asarray(arr, dtype=float)
 
         variables = dict(
             (to_name, transform_fn(dataset[from_name].data)) for to_name, from_name in variables.items()

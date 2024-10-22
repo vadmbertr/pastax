@@ -36,7 +36,7 @@ class SmagorinskyDiffusionCVF(eqx.Module):
     As the class inherits from `eqx.Module`, its `cs` attribute can be treated as a trainable parameter.
     """
 
-    cs: Float[Scalar, ""] = eqx.field(converter=lambda x: jnp.asarray(x), default_factory=lambda: 0.1)
+    cs: Float[Scalar, ""] = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float), default_factory=lambda: 0.1)
 
     @staticmethod
     def _neighborhood(t: Float[Scalar, ""], x: Location, dataset: Dataset, *variables: List[str]) -> Dataset:
@@ -140,7 +140,7 @@ class SmagorinskyDiffusionCVF(eqx.Module):
 
         # $\mathbf{u}(t, \mathbf{X}(t))$ term
         u, v = neighborhood.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)  # °/s
-        vu = jnp.asarray([v, u])  # "2"
+        vu = jnp.asarray([v, u], dtype=float)  # "2"
 
         # $(\nabla \cdot \mathbf{K})(t, \mathbf{X}(t))$ term
         dkdx, dkdy = spatial_derivative(
@@ -160,7 +160,7 @@ class SmagorinskyDiffusionCVF(eqx.Module):
             method="linear",
             extrap=True
         )
-        gradk = jnp.asarray([dkdy, dkdx])  # "2"
+        gradk = jnp.asarray([dkdy, dkdx], dtype=float)  # "2"
 
         return vu + gradk  # °/s
 
@@ -242,22 +242,36 @@ class SmagorinskyDiffusion(StochasticDiffrax):
     In this example, the `sde_cvf` attribute is an `eqx.Module` with the Smagorinsky constant as attribute, allowing to treat it as a trainable parameter.
     """
 
-    sde_cvf: SmagorinskyDiffusionCVF = SmagorinskyDiffusionCVF
     id: str = eqx.field(static=True, default_factory=lambda: "smagorinsky_diffusion")
+    sde_cvf: SmagorinskyDiffusionCVF = SmagorinskyDiffusionCVF()
 
     @classmethod
-    def from_param(cls, cs: float) -> SmagorinskyDiffusion:
+    def from_param(cls, cs: Float[Array, ""] = None, id: str = None) -> SmagorinskyDiffusion:
         """
         Creates a SmagorinskyDiffusion simulator with the given Smagorinsky constant.
 
         Parameters
         ----------
-        cs : float
-            The Smagorinsky constant.
+        cs : Float[Array, ""], optional
+            The Smagorinsky constant, defaults to None.
+        id : str, optional
+            The identifier for the simulator, defaults to None.
 
         Returns
         -------
         SmagorinskyDiffusion
             The SmagorinskyDiffusion simulator.
+
+        Notes
+        -----
+        If any of the parameters is None, its default value is used.
         """
-        return cls(sde_cvf=SmagorinskyDiffusionCVF(cs=cs))
+        sde_cvf_kwargs = {}
+        if cs is not None:
+            sde_cvf_kwargs["cs"] = cs
+
+        self_kwargs = {}
+        if id is not None:
+            self_kwargs["id"] = id
+
+        return cls(sde_cvf=SmagorinskyDiffusionCVF(**sde_cvf_kwargs), **self_kwargs)

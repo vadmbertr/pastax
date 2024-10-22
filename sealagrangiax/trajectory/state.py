@@ -11,7 +11,7 @@ from ._state import State
 
 
 def location_converter(x: Float[Array, "... 2"]) -> Float[Array, "... 2"]:
-    x = jnp.asarray(x)
+    x = jnp.asarray(x, dtype=float)
     return x.at[..., 1].set(longitude_in_180_180_degrees(x[..., 1]))
 
 

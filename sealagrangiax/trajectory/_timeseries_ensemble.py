@@ -249,11 +249,7 @@ class TimeseriesEnsemble(Unitful):
             The result of applying the function to each timeseries.
         """
         unit = {}
-        res = eqx.filter_vmap(
-            func, 
-            in_axes=_in_axes_func,
-            out_axes=eqx._vmap_pmap.if_mapped(0)  # TODO: not sure if this is correct (remove?)
-        )(self.members)
+        res = eqx.filter_vmap(func, in_axes=_in_axes_func)(self.members)
 
         if isinstance(res, Unitful):
             unit = res.unit

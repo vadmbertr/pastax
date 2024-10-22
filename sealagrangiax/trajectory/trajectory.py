@@ -12,7 +12,7 @@ from ..utils.geo import distance_on_earth
 from ..utils.unit import UNIT, units_to_str
 from ._state import State
 from .state import Location, Time
-from ._timeseries import _in_axes_func, Timeseries
+from ._timeseries import Timeseries
 
 
 class Trajectory(Timeseries):
@@ -258,9 +258,7 @@ class Trajectory(Timeseries):
         Timeseries
             The separation distance between the two trajectories.
         """
-        separation_distance = eqx.filter_vmap(lambda p1, p2: p1.distance_on_earth(p2), in_axes=_in_axes_func)(
-            self.locations, other.locations
-        )
+        separation_distance = eqx.filter_vmap(lambda p1, p2: p1.distance_on_earth(p2))(self.locations, other.locations)
 
         return Timeseries.from_array(
             separation_distance.value, 
@@ -278,7 +276,7 @@ class Trajectory(Timeseries):
         Timeseries
             The steps of the trajectory.
         """
-        steps = eqx.filter_vmap(lambda p1, p2: distance_on_earth(p1, p2), in_axes=_in_axes_func)(
+        steps = eqx.filter_vmap(lambda p1, p2: distance_on_earth(p1, p2))(
             self.locations.value[1:], self.locations.value[:-1]
         )
 

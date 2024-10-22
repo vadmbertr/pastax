@@ -1,5 +1,5 @@
-from .linear_ssc import LinearSSC, TrainableLinearSSC
+from .linear_ssc import IdentitySSC, LinearSSC
 from .smagorinsky_diffusion import SmagorinskyDiffusion
 
 
-__all__ = ["LinearSSC", "TrainableLinearSSC", "SmagorinskyDiffusion"]
+__all__ = ["IdentitySSC", "LinearSSC", "SmagorinskyDiffusion"]

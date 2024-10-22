@@ -68,7 +68,7 @@ class Unitful(eqx.Module):
         Subtracts another quantity or array like from this quantity.
     """
     
-    _value: ArrayLike = eqx.field(converter=lambda x: jnp.asarray(x))
+    _value: ArrayLike = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float))
     _unit: Dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter)
 
     def __init__ (self, value: ArrayLike = jnp.nan, unit: Unit | Dict[Unit, int | float] = {}):

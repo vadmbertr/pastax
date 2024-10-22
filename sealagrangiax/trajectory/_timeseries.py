@@ -158,11 +158,7 @@ class Timeseries(Unitful):
         if isinstance(other, Timeseries):
             other = other.states
         
-        res = eqx.filter_vmap(
-            lambda p1, p2: p1.euclidean_distance(p2), 
-            in_axes=_in_axes_func,
-            out_axes=eqx._vmap_pmap.if_mapped(0)  # TODO: not sure if this is correct (remove?)
-        )(self.states, other)
+        res = eqx.filter_vmap(lambda p1, p2: p1.euclidean_distance(p2))(self.states, other)
 
         return Timeseries.from_array(res.value, self.times.value, self.unit, name="Euclidean distance")
 
@@ -181,11 +177,7 @@ class Timeseries(Unitful):
             The result of applying the function to each state.
         """
         unit = {}
-        res = eqx.filter_vmap(
-            func, 
-            in_axes=_in_axes_func,
-            out_axes=eqx._vmap_pmap.if_mapped(0)  # TODO: not sure if this is correct (remove?)
-        )(self.states)
+        res = eqx.filter_vmap(func, in_axes=_in_axes_func)(self.states)
 
         if isinstance(res, Unitful):
             unit = res.unit
@@ -223,8 +215,8 @@ class Timeseries(Unitful):
         Timeseries
             The timeseries created from the array of values and time points.
         """
-        values = jnp.asarray(values)
-        times = jnp.asarray(times)
+        values = jnp.asarray(values, dtype=float)
+        times = jnp.asarray(times, dtype=float)
         
         values = eqx.filter_vmap(
             lambda value: cls._states_type(value, unit=unit, name=name),
