@@ -8,11 +8,7 @@ import numpy as np
 from ..utils.geo import distance_on_earth, longitude_in_180_180_degrees
 from ..utils.unit import Unit, UNIT
 from ._state import State
-
-
-def location_converter(x: Float[Array, "... 2"]) -> Float[Array, "... 2"]:
-    x = jnp.asarray(x)
-    return x.at[..., 1].set(longitude_in_180_180_degrees(x[..., 1]))
+from ._unitful import unit_converter
 
 
 class Location(State):
@@ -40,7 +36,7 @@ class Location(State):
         Computes the Earth distance between this location and another location.
     """
 
-    _value: Float[Array, "... 2"] = eqx.field(converter=location_converter)
+    _value: Float[Array, "... 2"] = eqx.field(converter=lambda x: jnp.asarray(x))
 
     def __init__(self, value: Float[Array, "... 2"], unit: Unit = UNIT["°"], **_):
         """
@@ -53,6 +49,9 @@ class Location(State):
         unit : Unit | Dict[str, Unit], optional
             The unit of the displacement (default is unit.LatLonDegrees()).
         """
+        if unit == unit_converter(UNIT["°"]):
+            value = value.at[..., 1].set(longitude_in_180_180_degrees(value[..., 1]))
+        
         super().__init__(value, unit=unit, name="Location in [latitude, longitude]")
 
     @property
@@ -97,6 +96,9 @@ class Location(State):
         -----
         This function uses the Haversine formula to compute the distance between two points on the Earth surface.
         """
+        if not self.unit == unit_converter(UNIT["°"]) or not other.unit == unit_converter(UNIT["°"]):
+            raise ValueError("Both locations must be in degrees.")
+
         return State(distance_on_earth(self.value, other.value), unit=UNIT["m"], name="Distance on Earth")
 
 
