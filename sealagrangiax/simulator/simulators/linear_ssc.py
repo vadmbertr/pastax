@@ -10,6 +10,17 @@ from ...utils import meters_to_degrees
 from ...grid import Dataset
 
 
+def _ssc_vf(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+    t = jnp.asarray(t, dtype=float)
+    dataset = args
+    latitude, longitude = y[0], y[1]
+
+    u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
+    dlatlon = jnp.asarray([v, u], dtype=float)
+
+    return dlatlon
+
+
 def ssc_vf(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     """
     Computes the drift term of the solved Ordinary Differential Equation by interpolating in space and time the velocity fields.
@@ -28,14 +39,10 @@ def ssc_vf(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     Float[Array, "2"]
         The drift term (change in latitude and longitude in degrees).
     """
-    t = jnp.asarray(t, dtype=float)
+    dlatlon = _ssc_vf(t, y, args)
+
     dataset = args
-    latitude, longitude = y[0], y[1]
-
-    u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
-    dlatlon = jnp.asarray([v, u], dtype=float)
-
-    if dataset.is_spherical_mesh and dataset.is_uv_mps:
+    if dataset.is_spherical_mesh and not dataset.use_degrees:
         dlatlon = meters_to_degrees(dlatlon, latitude=y[0])
 
     return dlatlon
@@ -57,7 +64,7 @@ class IdentitySSC(DeterministicDiffrax):
 
     Notes
     -----
-    In this example, the `ode_vf` attribute is simply a function as the simulator does not have parameter to optimise.
+    In this example, the `ode_vf` attribute is simply a function as the simulator does not have parameters to optimize.
     """
 
     id: str = eqx.field(static=True, default_factory=lambda: "identity_ssc")
@@ -109,9 +116,15 @@ class LinearSSCVF(eqx.Module):
         Float[Array, "2"]
             The drift term (change in latitude and longitude in degrees).
         """
-        vu = ssc_vf(t, y, args)  # °/s
+        vu = _ssc_vf(t, y, args)
 
-        return self.intercept + self.slope * vu
+        dlatlon = self.intercept + self.slope * vu
+
+        dataset = args
+        if dataset.is_spherical_mesh and not dataset.use_degrees:
+            dlatlon = meters_to_degrees(dlatlon, latitude=y[0])
+
+        return dlatlon
 
 
 class LinearSSC(DeterministicDiffrax):
