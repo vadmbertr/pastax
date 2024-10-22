@@ -8,8 +8,7 @@ from jaxtyping import Array, Bool, Float, Int, Scalar
 import numpy as np
 import xarray as xr
 
-from ..utils.geo import longitude_in_180_180_degrees
-from ..utils.unit import meters_to_degrees
+from ..utils.unit import degrees_to_meters
 from ._coordinates import Coordinates
 from ._grid import SpatioTemporalField
 
@@ -20,18 +19,22 @@ class Dataset(eqx.Module):
 
     Attributes
     ----------
-    variables : Dict[str, Spatiotemporal]
-        Dictionary of spatiotemporal variables.
-    is_land : Bool[Array, "lat lon"]
-        Boolean array indicating land presence.
+    is_spherical_mesh: bool
+        Boolean indicating whether the mesh uses spherical coordinates.
+    coordinates : Coordinates
+        Coordinates object containing time, latitude, and longitude.
     dx : Float[Array, "lat lon-1"]
         Array of longitudinal distances in meters.
     dy : Float[Array, "lat-1 lon"]
         Array of latitudinal distances in meters.
     cell_area : Bool[Array, "lat lon"]
         Array of cell areas in square meters.
-    coordinates : Coordinates
-        Coordinates object containing time, latitude, and longitude.
+    variables : Dict[str, Spatiotemporal]
+        Dictionary of spatiotemporal variables.
+    is_land : Bool[Array, "lat lon"]
+        Boolean array indicating land presence.
+    is_uv_mps : bool
+        Boolean indicating whether the velocity data is in m/s.
 
     Methods
     -------
@@ -43,22 +46,24 @@ class Dataset(eqx.Module):
         Interpolates the specified variables spatially at the given latitude and longitude.
     interp_spatiotemporal(*variables: Tuple[str, ...], time: Float[Array, "..."], latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Tuple[Float[Array, "... ... ..."], ...]
         Interpolates the specified variables spatiotemporally at the given time, latitude, and longitude.
-    neighborhood(*variables: Tuple[str, ...], time: Int[Array, ""], latitude: Float[Array, ""], longitude: Float[Array, ""], t_width: int = 2, x_width: int = 7) -> Dataset
+    neighborhood(*variables: Tuple[str, ...], time: Int[Array, ""], latitude: Float[Array, ""], longitude: Float[Array, ""], t_width: int, x_width: int) -> Dataset
         Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`, 
         `longitude`.
-    from_arrays(variables: Dict[str, Float[Array, "time lat lon"]], time: Int[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str = "linear", velocity_in_mps: bool = True) -> Dataset
+    from_arrays(variables: Dict[str, Float[Array, "time lat lon"]], time: Int[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str = "linear", is_spherical_mesh: bool = True, is_uv_mps: bool = True) -> Dataset
         Constructs a `Dataset` object from arrays of variables and coordinates `time`, `latitude`, `longitude`.
-    from_xarray(dataset: xr.Dataset, variables: Dict[str, str], coordinates: Dict[str, str], interpolation_method: str = "linear", velocity_in_mps: bool = False) -> Dataset
+    from_xarray(dataset: xr.Dataset, variables: Dict[str, str], coordinates: Dict[str, str], interpolation_method: str = "linear", is_spherical_mesh: bool = True, is_uv_mps: bool = True) -> Dataset
         Constructs a `Dataset` object from an `xarray.Dataset`.
     to_xarray() -> xr.Dataset
         Returns the `Dataset` object as an `xarray.Dataset`.
     """
+    is_spherical_mesh: bool
+    coordinates: Coordinates
+    dx: Float[Array, "lat lon-1"]
+    dy: Float[Array, "lat-1 lon"]
+    cell_area: Bool[Array, "lat lon"]
     variables: Dict[str, SpatioTemporalField]
     is_land: Bool[Array, "lat lon"]
-    dx: Float[Array, "lat lon-1"]  # m
-    dy: Float[Array, "lat-1 lon"]  # m
-    cell_area: Bool[Array, "lat lon"]  # m^2
-    coordinates: Coordinates
+    is_uv_mps: bool
 
     def indices(
         self,
@@ -152,8 +157,8 @@ class Dataset(eqx.Module):
         time: Int[Scalar, ""],
         latitude: Float[Scalar, ""],
         longitude: Float[Scalar, ""],
-        t_width: int = 2,
-        x_width: int = 7
+        t_width: int,
+        x_width: int
     ) -> Dataset:
         """
         Extracts a neighborhood of data around a specified point in time and space.
@@ -168,10 +173,10 @@ class Dataset(eqx.Module):
             The latitude coordinate for the center of the neighborhood.
         longitude : Float[Scalar, ""]
             The longitude coordinate for the center of the neighborhood.
-        t_width : int, optional
-            The width of the neighborhood in the time dimension (default is 2).
-        x_width : int, optional
-            The width of the neighborhood in the spatial dimensions (latitude and longitude) (default is 7).
+        t_width : int
+            The width of the neighborhood in the time dimension.
+        x_width : int
+            The width of the neighborhood in the spatial dimensions (latitude and longitude).
 
         Returns
         -------
@@ -180,6 +185,7 @@ class Dataset(eqx.Module):
         """
         t_i, lat_i, lon_i = self.indices(time, latitude, longitude)
 
+        # TODO: handle edge cases
         from_t_i = t_i - t_width // 2
         from_lat_i = lat_i - x_width // 2
         from_lon_i = lon_i - x_width // 2
@@ -200,9 +206,11 @@ class Dataset(eqx.Module):
         lat = jax.lax.dynamic_slice_in_dim(self.coordinates.latitude.values, from_lat_i, x_width)
         lon = jax.lax.dynamic_slice_in_dim(self.coordinates.longitude.values, from_lon_i, x_width)
 
-        return Dataset.from_arrays(variables, t, lat, lon, interpolation_method="linear")
+        return Dataset.from_arrays(
+            variables, t, lat, lon, interpolation_method="linear", 
+            is_spherical_mesh=self.is_spherical_mesh, is_uv_mps=self.is_uv_mps
+        )
 
-    # construct a `Dataset` from `Array`s of `variables` and coordinates `time`, `latitude`, `longitude`
     @classmethod
     def from_arrays(
         cls,
@@ -211,17 +219,17 @@ class Dataset(eqx.Module):
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"],
         interpolation_method: str = "linear",
-        convert_uv_to_dps: bool = False
+        is_spherical_mesh: bool = True,
+        is_uv_mps: bool = True
     ) -> Dataset:
         """
-        Create a Fields object from arrays of variables, time, latitude, and longitude.
+        Create a Dataset object from arrays of variables, time, latitude, and longitude.
 
         Parameters
         ----------
         variables : Dict[str, Float[Array, "time lat lon"]]
             A dictionary where keys are variable names and values are 3D arrays representing 
             the variable data over time, latitude, and longitude.
-            We expect at least "u" and "v" to be provided as variables names.
         time : Int[Array, "time"]
             A 1D array representing the time dimension.
         latitude : Float[Array, "lat"]
@@ -229,43 +237,53 @@ class Dataset(eqx.Module):
         longitude : Float[Array, "lon"]
             A 1D array representing the longitude dimension.
         interpolation_method : str, optional
-            The method to use for latter possible interpolation of the variables (default is "linear").
-        convert_uv_to_dps : bool, optional
-            Whether the velocity data is in m/s (default is False) and should be converted to °/s.
+            The method to use for latter possible interpolation of the variables, defaults to "linear".
+        is_spherical_mesh : bool, optional
+            Whether the mesh uses spherical coordinate, defaults to True.
+        is_uv_mps : bool, optional
+            Whether the velocity data is in m/s, defaults to True.
 
         Returns
         -------
-        Fields
-            A Fields object containing the processed variables, land mask, grid spacing in 
+        Dataset
+            A Dataset object containing the processed variables, land mask, grid spacing in 
             meters, cell area in square meters, and coordinates.
         """
-        def convert_velocity_to_dps(
-                u_mps: Float[Array, "time lat lon"], 
-                v_mps: Float[Array, "time lat lon"]
-        ) -> Tuple[Float[Array, "time lat lon"], Float[Array, "time lat lon"]]:
-            vu_mps = jnp.stack((v_mps, u_mps), axis=-1)
-            original_shape = vu_mps.shape
-            vu_mps = vu_mps.reshape(vu_mps.shape[0], -1, 2)
+        def compute_cell_dlatlon(dright: Float[Array, "latlon-1"], axis: int) -> Float[Array, "latlon"]:
+            if axis == 0:
+                dcentered = (dright[1:, :] + dright[:-1, :]) / 2
+                dstart =((dright[0, :] - dcentered[0, :] / 2) * 2)[None, :]
+                dend = ((dright[-1, :] - dcentered[-1, :] / 2) * 2)[None, :]
+            else:
+                dcentered = (dright[:, 1:] + dright[:, :-1]) / 2
+                dstart = ((dright[:, 0] - dcentered[:, 0] / 2) * 2)[:, None]
+                dend = ((dright[:, -1] - dcentered[:, -1] / 2) * 2)[:, None]
+            return jnp.concat((dstart, dcentered, dend), axis=axis)
 
-            _, lat_grid = jnp.meshgrid(longitude, latitude)
-            lat_grid = lat_grid.ravel()
-            
-            vu_dps = eqx.filter_vmap(lambda x: meters_to_degrees(x, lat_grid))(vu_mps)
-            vu_dps = vu_dps.reshape(original_shape)
+        coordinates = Coordinates.from_arrays(time, latitude, longitude, is_spherical_mesh)
 
-            return vu_dps[..., 1], vu_dps[..., 0]
+        dlat = jnp.diff(latitude)
+        dlon = jnp.diff(longitude)
 
-        def compute_dlatlon(latlon: Float[Array, "latlon"]) -> Float[Array, "latlon-1"]:
-            return latlon[1:] - latlon[:-1]
-
-        def compute_cell_dlatlon(dright: Float[Array, "latlon-1"]) -> Float[Array, "latlon"]:
-            dcentered = (dright[1:] + dright[:-1]) / 2
-            dlatlon = jnp.pad(
-                dcentered,
-                1,
-                constant_values=((dright[0] - dcentered[0] / 2) * 2, (dright[-1] - dcentered[-1] / 2) * 2)
+        if is_spherical_mesh:
+            dlatlon = degrees_to_meters(
+                jnp.stack([dlat, jnp.zeros_like(dlat)], axis=-1), (latitude[:-1] + latitude[1:]) / 2
             )
-            return dlatlon
+            dlat = dlatlon[:, 0]
+            _, dlat = jnp.meshgrid(longitude, dlat)
+            dlatlon = jax.vmap(
+                lambda lat: jax.vmap(
+                    lambda _dlon: degrees_to_meters(jnp.stack([jnp.zeros_like(_dlon), _dlon], axis=-1), lat)
+                )(dlon)
+            )(latitude)
+            dlon = dlatlon[:, :, 1]
+        else:
+            _, dlat = jnp.meshgrid(longitude, dlat)
+            dlon, _ = jnp.meshgrid(dlon, latitude)
+
+        cell_dlat = compute_cell_dlatlon(dlat, axis=0)
+        cell_dlon = compute_cell_dlatlon(dlon, axis=1)
+        cell_area = cell_dlat * cell_dlon
 
         is_land = jnp.zeros((latitude.size, longitude.size), dtype=bool)
         for variable in variables.values():
@@ -276,12 +294,6 @@ class Dataset(eqx.Module):
             variable = variables[var_name]
             variable = jnp.where(is_land, 0, variable)
             variables[var_name] = variable
-
-        if convert_uv_to_dps:
-            variables["u"], variables["v"] = convert_velocity_to_dps(variables["u"], variables["v"])
-
-        longitude = longitude_in_180_180_degrees(longitude)
-        coordinates = Coordinates.from_arrays(time, latitude, longitude)
 
         variables = dict(
             (
@@ -294,26 +306,15 @@ class Dataset(eqx.Module):
             ) for variable_name, values in variables.items()
         )
 
-        dlat = compute_dlatlon(latitude)  # °
-        dlon = compute_dlatlon(longitude)  # °
-
-        cell_dlat = compute_cell_dlatlon(dlat)  # °
-        cell_dlon = compute_cell_dlatlon(dlon)  # °
-
-        _, dlat = jnp.meshgrid(longitude, dlat)
-        dlon, _ = jnp.meshgrid(dlon, latitude)
-        _, cell_dlat = jnp.meshgrid(longitude, cell_dlat)
-        cell_dlon, _ = jnp.meshgrid(cell_dlon, latitude)
-
-        cell_area = cell_dlat * cell_dlon  # °^2
-
         return cls(
-            variables=variables, 
-            is_land=is_land, 
-            dx=dlon, 
-            dy=dlat, 
-            cell_area=cell_area, 
-            coordinates=coordinates
+            is_spherical_mesh=is_spherical_mesh,
+            coordinates=coordinates,
+            dx=dlon,
+            dy=dlat,
+            cell_area=cell_area,
+            variables=variables,
+            is_land=is_land,
+            is_uv_mps=is_uv_mps
         )
 
     @classmethod
@@ -323,7 +324,8 @@ class Dataset(eqx.Module):
         variables: Dict[str, str],
         coordinates: Dict[str, str],
         interpolation_method: str = "linear",
-        convert_uv_to_dps: bool = False
+        is_spherical_mesh: bool = True,
+        is_uv_mps: bool = True
     ) -> Dataset:
         """
         Create a Fields object from an xarray Dataset.
@@ -340,8 +342,10 @@ class Dataset(eqx.Module):
             the dataset.
         interpolation_method : str, optional
             The method to use for latter possible interpolation of the variables (default is "linear").
-        convert_uv_to_dps : bool, optional
-            Whether the velocity data is in m/s (default is False) and should be converted to °/s.
+        is_spherical_mesh : bool, optional
+            Whether the mesh uses spherical coordinate, defaults to True.
+        is_uv_mps : bool, optional
+            Whether the velocity data is in m/s, defaults to True.
 
         Returns
         -------
@@ -350,7 +354,7 @@ class Dataset(eqx.Module):
         """
         variables, t, lat, lon = cls.to_arrays(dataset, variables, coordinates, to_jax=True)
 
-        return cls.from_arrays(variables, t, lat, lon, interpolation_method, convert_uv_to_dps)
+        return cls.from_arrays(variables, t, lat, lon, interpolation_method, is_spherical_mesh, is_uv_mps)
 
     @staticmethod
     def to_arrays(
