@@ -8,7 +8,7 @@ from jaxtyping import Array, Bool, Float, Int, Scalar
 import numpy as np
 import xarray as xr
 
-from ..utils.unit import degrees_to_meters
+from ..utils.unit import degrees_to_meters, meters_to_degrees
 from ._coordinates import Coordinates
 from ._grid import SpatioTemporalField
 
@@ -21,6 +21,8 @@ class Dataset(eqx.Module):
     ----------
     is_spherical_mesh: bool
         Boolean indicating whether the mesh uses spherical coordinates.
+    use_degrees : bool
+        Boolean indicating whether distance units are degrees.
     coordinates : Coordinates
         Coordinates object containing time, latitude, and longitude.
     dx : Float[Array, "lat lon-1"]
@@ -33,37 +35,35 @@ class Dataset(eqx.Module):
         Dictionary of spatiotemporal variables.
     is_land : Bool[Array, "lat lon"]
         Boolean array indicating land presence.
-    is_uv_mps : bool
-        Boolean indicating whether the velocity data is in m/s.
 
     Methods
     -------
-    indices(time: Int[Array, ""], latitude: Float[Array, ""], longitude: Float[Array, ""]) -> Tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]
+    indices(time, latitude, longitude)
         Gets nearest indices of the spatio-temporal point `time`, `latitude`, `longitude`.
-    interp_temporal(*variables: Tuple[str, ...], time: Float[Array, "..."]) -> Tuple[Float[Array, "... ... ..."], ...]
+    interp_temporal(*variables, time)
         Interpolates the specified variables temporally at the given time.
-    interp_spatial(*variables: Tuple[str, ...], latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Tuple[Float[Array, "... ... ..."], ...]
+    interp_spatial(*variables, latitude, longitude)
         Interpolates the specified variables spatially at the given latitude and longitude.
-    interp_spatiotemporal(*variables: Tuple[str, ...], time: Float[Array, "..."], latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Tuple[Float[Array, "... ... ..."], ...]
+    interp_spatiotemporal(*variables, time, latitude, longitude)
         Interpolates the specified variables spatiotemporally at the given time, latitude, and longitude.
-    neighborhood(*variables: Tuple[str, ...], time: Int[Array, ""], latitude: Float[Array, ""], longitude: Float[Array, ""], t_width: int, x_width: int) -> Dataset
+    neighborhood(*variables, time, latitude, longitude, t_width, x_width)
         Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`, 
         `longitude`.
-    from_arrays(variables: Dict[str, Float[Array, "time lat lon"]], time: Int[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str = "linear", is_spherical_mesh: bool = True, is_uv_mps: bool = True) -> Dataset
+    from_arrays(variables, time, latitude, longitude, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
         Constructs a `Dataset` object from arrays of variables and coordinates `time`, `latitude`, `longitude`.
-    from_xarray(dataset: xr.Dataset, variables: Dict[str, str], coordinates: Dict[str, str], interpolation_method: str = "linear", is_spherical_mesh: bool = True, is_uv_mps: bool = True) -> Dataset
+    from_xarray(dataset, variables, coordinates, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
         Constructs a `Dataset` object from an `xarray.Dataset`.
-    to_xarray() -> xr.Dataset
+    to_xarray()
         Returns the `Dataset` object as an `xarray.Dataset`.
     """
     is_spherical_mesh: bool
+    use_degrees: bool
     coordinates: Coordinates
     dx: Float[Array, "lat lon-1"]
     dy: Float[Array, "lat-1 lon"]
     cell_area: Bool[Array, "lat lon"]
     variables: Dict[str, SpatioTemporalField]
     is_land: Bool[Array, "lat lon"]
-    is_uv_mps: bool
 
     def indices(
         self,
@@ -211,7 +211,7 @@ class Dataset(eqx.Module):
             t, lat, lon, 
             interpolation_method="linear", 
             is_spherical_mesh=self.is_spherical_mesh, 
-            is_uv_mps=self.is_uv_mps
+            use_degrees=self.use_degrees
         )
 
     @classmethod
@@ -223,6 +223,7 @@ class Dataset(eqx.Module):
         longitude: Float[Array, "lon"],
         interpolation_method: str = "linear",
         is_spherical_mesh: bool = True,
+        use_degrees: bool = False,
         is_uv_mps: bool = True
     ) -> Dataset:
         """
@@ -243,6 +244,8 @@ class Dataset(eqx.Module):
             The method to use for latter possible interpolation of the variables, defaults to "linear".
         is_spherical_mesh : bool, optional
             Whether the mesh uses spherical coordinate, defaults to True.
+        use_degrees : bool, optional
+            Whether distance units should be degrees rather than meters, defaults to False.
         is_uv_mps : bool, optional
             Whether the velocity data is in m/s, defaults to True.
 
@@ -262,18 +265,22 @@ class Dataset(eqx.Module):
                 dstart = ((dright[:, 0] - dcentered[:, 0] / 2) * 2)[:, None]
                 dend = ((dright[:, -1] - dcentered[:, -1] / 2) * 2)[:, None]
             return jnp.concat((dstart, dcentered, dend), axis=axis)
+        
+        use_degrees = use_degrees & is_spherical_mesh  # if flat mesh, no reason to use degrees
 
         coordinates = Coordinates.from_arrays(time, latitude, longitude, is_spherical_mesh)
 
+        # compute grid spacings and cells area
         dlat = jnp.diff(latitude)
         dlon = jnp.diff(longitude)
 
-        if is_spherical_mesh:
+        if is_spherical_mesh and not use_degrees:
             dlatlon = degrees_to_meters(
                 jnp.stack([dlat, jnp.zeros_like(dlat)], axis=-1), (latitude[:-1] + latitude[1:]) / 2
             )
             dlat = dlatlon[:, 0]
             _, dlat = jnp.meshgrid(longitude, dlat)
+
             dlatlon = jax.vmap(
                 lambda lat: jax.vmap(
                     lambda _dlon: degrees_to_meters(jnp.stack([jnp.zeros_like(_dlon), _dlon], axis=-1), lat)
@@ -288,15 +295,34 @@ class Dataset(eqx.Module):
         cell_dlon = compute_cell_dlatlon(dlon, axis=1)
         cell_area = cell_dlat * cell_dlon
 
+        # compute land mask
         is_land = jnp.zeros((latitude.size, longitude.size), dtype=bool)
         for variable in variables.values():
             _is_land = jnp.isnan(variable).sum(axis=0, dtype=bool)
             is_land = jnp.logical_or(is_land, _is_land)
 
+        # apply it
         for var_name in variables:
             variable = variables[var_name]
             variable = jnp.where(is_land, 0, variable)
             variables[var_name] = variable
+
+        # if required, convert uv from m/s to °/s
+        if use_degrees and is_uv_mps:
+            vu = jnp.stack((variables["v"], variables["u"]), axis=-1)
+            original_shape = vu.shape
+            vu = vu.reshape(vu.shape[0], -1, 2)
+
+            _, lat_grid = jnp.meshgrid(longitude, latitude)
+            lat_grid = lat_grid.ravel()
+             
+            vu = eqx.filter_vmap(lambda x: meters_to_degrees(x, lat_grid))(vu)
+            vu = vu.reshape(original_shape)
+
+            variables["v"] = vu[..., 0]
+            variables["u"] = vu[..., 1]
+
+            is_uv_mps = False
 
         variables = dict(
             (
@@ -311,13 +337,13 @@ class Dataset(eqx.Module):
 
         return cls(
             is_spherical_mesh=is_spherical_mesh,
+            use_degrees=use_degrees,
             coordinates=coordinates,
             dx=dlon,
             dy=dlat,
             cell_area=cell_area,
             variables=variables,
-            is_land=is_land,
-            is_uv_mps=is_uv_mps
+            is_land=is_land
         )
 
     @classmethod
@@ -328,7 +354,8 @@ class Dataset(eqx.Module):
         coordinates: Dict[str, str],
         interpolation_method: str = "linear",
         is_spherical_mesh: bool = True,
-        is_uv_mps: bool = True
+        is_uv_mps: bool = True,
+        use_degrees: bool = False
     ) -> Dataset:
         """
         Create a Fields object from an xarray Dataset.
@@ -349,6 +376,8 @@ class Dataset(eqx.Module):
             Whether the mesh uses spherical coordinate, defaults to True.
         is_uv_mps : bool, optional
             Whether the velocity data is in m/s, defaults to True.
+        use_dps : bool, optional
+            Whether distance unit should be degrees rather than meters, defaults to False.
 
         Returns
         -------
@@ -357,7 +386,7 @@ class Dataset(eqx.Module):
         """
         variables, t, lat, lon = cls.to_arrays(dataset, variables, coordinates, to_jax=True)
 
-        return cls.from_arrays(variables, t, lat, lon, interpolation_method, is_spherical_mesh, is_uv_mps)
+        return cls.from_arrays(variables, t, lat, lon, interpolation_method, is_spherical_mesh, use_degrees, is_uv_mps)
 
     @staticmethod
     def to_arrays(
