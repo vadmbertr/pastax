@@ -4,6 +4,7 @@ from typing import Tuple
 import equinox as eqx
 from jaxtyping import Array, Float, Int
 
+from ..utils.geo import longitude_in_180_180_degrees
 from ._grid import Coordinate, LongitudeCoordinate
 
 
@@ -25,7 +26,7 @@ class Coordinates(eqx.Module):
     indices(time: Int[Array, "..."], latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]
         Returns the indices of the given time, latitude, and longitude arrays.
         
-    from_arrays(time: Int[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"]) -> Coordinates
+    from_arrays(time: Int[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], is_spherical_mesh: bool) -> Coordinates
         Creates a Coordinates object from arrays of time, latitude, and longitude.
     """
     time: Coordinate
@@ -62,7 +63,8 @@ class Coordinates(eqx.Module):
         cls,
         time: Int[Array, "time"],
         latitude: Float[Array, "lat"],
-        longitude: Float[Array, "lon"]
+        longitude: Float[Array, "lon"],
+        is_spherical_mesh: bool
     ) -> Coordinates:
         """
         Create a Coordinates object from arrays of time, latitude, and longitude.
@@ -75,6 +77,8 @@ class Coordinates(eqx.Module):
             Array of latitude values.
         longitude : Float[Array, "lon"]
             Array of longitude values.
+        is_spherical_mesh : bool
+            Whether the mesh is spherical (or flat).
 
         Returns
         -------
@@ -83,6 +87,11 @@ class Coordinates(eqx.Module):
         """
         t = Coordinate.from_array(time, extrap=True)
         lat = Coordinate.from_array(latitude, extrap=True)
-        lon = LongitudeCoordinate.from_array(longitude, extrap=True, period=360)
+
+        if is_spherical_mesh:
+            longitude = longitude_in_180_180_degrees(longitude)
+            lon = LongitudeCoordinate.from_array(longitude, extrap=True, period=360)
+        else:
+            lon = Coordinate.from_array(longitude, extrap=True)
 
         return cls(time=t, latitude=lat, longitude=lon)

@@ -668,7 +668,7 @@ def meters_to_degrees(arr: Float[Array, "... 2"], latitude: Float[Array, "..."])
     -----
     This function uses the Haversine formula for accurate conversion of distances.
     """
-    dx, dy = arr[..., 1], arr[..., 0]
+    dy, dx = arr[..., 0], arr[..., 1]
     lat1_rad = jnp.radians(latitude)
 
     distance = jnp.sqrt(dx**2 + dy**2)
@@ -755,14 +755,13 @@ def degrees_to_meters(arr: Float[Array, "... 2"], latitude: Float[Array, "..."])
     
     lat1 = latitude
     lat2 = lat1 + dlat
-    lon2 = dlon
 
     dy = distance_on_earth(
         jnp.stack([lat1, jnp.zeros_like(lat1)], axis=-1), jnp.stack([lat2, jnp.zeros_like(lat2)], axis=-1)
     )
-    dx = distance_on_earth(jnp.stack([lat1, jnp.zeros_like(lat1)], axis=-1), jnp.stack([lat1, lon2], axis=-1))
+    dx = distance_on_earth(jnp.stack([lat1, jnp.zeros_like(lat1)], axis=-1), jnp.stack([lat1, dlon], axis=-1))
 
-    return jnp.stack([dx, dy], axis=-1)
+    return jnp.stack([dy, dx], axis=-1)
 
 
 def degrees_to_kilometers(arr: Float[Array, "... 2"], latitude: Float[Array, "..."]) -> Float[Array, "... 2"]:

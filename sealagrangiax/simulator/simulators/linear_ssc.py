@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float, Scalar
 
 from .._diffrax_simulator import DeterministicDiffrax
+from ...utils import meters_to_degrees
 from ...grid import Dataset
 
 
@@ -31,9 +32,13 @@ def ssc_vf(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     dataset = args
     latitude, longitude = y[0], y[1]
 
-    u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)  # °/s
+    u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
+    dlatlon = jnp.asarray([v, u], dtype=float)
 
-    return jnp.asarray([v, u], dtype=float)
+    if dataset.is_spherical_mesh and dataset.is_uv_mps:
+        dlatlon = meters_to_degrees(dlatlon, latitude=y[0])
+
+    return dlatlon
 
 
 class IdentitySSC(DeterministicDiffrax):
