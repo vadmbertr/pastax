@@ -108,7 +108,8 @@ class SmagorinskyDiffusionCVF(eqx.Module):
             longitude=neighborhood.coordinates.longitude.values[1:-1],
             interpolation_method="linear",
             is_spherical_mesh=neighborhood.is_spherical_mesh,
-            is_uv_mps=neighborhood.is_uv_mps
+            use_degrees=neighborhood.use_degrees,
+            is_uv_mps=False  # no uv anyway...
         )
 
         return smag_ds
@@ -146,9 +147,6 @@ class SmagorinskyDiffusionCVF(eqx.Module):
         # $\mathbf{u}(t, \mathbf{X}(t))$ term
         u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
         vu = jnp.asarray([v, u], dtype=float)  # "2"
-
-        if smag_ds.is_spherical_mesh:
-            longitude += 180
 
         # $(\nabla \cdot \mathbf{K})(t, \mathbf{X}(t))$ term
         dkdx, dkdy = spatial_derivative(
@@ -218,7 +216,6 @@ class SmagorinskyDiffusionCVF(eqx.Module):
         t = jnp.asarray(t)
         dataset = args
 
-        neighborhood = self._neighborhood("u", "v", t=t, y=y, dataset=dataset)
         smag_ds = self._smagorinsky_coefficients(t, y, dataset)  # "1 x_width-2 x_width-2"
 
         dlatlon_drift = self._drift_term(t, y, dataset, smag_ds)
@@ -226,7 +223,7 @@ class SmagorinskyDiffusionCVF(eqx.Module):
 
         dlatlon = jnp.column_stack([dlatlon_drift, dlatlon_diffusion])
 
-        if dataset.is_spherical_mesh and dataset.is_uv_mps:
+        if dataset.is_spherical_mesh and not dataset.use_degrees:
             dlatlon = meters_to_degrees(dlatlon.T, latitude=y[0]).T
 
         return dlatlon
