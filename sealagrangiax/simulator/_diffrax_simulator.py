@@ -152,7 +152,7 @@ class DeterministicDiffrax(DiffraxSimulator):
             saveat=dfx.SaveAt(ts=ts[1:])
         ).ys
 
-        return Trajectory.from_array(jnp.concat((x0.value[None], ys), axis=0), ts)
+        return Trajectory.from_array(jnp.concat((x0.value[None], ys), axis=0), ts, unit=x0.unit)
 
 
 class SDEControl(dfx.AbstractPath):
@@ -307,4 +307,4 @@ class StochasticDiffrax(DiffraxSimulator):
         ys = solve(keys)
 
         y0 = jnp.tile(x0.value, (n_samples, 1, 1))
-        return TrajectoryEnsemble.from_array(jnp.concat((y0, ys), axis=1), ts)
+        return TrajectoryEnsemble.from_array(jnp.concat((y0, ys), axis=1), ts, unit=x0.unit)

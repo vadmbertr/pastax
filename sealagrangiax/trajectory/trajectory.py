@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 
 from ..utils.geo import distance_on_earth
-from ..utils.unit import UNIT, units_to_str
+from ..utils.unit import UNIT, Unit, units_to_str
 from ._state import State
 from .state import Location, Time
 from ._timeseries import Timeseries
@@ -54,7 +54,7 @@ class Trajectory(Timeseries):
         Computes the separation distance between this trajectory and another trajectory.
     steps()
         Returns the steps of the trajectory.
-    from_array(values, times, id=None)
+    from_array(values, times, unit=UNIT["°"], id=None)
         Creates a Trajectory from an array of values and time points.
     to_dataarray()
         Converts the trajectory locations to a dict of xarray DataArray.
@@ -289,6 +289,7 @@ class Trajectory(Timeseries):
         cls, 
         values: Float[Array, "... time 2"], 
         times: Float[Array, "... time"],
+        unit: Unit | Dict[Unit, int] = UNIT["°"],
         id: Int[Array, ""] = None,
         **_: Dict
     ) -> Trajectory:
@@ -299,6 +300,8 @@ class Trajectory(Timeseries):
         ----------
         values : Float[Array, "... time 2"]
             The array of values for the trajectory.
+        unit : Unit | Dict[Unit, int], optional
+            Unit of the trajectory locations, defaults to UNIT["°"].
         times : Float[Array, "... time"]
             The time points for the trajectory.
         id : Int[Array, ""], optional
@@ -309,7 +312,7 @@ class Trajectory(Timeseries):
         Trajectory
             The trajectory created from the array of values and time points.
         """
-        return super().from_array(values, times, unit=UNIT["°"], name="Location in [latitude, longitude]", id=id)
+        return super().from_array(values, times, unit=unit, name="Location in [latitude, longitude]", id=id)
 
     def to_dataarray(self) -> Dict[str, xr.DataArray]:
         """

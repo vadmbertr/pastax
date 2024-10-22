@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
-from ..utils.unit import units_to_str
+from ..utils.unit import UNIT, Unit, units_to_str
 from ._state import State
 from .state import Location
 from ._timeseries_ensemble import TimeseriesEnsemble
@@ -55,7 +55,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         Computes the separation distance for each ensemble trajectory.
     steps()
         Returns the steps of the trajectories.
-    from_array(values, times, id=None)
+    from_array(values, times, unit=UNIT["°"]
         Creates a TrajectoryEnsemble from an array of values and time points.
     to_dataarray()
         Converts the trajectory ensemble locations to a dict of xarray DataArray.
@@ -279,6 +279,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         cls,
         values: Float[Array, "member time 2"],
         times: Float[Array, "time"],
+        unit: Unit | Dict[Unit, int] = UNIT["°"],
         id: Int[Array, ""] = None,
         **_: Dict
     ) -> TrajectoryEnsemble:
@@ -291,6 +292,8 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
             The values for the members of the trajectory ensemble.
         times : Float[Array, "time"]
             The time points for the timeseries.
+        unit : Unit | Dict[Unit, int], optional
+            Unit of the trajectory locations, defaults to UNIT["°"].
         id : Int[Array, ""], optional
             The ID of the trajectory (default is None).
 
@@ -299,7 +302,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         TrajectoryEnsemble
             The TrajectoryEnsemble created from the array of values and time points.
         """
-        return super().from_array(values, times, id=id)
+        return super().from_array(values, times, unit=unit, id=id)
 
     def to_dataarray(self) -> Dict[str, xr.DataArray]:
         """
