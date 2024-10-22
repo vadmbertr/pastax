@@ -237,7 +237,7 @@ class StochasticDiffrax(DiffraxSimulator):
 
     Methods
     -------
-    __call__(args, x0, ts, dt0, solver=dfx.Heun(), n_samples=100, key=jrd.PRNGKey(0))
+    __call__(args, x0, ts, dt0, solver=dfx.Heun(), n_samples=100, key=jrd.key(0))
         Simulates the trajectory ensemble based on the initial location and time steps (including t0).
     """
 
@@ -251,7 +251,7 @@ class StochasticDiffrax(DiffraxSimulator):
         dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
         n_samples: Int[Scalar, ""] = 100,
-        key: jrd.PRNGKey = jrd.PRNGKey(0)
+        key: jrd.PRNGKey = jrd.key(0)
     ) -> TrajectoryEnsemble:
         """
         Simulates the trajectory ensemble based on the initial location and time steps (including t0).
@@ -272,7 +272,7 @@ class StochasticDiffrax(DiffraxSimulator):
         n_samples : Int[Scalar, ""], optional
             The number of samples to generate (default is 100).
         key : jrd.PRNGKey, optional
-            The random key for sampling (default is jrd.PRNGKey(0)).
+            The random key for sampling (default is jrd.key(0)).
 
         Returns
         -------
