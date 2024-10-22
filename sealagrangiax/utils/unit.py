@@ -8,7 +8,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float    
 import numpy as np
 
-from .geo import distance_on_earth, EARTH_RADIUS
+from .geo import EARTH_RADIUS
 
 
 ft.total_ordering
@@ -663,32 +663,10 @@ def meters_to_degrees(arr: Float[Array, "... 2"], latitude: Float[Array, "..."])
     -------
     Float[Array, "... 2"]
         An array of latitude/longitude distances in degrees.
-
-    Notes
-    -----
-    This function uses the Haversine formula for accurate conversion of distances.
     """
-    dy, dx = arr[..., 0], arr[..., 1]
-    lat1_rad = jnp.radians(latitude)
-
-    distance = jnp.sqrt(dx**2 + dy**2)
-    bearing = jnp.atan2(dx, dy)
-
-    # using Haversine formula
-    lat2_rad = jnp.asin(
-        jnp.sin(lat1_rad) * jnp.cos(distance / EARTH_RADIUS) + 
-        jnp.cos(lat1_rad) * jnp.sin(distance / EARTH_RADIUS) * jnp.cos(bearing)
-    )
-    
-    dlon = jnp.atan2(
-        jnp.sin(bearing) * jnp.sin(distance / EARTH_RADIUS) * jnp.cos(lat1_rad),
-        jnp.cos(distance / EARTH_RADIUS) - jnp.sin(lat1_rad) * jnp.sin(lat2_rad)
-    )
-    
-    dlat = jnp.degrees(lat2_rad - lat1_rad)
-    dlon = jnp.degrees(dlon)
-
-    return jnp.stack([dlat, dlon], axis=-1)
+    arr = jnp.degrees(arr / EARTH_RADIUS)
+    arr = arr.at[..., 1].divide(jnp.cos(jnp.radians(latitude)))
+    return arr
 
 
 def kilometers_to_meters(arr: ArrayLike) -> ArrayLike:
@@ -746,22 +724,10 @@ def degrees_to_meters(arr: Float[Array, "... 2"], latitude: Float[Array, "..."])
     -------
     Float[Array, "... 2"]
         An array of latitude/longitude distances in meters.
-
-    Notes
-    -----
-    This function uses the Haversine formula for accurate conversion of distances.
     """
-    dlat, dlon = arr[..., 0], arr[..., 1]
-    
-    lat1 = latitude
-    lat2 = lat1 + dlat
-
-    dy = distance_on_earth(
-        jnp.stack([lat1, jnp.zeros_like(lat1)], axis=-1), jnp.stack([lat2, jnp.zeros_like(lat2)], axis=-1)
-    )
-    dx = distance_on_earth(jnp.stack([lat1, jnp.zeros_like(lat1)], axis=-1), jnp.stack([lat1, dlon], axis=-1))
-
-    return jnp.stack([dy, dx], axis=-1)
+    arr = jnp.radians(arr) * EARTH_RADIUS
+    arr = arr.at[..., 1].multiply(jnp.cos(jnp.radians(latitude)))
+    return arr
 
 
 def degrees_to_kilometers(arr: Float[Array, "... 2"], latitude: Float[Array, "..."]) -> Float[Array, "... 2"]:
