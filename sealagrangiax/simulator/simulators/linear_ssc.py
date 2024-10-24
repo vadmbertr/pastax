@@ -10,7 +10,7 @@ from ...utils import meters_to_degrees
 from ...grid import Dataset
 
 
-def _ssc_vf(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+def _rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     t = jnp.asarray(t, dtype=float)
     dataset = args
     latitude, longitude = y[0], y[1]
@@ -21,7 +21,7 @@ def _ssc_vf(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     return dlatlon
 
 
-def ssc_vf(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+def rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     """
     Computes the drift term of the solved Ordinary Differential Equation by interpolating in space and time the velocity fields.
 
@@ -39,7 +39,7 @@ def ssc_vf(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     Float[Array, "2"]
         The drift term (change in latitude and longitude in degrees).
     """
-    dlatlon = _ssc_vf(t, y, args)
+    dlatlon = _rhs(t, y, args)
 
     dataset = args
     if dataset.is_spherical_mesh and not dataset.use_degrees:
@@ -59,19 +59,19 @@ class IdentitySSC(DeterministicDiffrax):
         
     Methods
     -------
-    ode_vf(t, y, args)
+    rhs(t, y, args)
         Computes the drift term of the solved Ordinary Differential Equation.
 
     Notes
     -----
-    In this example, the `ode_vf` attribute is simply a function as the simulator does not have parameters to optimize.
+    In this example, the `rhs` attribute is simply a function as the simulator does not have parameters to optimize.
     """
 
     id: str = eqx.field(static=True, default_factory=lambda: "identity_ssc")
-    ode_vf: Callable[[Float[Scalar, ""], Float[Array, "2"], Dataset], Float[Array, "2"]] = ssc_vf
+    rhs: Callable[[Float[Scalar, ""], Float[Array, "2"], Dataset], Float[Array, "2"]] = rhs
 
 
-class LinearSSCVF(eqx.Module):
+class _RHS(eqx.Module):
     """
     Attributes
     ----------
@@ -116,7 +116,7 @@ class LinearSSCVF(eqx.Module):
         Float[Array, "2"]
             The drift term (change in latitude and longitude in degrees).
         """
-        vu = _ssc_vf(t, y, args)
+        vu = _rhs(t, y, args)
 
         dlatlon = self.intercept + self.slope * vu
 
@@ -133,7 +133,7 @@ class LinearSSC(DeterministicDiffrax):
 
     Attributes
     ----------
-    ode_vf : LinearSSCVF
+    rhs : _RHS
         Computes the drift term of the solved Ordinary Differential Equation.
     id : str
         The identifier for the LinearSSC model, defaults to "linear_ssc".
@@ -145,11 +145,11 @@ class LinearSSC(DeterministicDiffrax):
 
     Notes
     -----
-    In this example, the `ode_vf` attribute is an `eqx.Module` with intercept and slope as attributes, allowing to treat them as a trainable parameters.
+    In this example, the `rhs` attribute is an `eqx.Module` with intercept and slope as attributes, allowing to treat them as a trainable parameters.
     """
 
     id: str = eqx.field(static=True, default_factory=lambda: "linear_ssc")
-    ode_vf: LinearSSCVF = LinearSSCVF()
+    rhs: _RHS = _RHS()
     
     @classmethod
     def from_param(
@@ -179,14 +179,14 @@ class LinearSSC(DeterministicDiffrax):
         -----
         If any of the parameters is None, its default value is used.
         """
-        ode_vf_kwargs = {}
+        rhs_kwargs = {}
         if intercept is not None:
-            ode_vf_kwargs["intercept"] = intercept
+            rhs_kwargs["intercept"] = intercept
         if slope is not None:
-            ode_vf_kwargs["slope"] = slope
+            rhs_kwargs["slope"] = slope
 
         self_kwargs = {}
         if id is not None:
             self_kwargs["id"] = id
 
-        return cls(ode_vf=LinearSSCVF(**ode_vf_kwargs), **self_kwargs)
+        return cls(rhs=_RHS(**rhs_kwargs), **self_kwargs)

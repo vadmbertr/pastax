@@ -71,8 +71,8 @@ class DeterministicDiffrax(DiffraxSimulator):
 
     Attributes
     ----------
-    ode_vf : Callable[[int, Float[Array, "2"], PyTree], PyTree]
-        Any Callable (including another Equinox module with a __call__ method) that returns the drift term 
+    rhs : Callable[[int, Float[Array, "2"], PyTree], PyTree]
+        Any Callable (including another Equinox module with a __call__ method) that returns the right-hand-side 
         of the solved Ordinary Differential Equation.
         
         Parameters
@@ -100,7 +100,7 @@ class DeterministicDiffrax(DiffraxSimulator):
         Simulates the trajectory based on the initial location and time steps (including t0).
     """
 
-    ode_vf: Callable[[int, Float[Array, "2"], PyTree], PyTree]
+    rhs: Callable[[int, Float[Array, "2"], PyTree], PyTree]
 
     def __call__(
         self,
@@ -142,7 +142,7 @@ class DeterministicDiffrax(DiffraxSimulator):
         t1 = ts[-1]
 
         ys = dfx.diffeqsolve(
-            dfx.ODETerm(self.ode_vf),
+            dfx.ODETerm(self.rhs),
             solver,
             t0=t0,
             t1=t1,
@@ -218,9 +218,9 @@ class StochasticDiffrax(DiffraxSimulator):
 
     Attributes
     ----------
-    sde_cvf : Callable[[Float[Scalar, ""], Float[Array, "2"], PyTree], lnx.PyTreeLinearOperator]
-        Any Callable (including another Equinox module with a __call__ method) that stacks and returns 
-        the drift and diffusion terms of the solved Stochastic Differential Equation.
+    rhs : Callable[[Float[Scalar, ""], Float[Array, "2"], PyTree], lnx.PyTreeLinearOperator]
+        Any Callable (including another Equinox module with a __call__ method) that returns the right-hand-side
+        (stacked drift and diffusion terms) of the solved Stochastic Differential Equation.
         
         Parameters
         ----------
@@ -243,7 +243,7 @@ class StochasticDiffrax(DiffraxSimulator):
         Simulates the trajectory ensemble based on the initial location and time steps (including t0).
     """
 
-    sde_cvf: Callable[[Float[Scalar, ""], Float[Array, "2"], PyTree], PyTree]
+    rhs: Callable[[Float[Scalar, ""], Float[Array, "2"], PyTree], PyTree]
 
     def __call__(
         self,
@@ -291,7 +291,7 @@ class StochasticDiffrax(DiffraxSimulator):
             eps = 1e-3
             brownian_motion = dfx.VirtualBrownianTree(t0, t1 + eps, tol=eps, shape=(2,), key=subkey)
             sde_control = SDEControl(brownian_motion=brownian_motion)
-            sde_term = dfx.ControlTerm(self.sde_cvf, sde_control)
+            sde_term = dfx.ControlTerm(self.rhs, sde_control)
 
             return dfx.diffeqsolve(
                 sde_term,

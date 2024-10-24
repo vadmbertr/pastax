@@ -11,7 +11,7 @@ from ...utils import meters_to_degrees
 from .._diffrax_simulator import StochasticDiffrax
 
 
-class SmagorinskyDiffusionCVF(eqx.Module):
+class _RHS(eqx.Module):
     """
     Attributes
     ----------
@@ -235,7 +235,7 @@ class SmagorinskyDiffusion(StochasticDiffrax):
  
     Attributes
     ----------
-    sde_cvf : SmagorinskyDiffusionCVF
+    rhs : _RHS
         Computes the drift and diffusion terms of the Smagorinsky diffusion SDE.
     id : str
         The identifier for the SmagorinskyDiffrax model (set to "smagorinsky_diffusion").
@@ -247,11 +247,11 @@ class SmagorinskyDiffusion(StochasticDiffrax):
 
     Notes
     -----
-    In this example, the `sde_cvf` attribute is an `eqx.Module` with the Smagorinsky constant as attribute, allowing to treat it as a trainable parameter.
+    In this example, the `rhs` attribute is an `eqx.Module` with the Smagorinsky constant as attribute, allowing to treat it as a trainable parameter.
     """
 
     id: str = eqx.field(static=True, default_factory=lambda: "smagorinsky_diffusion")
-    sde_cvf: SmagorinskyDiffusionCVF = SmagorinskyDiffusionCVF()
+    rhs: _RHS = _RHS()
 
     @classmethod
     def from_param(cls, cs: Float[Array, ""] = None, id: str = None) -> SmagorinskyDiffusion:
@@ -274,12 +274,12 @@ class SmagorinskyDiffusion(StochasticDiffrax):
         -----
         If any of the parameters is None, its default value is used.
         """
-        sde_cvf_kwargs = {}
+        rhs_kwargs = {}
         if cs is not None:
-            sde_cvf_kwargs["cs"] = cs
+            rhs_kwargs["cs"] = cs
 
         self_kwargs = {}
         if id is not None:
             self_kwargs["id"] = id
 
-        return cls(sde_cvf=SmagorinskyDiffusionCVF(**sde_cvf_kwargs), **self_kwargs)
+        return cls(rhs=_RHS(**rhs_kwargs), **self_kwargs)
