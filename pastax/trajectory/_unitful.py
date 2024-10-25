@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Tuple, Type
+from typing import Dict, Type
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -188,7 +188,7 @@ class Unitful(eqx.Module):
         self, 
         other: Unitful | ArrayLike, 
         additive_op: bool
-    ) -> Tuple[ArrayLike, str | None, Type]:
+    ) -> tuple[ArrayLike, str | None, Type]:
         """
         Extract value and unit from other operand if it is a Unitful instance, 
         and guess the class of the result of the operation type between self and other.
@@ -202,7 +202,7 @@ class Unitful(eqx.Module):
 
         Returns
         -------
-        Tuple[ArrayLike, str | None, Type]
+        tuple[ArrayLike, str | None, Type]
             The value and unit of the other operand, and the class of the result of the operation type.
 
         Raises

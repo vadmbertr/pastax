@@ -1,4 +1,4 @@
-from typing import Callable, Tuple
+from typing import Callable
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -11,7 +11,7 @@ from ..utils.unit import UNIT
 
 class Simulator(eqx.Module):
     """
-    Base class for defining differentiable trajectories or ensembles of trajectories simulators.
+    Base class for defining differentiable [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] simulators.
 
     Attributes
     ----------
@@ -23,7 +23,8 @@ class Simulator(eqx.Module):
     get_domain(x0, t0, ts)
         Computes the minimum and maximum time and location bounds of the simulation space-time domain.
     __call__(args, x0, ts, n_samples=None, key=None)
-        Simulates a trajectory or ensemble of trajectories based on the initial location and time steps (including t0).
+        Simulates a [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] 
+        based on the initial [`pastax.Location`][] and time steps (including t0).
     """
 
     id: str
@@ -32,20 +33,20 @@ class Simulator(eqx.Module):
     def get_domain(
         x0: Location,
         ts: Float[Array, "time"]
-    ) -> Tuple[Float[Array, ""], Float[Array, ""], Location, Location]:
+    ) -> tuple[Float[Array, ""], Float[Array, ""], Location, Location]:
         """
         Computes the minimum and maximum time and location bounds of the simulation space-time domain.
 
         Parameters
         ----------
         x0 : Location
-            The initial location.
+            The initial [`pastax.Location`][].
         ts : Float[Array, "time"]
             The time steps for the simulation.
 
         Returns
         -------
-        Tuple[Float[Array, ""], Float[Array, ""], Location, Location]
+        tuple[Float[Array, ""], Float[Array, ""], Location, Location]
             The minimum time, maximum time, minimum location, and maximum location bounds.
         """
         one_day = 60 * 60 * 24
@@ -75,7 +76,8 @@ class Simulator(eqx.Module):
         key: jrd.PRNGKey = None
     ) -> Trajectory | TrajectoryEnsemble:
         """
-        Simulates a trajectory or ensemble of trajectories based on the initial location and time steps (including t0).
+        Simulates a [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] 
+        based on the initial [`pastax.Location`][] and time steps (including t0).
 
         This method must be implemented by its subclasses.
 
@@ -83,24 +85,25 @@ class Simulator(eqx.Module):
         ----------
         args : PyTree
             Any PyTree of argument(s) used by the simulator.
-            Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
+            Could be for example one or several `pastax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
-            The initial location.
+            The initial [`pastax.Location`][].
         ts : Float[Array, "time"]
             The time steps for the simulation outputs (including t0).
         dt0 : Float[Scalar, ""], optional
             The initial time step of the solver, in seconds.
         solver : Callable, optional
-            The solver function to use for the simulation (default is None).
+            The solver function to use for the simulation, defaults to None.
         n_samples : Int[Scalar, ""], optional
-            The number of samples to generate (default is None, meaning a single trajectory).
+            The number of samples to generate, default to None, meaning a single [`pastax.Trajectory`][].
         key : jrd.PRNGKey, optional
-            The random key for sampling (default is None).
+            The random key for sampling, defaults to None.
 
         Returns
         -------
         Trajectory | TrajectoryEnsemble
-            The simulated trajectory or ensemble of trajectories, including the initial conditions (x0, t0).
+            The simulated [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][], 
+            including the initial conditions (x0, t0).
 
         Raises
         ------

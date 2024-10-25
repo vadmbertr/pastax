@@ -22,13 +22,13 @@ theme:
   # logo: "_static/logo.png"  # package logo (top left)
   # favicon: "_static/favicon.png"  # package favicon
 
-site_name: sealagrangiax
-site_description: The documentation for the sealagrangiax package.
+site_name: pastax
+site_description: The documentation for the pastax package.
 site_author: Vadim Bertrand
-site_url: https://sealagrangiax.readthedocs.io/en/latest/
+site_url: https://pastax.readthedocs.io/en/latest/
 
-repo_url: https://github.com/vadmbertr/sealagrangiax
-repo_name: vadmbertr/sealagrangiax
+repo_url: https://github.com/vadmbertr/pastax
+repo_name: vadmbertr/pastax
 
 # strict: true
 

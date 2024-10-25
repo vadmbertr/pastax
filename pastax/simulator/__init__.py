@@ -1,5 +1,6 @@
 """
-This module provides base and example simulator classes for trajectory reconstruction in JAX.
+This module provides base and example [`pastax.Simulator`][] classes for [`pastax.Trajectory`][] 
+and [`pastax.TrajectoryEnsemble`][] simulation in JAX.
 """
 
 

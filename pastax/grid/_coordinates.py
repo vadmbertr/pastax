@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Tuple
 
 import equinox as eqx
 from jaxtyping import Array, Float, Int
@@ -15,19 +14,19 @@ class Coordinates(eqx.Module):
     Attributes
     ----------
     time : Coordinate
-        The time coordinate.
+        The time [`pastax.Coordinate`][].
     latitude : Coordinate
-        The latitude coordinate.
+        The latitude [`pastax.Coordinate`][].
     longitude : Coordinate
-        The longitude coordinate.
+        The longitude [`pastax.Coordinate`][].
 
     Methods
     -------        
-    indices(time: Int[Array, "..."], latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]
+    indices(time, latitude, longitude)
         Returns the indices of the given time, latitude, and longitude arrays.
         
-    from_arrays(time: Int[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], is_spherical_mesh: bool) -> Coordinates
-        Creates a Coordinates object from arrays of time, latitude, and longitude.
+    from_arrays(time, latitude, longitude, is_spherical_mesh)
+        Creates a `pastax.Coordinates` object from arrays of time, latitude, and longitude.
     """
     time: Coordinate
     latitude: Coordinate
@@ -38,7 +37,7 @@ class Coordinates(eqx.Module):
         time: Int[Array, "..."],
         latitude: Float[Array, "..."],
         longitude: Float[Array, "..."]
-    ) -> Tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]:
+    ) -> tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]:
         """
         Returns the nearest indices for the given time, latitude, and longitude.
 
@@ -53,7 +52,7 @@ class Coordinates(eqx.Module):
 
         Returns
         -------
-        Tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]
+        tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]
             A tuple containing the indices for time, latitude, and longitude respectively.
         """
         return self.time.index(time), self.latitude.index(latitude), self.longitude.index(longitude)
@@ -67,7 +66,7 @@ class Coordinates(eqx.Module):
         is_spherical_mesh: bool
     ) -> Coordinates:
         """
-        Create a Coordinates object from arrays of time, latitude, and longitude.
+        Create a `pastax.Coordinates` object from arrays of time, latitude, and longitude.
 
         Parameters
         ----------
@@ -83,7 +82,7 @@ class Coordinates(eqx.Module):
         Returns
         -------
         Coordinates
-            A Coordinates object with time, latitude, and longitude.
+            A `pastax.Coordinates` object with time, latitude, and longitude.
         """
         t = Coordinate.from_array(time, extrap=True)
         lat = Coordinate.from_array(latitude, extrap=True)

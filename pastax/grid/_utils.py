@@ -1,16 +1,14 @@
-from typing import Tuple
-
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Bool, Float
 
 
 def spatial_derivative(
-    *fields: Tuple[Float[Array, "(time) lat lon"], ...],
+    *fields: tuple[Float[Array, "(time) lat lon"], ...],
     dx: Float[Array, "lat lon-1"],
     dy: Float[Array, "lat-1 lon"],
     is_land: Bool[Array, "lat lon"]
-) -> Tuple[Float[Array, "(time) lat lon"], ...]:
+) -> tuple[Float[Array, "(time) lat lon"], ...]:
     """
     Computes spatial derivatives for given fields using central finite differences.
 
@@ -21,7 +19,7 @@ def spatial_derivative(
 
     Parameters
     ----------
-    fields (Tuple[Float[Array, "(time) lat lon"], ...])
+    fields (tuple[Float[Array, "(time) lat lon"], ...])
         Variable number of fields for which the spatial derivatives are to be computed. 
         Each field is a 2D or 3D array with dimensions (latitude, longitude) or (time, latitude, longitude).
     dx (Float[Array, "lat lon-1"])
@@ -33,15 +31,15 @@ def spatial_derivative(
 
     Returns
     -------
-    Tuple[Float[Array, "(time) lat lon"], ...]
+    tuple[Float[Array, "(time) lat lon"], ...]
         A tuple containing the spatial derivatives of the input fields. 
         Each derivative is a 2D or 3D array with dimensions (latitude, longitude) or (time, latitude, longitude).
         For field f1 and f2, returns (df1_x, df1_y, df2_x, df2_y).
     """
     def central_finite_difference(
             _f: Float[Array, "(time) lat lon"], _axis: int
-    ) -> Tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
-        def _axis1(_dxy: Float[Array, "(time) lat(-1) lon(-1)"]) -> Tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
+    ) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
+        def _axis1(_dxy: Float[Array, "(time) lat(-1) lon(-1)"]) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
             _f_l = _f[..., :-2, 1:-1]
             _f_r = _f[..., 2:, 1:-1]
 
@@ -53,7 +51,7 @@ def spatial_derivative(
 
             return _f_l, _f_r, _is_land_l, _is_land_r, _dx_l, _dx_r
 
-        def _axis2(_dxy: Float[Array, "(time) lat(-1) lon(-1)"]) -> Tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
+        def _axis2(_dxy: Float[Array, "(time) lat(-1) lon(-1)"]) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
             _f_l = _f[..., 1:-1, :-2]
             _f_r = _f[..., 1:-1, 2:]
 

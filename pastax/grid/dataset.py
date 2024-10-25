@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Tuple
+from typing import Dict
 
 import equinox as eqx
 import jax
@@ -15,7 +15,7 @@ from ._grid import SpatioTemporalField
 
 class Dataset(eqx.Module):
     """
-    Class that provides some routines for handling gridded spatiotemporal data in JAX.
+    Class providing some routines for handling gridded spatiotemporal data in JAX.
 
     Attributes
     ----------
@@ -50,11 +50,11 @@ class Dataset(eqx.Module):
         Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`, 
         `longitude`.
     from_arrays(variables, time, latitude, longitude, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
-        Constructs a `Dataset` object from arrays of variables and coordinates `time`, `latitude`, `longitude`.
+        Constructs a `pastax.Dataset` object from arrays of variables and coordinates `time`, `latitude`, `longitude`.
     from_xarray(dataset, variables, coordinates, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
-        Constructs a `Dataset` object from an `xarray.Dataset`.
+        Constructs a `pastax.Dataset` object from a `xarray.Dataset`.
     to_xarray()
-        Returns the `Dataset` object as an `xarray.Dataset`.
+        Returns the `pastax.Dataset` object as a `xarray.Dataset`.
     """
     is_spherical_mesh: bool
     use_degrees: bool
@@ -70,7 +70,7 @@ class Dataset(eqx.Module):
         time: Int[Scalar, ""],
         latitude: Float[Scalar, ""],
         longitude: Float[Scalar, ""]
-    ) -> Tuple[Int[Scalar, ""], Int[Scalar, ""], Int[Scalar, ""]]:
+    ) -> tuple[Int[Scalar, ""], Int[Scalar, ""], Int[Scalar, ""]]:
         """
         Get nearest indices of the spatio-temporal point `time`, `latitude`, `longitude`.
 
@@ -85,44 +85,45 @@ class Dataset(eqx.Module):
 
         Returns
         -------
-        Tuple[Int[Scalar, ""], Int[Scalar, ""], Int[Scalar, ""]]
+        tuple[Int[Scalar, ""], Int[Scalar, ""], Int[Scalar, ""]]
+            A tuple containing the nearest indices of the spatio-temporal point.
         """
         return self.coordinates.indices(time, latitude, longitude)
 
     def interp_temporal(
         self,
-        *variables: Tuple[str, ...],
+        *variables: tuple[str, ...],
         time: Float[Array, "..."]
-    ) -> Tuple[Float[Array, "... ... ..."], ...]:
+    ) -> tuple[Float[Array, "... ... ..."], ...]:
         """
         Interpolates the given variables in time.
 
         Parameters
         ----------
-        variables : Tuple[str, ...]
+        variables : tuple[str, ...]
             Variable names to be interpolated.
         time : Float[Array, "..."]
             The time points at which to interpolate the variables.
 
         Returns
         -------
-        Tuple[Float[Array, "... ... ..."], ...]
+        tuple[Float[Array, "... ... ..."], ...]
             A tuple containing the interpolated values for each variable.
         """
         return tuple(self.variables[var_name].interp_temporal(time) for var_name in variables)
 
     def interp_spatial(
         self,
-        *variables: Tuple[str, ...],
+        *variables: tuple[str, ...],
         latitude: Float[Array, "..."],
         longitude: Float[Array, "..."]
-    ) -> Tuple[Float[Array, "... ... ..."], ...]:
+    ) -> tuple[Float[Array, "... ... ..."], ...]:
         """
         Interpolates the given variables in space.
 
         Parameters
         ----------
-        *variables : Tuple[str, ...]
+        *variables : tuple[str, ...]
             Variable names to be interpolated.
         latitude : Float[Array, "..."]
             The latitude values at which to interpolate the variables.
@@ -131,7 +132,7 @@ class Dataset(eqx.Module):
 
         Returns
         -------
-        Tuple[Float[Array, "... ... ..."], ...]
+        tuple[Float[Array, "... ... ..."], ...]
             A tuple containing interpolated values for each variable.
         """
         return tuple(
@@ -141,19 +142,38 @@ class Dataset(eqx.Module):
     
     def interp_spatiotemporal(
         self,
-        *variables: Tuple[str, ...],
+        *variables: tuple[str, ...],
         time: Float[Array, "..."],
         latitude: Float[Array, "..."],
         longitude: Float[Array, "..."]
-    ) -> Tuple[Float[Array, "... ... ..."], ...]:
+    ) -> tuple[Float[Array, "... ... ..."], ...]:
+        """
+        Interpolates the specified variables spatiotemporally at the given time, latitude, and longitude.
+
+        Parameters
+        ----------
+        *variables : tuple[str, ...]
+            Variable names to interpolate.
+        time : Float[Array, "..."]
+            The time values at which to interpolate the variables.
+        latitude : Float[Array, "..."]
+            The latitude values at which to interpolate the variables.
+        longitude : Float[Array, "..."]
+            The latitude values at which to interpolate the variables.
+
+        Returns
+        -------
+        tuple[Float[Array, "... ... ..."], ...]
+            A tuple containing the interpolated values for each variable.
+        """
         return tuple(
             self.variables[var_name].interp_spatiotemporal(time, latitude, longitude)
             for var_name in variables
         )
 
-    def neighborhood(
+    def neighborhood(  # TODO: handle edge cases
         self,
-        *variables: Tuple[str, ...],
+        *variables: tuple[str, ...],
         time: Int[Scalar, ""],
         latitude: Float[Scalar, ""],
         longitude: Float[Scalar, ""],
@@ -165,7 +185,7 @@ class Dataset(eqx.Module):
 
         Parameters
         ----------
-        *variables : Tuple[str, ...]
+        *variables : tuple[str, ...]
             Variable names to extract from the dataset.
         time : Int[Scalar, ""]
             The time coordinate for the center of the neighborhood.
@@ -180,12 +200,11 @@ class Dataset(eqx.Module):
 
         Returns
         -------
-        Fields
-            A Fields object containing the extracted neighborhood data.
+        Dataset
+            A `pastax.Dataset` object containing the extracted neighborhood data.
         """
         t_i, lat_i, lon_i = self.indices(time, latitude, longitude)
 
-        # TODO: handle edge cases
         from_t_i = t_i - t_width // 2
         from_lat_i = lat_i - x_width // 2
         from_lon_i = lon_i - x_width // 2
@@ -227,7 +246,7 @@ class Dataset(eqx.Module):
         is_uv_mps: bool = True
     ) -> Dataset:
         """
-        Create a Dataset object from arrays of variables, time, latitude, and longitude.
+        Create a `pastax.Dataset` object from arrays of variables, time, latitude, and longitude.
 
         Parameters
         ----------
@@ -241,18 +260,18 @@ class Dataset(eqx.Module):
         longitude : Float[Array, "lon"]
             A 1D array representing the longitude dimension.
         interpolation_method : str, optional
-            The method to use for latter possible interpolation of the variables, defaults to "linear".
+            The method to use for latter possible interpolation of the variables, defaults to `"linear"`.
         is_spherical_mesh : bool, optional
-            Whether the mesh uses spherical coordinate, defaults to True.
+            Whether the mesh uses spherical coordinate, defaults to `True`.
         use_degrees : bool, optional
-            Whether distance units should be degrees rather than meters, defaults to False.
+            Whether distance units should be degrees rather than meters, defaults to `False`.
         is_uv_mps : bool, optional
-            Whether the velocity data is in m/s, defaults to True.
+            Whether the velocity data is in m/s, defaults to `True`.
 
         Returns
         -------
         Dataset
-            A Dataset object containing the processed variables, land mask, grid spacing in 
+            A `pastax.Dataset` object containing the processed variables, land mask, grid spacing in 
             meters, cell area in square meters, and coordinates.
         """
         def compute_cell_dlatlon(dright: Float[Array, "latlon-1"], axis: int) -> Float[Array, "latlon"]:
@@ -358,7 +377,7 @@ class Dataset(eqx.Module):
         use_degrees: bool = False
     ) -> Dataset:
         """
-        Create a Fields object from an xarray Dataset.
+        Create a `pastax.Dataset` object from an `xarray.Dataset`.
 
         Parameters
         ----------
@@ -371,18 +390,18 @@ class Dataset(eqx.Module):
             A dictionary mapping the coordinate names ('time', 'latitude', 'longitude') to their corresponding names in
             the dataset.
         interpolation_method : str, optional
-            The method to use for latter possible interpolation of the variables (default is "linear").
+            The method to use for latter possible interpolation of the variables, defaults to `"linear"`.
         is_spherical_mesh : bool, optional
-            Whether the mesh uses spherical coordinate, defaults to True.
+            Whether the mesh uses spherical coordinate, defaults to `True`.
         is_uv_mps : bool, optional
-            Whether the velocity data is in m/s, defaults to True.
+            Whether the velocity data is in m/s, defaults to `True`.
         use_dps : bool, optional
-            Whether distance unit should be degrees rather than meters, defaults to False.
+            Whether distance unit should be degrees rather than meters, defaults to `False`.
 
         Returns
         -------
-        Fields
-            An instance of the Fields class created from the provided xarray Dataset.
+        Dataset
+            An instance of the `pastax.Dataset` class created from the provided `xarray.Dataset`.
         """
         variables, t, lat, lon = cls.to_arrays(dataset, variables, coordinates, to_jax=True)
 
@@ -394,24 +413,24 @@ class Dataset(eqx.Module):
         variables: Dict[str, str],  # to -> from
         coordinates: Dict[str, str],  # to -> from
         to_jax: bool = True
-    ) -> Tuple[Dict[str, Float[Array, "..."]], Float[Array, "..."], Float[Array, "..."], Float[Array, "..."]]:
+    ) -> tuple[Dict[str, Float[Array, "..."]], Float[Array, "..."], Float[Array, "..."], Float[Array, "..."]]:
         """
-        Converts an xarray Dataset to arrays for specified variables and coordinates.
+        Converts an `xarray.Dataset` to arrays for specified variables and coordinates.
 
         Parameters
         ----------
         dataset : xr.Dataset
-            The xarray Dataset to convert.
+            The `xarray.Dataset` to convert.
         variables : Dict[str, str]
             A dictionary mapping the target variable names to the source variable names in the dataset.
         coordinates : Dict[str, str]
             A dictionary mapping the target coordinate names to the source coordinate names in the dataset.
         to_jax : bool, optional
-            Whether to convert the arrays to JAX arrays (default is True).
+            Whether to convert the arrays to JAX arrays, defaults to `True`.
 
         Returns
         -------
-        Tuple[Dict[str, Float[Array, "..."]], Float[Array, "..."], Float[Array, "..."], Float[Array, "..."]]
+        tuple[Dict[str, Float[Array, "..."]], Float[Array, "..."], Float[Array, "..."], Float[Array, "..."]]
             A tuple containing:
             - A dictionary of converted variables.
             - The time coordinate array.
@@ -435,7 +454,7 @@ class Dataset(eqx.Module):
 
     def to_xarray(self) -> xr.Dataset:
         """
-        Converts the current object to an xarray Dataset.
+        Converts the `pastax.Dataset` to a `xarray.Dataset`.
 
         This method constructs an xarray Dataset from the object's variables and coordinates.
         The variables are added as data variables with dimensions ["time", "latitude", "longitude"].
@@ -443,7 +462,8 @@ class Dataset(eqx.Module):
 
         Returns
         -------
-            xr.Dataset: The constructed xarray Dataset containing the data variables and coordinates.
+        xr.Dataset
+            The constructed `xarray.Dataset` containing the data variables and coordinates.
         """
         dataset = xr.Dataset(
             data_vars=dict(

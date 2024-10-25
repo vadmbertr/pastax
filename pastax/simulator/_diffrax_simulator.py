@@ -13,12 +13,14 @@ from ._simulator import Simulator
 
 class DiffraxSimulator(Simulator):
     """
-    Base class for defining differentiable trajectories or ensembles of trajectories simulators using diffrax library.
+    Base class for defining differentiable [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] simulators 
+    using diffrax library.
 
     Methods
     -------
     __call__(x0, ts, dt0, solver=dfx.Heun(), n_samples=None, key=None)
-        Simulates trajectories or ensembles of trajectories based on the initial location and time steps (including t0).
+        Simulates [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] 
+        based on the initial [`pastax.Location`][] and time steps (including t0).
     """
 
     def __call__(
@@ -32,15 +34,16 @@ class DiffraxSimulator(Simulator):
         key: jrd.PRNGKey = None
     ) -> Trajectory:
         """
-        Simulates trajectories or ensembles of trajectories based on the initial location and time steps (including t0).
+        Simulates [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] 
+        based on the initial [`pastax.Location`][] and time steps (including t0).
 
         Parameters
         ----------
         args : PyTree
             Any PyTree of argument(s) used by the simulator.
-            Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
+            Could be for example one or several `pastax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
-            The initial location.
+            The initial [`pastax.Location`][].
         ts : Float[Array, "time"]
             The time steps for the simulation outputs.
         dt0 : Float[Scalar, ""]
@@ -54,8 +57,9 @@ class DiffraxSimulator(Simulator):
 
         Returns
         -------
-        Trajectory
-            The simulated trajectory or ensemble of trajectories, including the initial conditions (x0, t0).
+        Trajectory | TrajectoryEnsemble
+            The simulated [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][], 
+            including the initial conditions (x0, t0).
 
         Raises
         ------
@@ -67,7 +71,7 @@ class DiffraxSimulator(Simulator):
 
 class DeterministicDiffrax(DiffraxSimulator):
     """
-    Base class for defining deterministic differentiable trajectories simulators using diffrax library.
+    Base class for defining deterministic differentiable [`pastax.Trajectory`][] simulators using diffrax library.
 
     Attributes
     ----------
@@ -83,7 +87,7 @@ class DeterministicDiffrax(DiffraxSimulator):
             The current state (latitude and longitude in degrees).
         args : PyTree
             Any PyTree of argument(s) used by the simulator.
-            Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
+            Could be for example one or several `pastax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
 
         Returns
         -------
@@ -95,9 +99,9 @@ class DeterministicDiffrax(DiffraxSimulator):
     drift_term(t, y, args)
         Computes the drift term of the solved Ordinary Differential Equation.
     solve(x0, t0, ts, dt0, solver=dfx.Heun())
-        Solves an Ordinary Differential Equation simulating the trajectory.
+        Solves an Ordinary Differential Equation simulating the [`pastax.Trajectory`][].
     __call__(x0, ts, dt0, solver=dfx.Heun(), n_samples=None, key=None)
-        Simulates the trajectory based on the initial location and time steps (including t0).
+        Simulates the [`pastax.Trajectory`][] based on the initial [`pastax.Location`][] and time steps (including t0).
     """
 
     rhs: Callable[[int, Float[Array, "2"], PyTree], PyTree]
@@ -113,30 +117,30 @@ class DeterministicDiffrax(DiffraxSimulator):
         key: jrd.PRNGKey = None
     ) -> Trajectory:
         """
-        Simulates the trajectory based on the initial location and time steps (including t0).
+        Simulates the [`pastax.Trajectory`][] based on the initial [`pastax.Location`][] and time steps (including t0).
 
         Parameters
         ----------
         args : PyTree
             Any PyTree of argument(s) used by the simulator.
-            Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
+            Could be for example one or several [`pastax.Dataset`][] of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
-            The initial location.
+            The initial [`pastax.Location`][].
         ts : Float[Array, "time"]
             The time steps for the simulation outputs.
         dt0 : Float[Scalar, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
-            The solver function to use for the simulation (default is dfx.Heun()).
+            The solver function to use for the simulation, defaults to dfx.Heun().
         n_samples : Int[Scalar, ""], optional
-            The number of samples to generate (default is None, meaning a single trajectory).
+            The number of samples to generate, defaults to None, not use with deterministic simulators.
         key : jrd.PRNGKey, optional
-            The random key for sampling (default is None, useless for the deterministic simulator).
+            The random key for sampling, default to None, not use with deterministic simulators.
 
         Returns
         -------
         Trajectory
-            The simulated trajectory, including the initial conditions (x0, t0).
+            The simulated [`pastax.Trajectory`][], including the initial conditions (x0, t0).
         """
         t0 = ts[0]
         t1 = ts[-1]
@@ -214,7 +218,7 @@ class SDEControl(dfx.AbstractPath):
 
 class StochasticDiffrax(DiffraxSimulator):
     """
-    Base class for defining stochastic differentiable trajectory ensembles simulators using diffrax library.
+    Base class for defining stochastic differentiable [`pastax.TrajectoryEnsemble`][] simulators using diffrax library.
 
     Attributes
     ----------
@@ -230,7 +234,7 @@ class StochasticDiffrax(DiffraxSimulator):
             The current state (latitude and longitude in degrees).
         args : Dataset
             Any PyTree of argument(s) used by the simulator.
-            Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
+            Could be for example one or several [`pastax.Dataset`][] of gridded physical fields (SSC, SSH, SST, etc.).
 
         Returns
         -------
@@ -240,7 +244,8 @@ class StochasticDiffrax(DiffraxSimulator):
     Methods
     -------
     __call__(args, x0, ts, dt0, solver=dfx.Heun(), n_samples=100, key=jrd.key(0))
-        Simulates the trajectory ensemble based on the initial location and time steps (including t0).
+        Simulates a [`pastax.TrajectoryEnsemble`][] based on the initial [`pastax.Location`][] 
+        and time steps (including t0).
     """
 
     rhs: Callable[[Float[Scalar, ""], Float[Array, "2"], PyTree], PyTree]
@@ -256,30 +261,31 @@ class StochasticDiffrax(DiffraxSimulator):
         key: jrd.PRNGKey = jrd.key(0)
     ) -> TrajectoryEnsemble:
         """
-        Simulates the trajectory ensemble based on the initial location and time steps (including t0).
+        Simulates a [`pastax.TrajectoryEnsemble`][] based on the initial [`pastax.Location`][] 
+        and time steps (including t0).
 
         Parameters
         ----------
         args : PyTree
             Any PyTree of argument(s) used by the simulator.
-            Could be for example one or several `sealagrangiax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
+            Could be for example one or several [`pastax.Dataset`][] of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
-            The initial location.
+            The initial [`pastax.Location`][].
         ts : Float[Array, "time"]
             The time steps for the simulation outputs (including t0).
         dt0 : Float[Scalar, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
-            The solver function to use for the simulation (default is dfx.Heun()).
+            The solver function to use for the simulation, defaults to dfx.Heun().
         n_samples : Int[Scalar, ""], optional
-            The number of samples to generate (default is 100).
+            The number of samples to generate, defaults to 100.
         key : jrd.PRNGKey, optional
-            The random key for sampling (default is jrd.key(0)).
+            The random key for sampling, defaults to jrd.key(0).
 
         Returns
         -------
         TrajectoryEnsemble
-            The simulated ensemble of trajectories.
+            The simulated [`pastax.TrajectoryEnsemble`][].
         """
         t0 = ts[0]  
         t1 = ts[-1]

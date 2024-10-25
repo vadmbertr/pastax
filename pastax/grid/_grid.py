@@ -18,7 +18,7 @@ class Grid(eqx.Module):
 
     Methods
     -------
-    __getitem__(item: Any) -> Float[Array, "..."] | Int[Array, "..."]
+    __getitem__(item:)
         Retrieves the value(s) at the specified index or slice from the grid.
     """
     _values: Float[Array, "..."] | Int[Array, "..."]
@@ -65,11 +65,11 @@ class Coordinate(Grid):
 
     Methods
     -------
-    index(query: Float[Array, "..."]) -> Int[Array, "..."]
+    index(query)
         Returns the nearest index for the given query coordinates.
         
-    from_array(values: Float[Array, "coord"], **interpolator_kwargs: Any) -> Coordinate
-        Creates a Coordinate instance from an array of values.
+    from_array(values, **interpolator_kwargs)
+        Creates a `pastax.Coordinate` instance from an array of values.
     """
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
@@ -109,10 +109,10 @@ class Coordinate(Grid):
         **interpolator_kwargs: Any
     ) -> Coordinate:
         """
-        Create a Coordinate object from an array of values.
+        Create a `pastax.Coordinate` object from an array of values.
 
-        This method initializes a Coordinate object using the provided array of values.
-        It uses a 1D interpolator to generate indices from values, with the interpolation method set to "nearest".
+        This method initializes a `pastax.Coordinate` object using the provided array of values.
+        It uses a 1D interpolator to generate indices from values, with the interpolation method set to `"nearest"`.
 
         Parameters
         ----------
@@ -124,7 +124,7 @@ class Coordinate(Grid):
         Returns
         -------
         Coordinate
-            A Coordinate object containing the provided values and corresponding indices interpolator.
+            A  `pastax.Coordinate` object containing the provided values and corresponding indices interpolator.
         """
         interpolator_kwargs["method"] = "nearest"
         indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
@@ -133,7 +133,7 @@ class Coordinate(Grid):
 
 class LongitudeCoordinate(Coordinate):
     """
-    Class for handling 1D longitude coordinates (i.e. of rectilinear grids).
+    Class for handling 1D longitude coordinates (i.e. of rectilinear grids). 
     This class handles the circular nature of longitudes coordinates.
 
     Attributes
@@ -145,11 +145,11 @@ class LongitudeCoordinate(Coordinate):
 
     Methods
     -------
-    index(query: Float[Array, "..."]) -> Int[Array, "..."]
+    index(query)
         Returns the nearest index for the given query coordinates.
         
-    from_array(values: Float[Array, "coord"], **interpolator_kwargs: Any) -> LongitudeCoordinate
-        Creates a LongitudeCoordinate instance from an array of values.
+    from_array(values, **interpolator_kwargs)
+        Creates a `pastax.LongitudeCoordinate` instance from an array of values.
     """
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
@@ -204,7 +204,7 @@ class LongitudeCoordinate(Coordinate):
         Returns
         -------
         LongitudeCoordinate
-            A LongitudeCoordinate object containing the provided values and corresponding indices interpolator.
+            A `pastax.LongitudeCoordinate` object containing the provided values and corresponding indices interpolator.
         """
         values += 180
 
@@ -227,12 +227,12 @@ class SpatialField(Grid):
 
     Methods
     -------
-    interp_spatial(latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Float[Array, "... ..."]:
+    interp_spatial(latitude, longitude)
         Interpolates the spatial data at the given latitude and longitude.
         
-    from_array(values: Float[Array, "lat lon"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str) -> SpatialField:
-        Creates a SpatialField instance from the given array of values, latitude, and longitude using the specified
-        interpolation method.
+    from_array(values, latitude, longitude, interpolation_method)
+        Creates a `pastax.SpatialField` instance from the given array of values, latitude, and longitude 
+        using the specified interpolation method.
     """
     _values: Float[Array, "lat lon"]
     spatial_field: ipx.Interpolator2D
@@ -270,7 +270,7 @@ class SpatialField(Grid):
         interpolation_method: str
     ) -> SpatialField:
         """
-        Create a SpatialField object from given arrays of values, latitude, and longitude.
+        Create a `pastax.SpatialField` object from given arrays of values, latitude, and longitude.
 
         Parameters
         ----------
@@ -286,7 +286,7 @@ class SpatialField(Grid):
         Returns
         -------
         SpatialField
-            A SpatialField object containing the values and the interpolated spatial field.
+            A `pastax.SpatialField` object containing the values and the interpolated spatial field.
         """
         spatial_field = ipx.Interpolator2D(
             latitude, longitude + 180,  # circular domain
@@ -314,17 +314,17 @@ class SpatioTemporalField(Grid):
 
     Methods
     -------
-    interp_temporal(tq: Float[Array, "..."]) -> Float[Array, "... ... ..."]
+    interp_temporal(tq)
         Interpolates the spatiotemporal field at the given times.
     
-    interp_spatial(latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Float[Array, "... ... ..."]
+    interp_spatial(latitude, longitude)
         Interpolates the spatiotemporal field at the given latitudes and longitudes.
     
-    interp_spatiotemporal(time: Float[Array, "..."], latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Float[Array, "... ... ..."]
+    interp_spatiotemporal(time, latitude, longitude)
         Interpolates the spatiotemporal field at the given times, latitudes, and longitudes.
     
-    from_array(values: Float[Array, "time lat lon"], time: Float[Array, "time"], latitude: Float[Array, "lat"], longitude: Float[Array, "lon"], interpolation_method: str) -> SpatioTemporalField
-        Creates a SpatioTemporalField instance from the given array of values and coordinates.
+    from_array(values, time, latitude, longitude, interpolation_method)
+        Creates a `pastax.SpatioTemporalField` instance from the given array of values and coordinates.
     """
     _values: Float[Array, "time lat lon"]
     temporal_field: ipx.Interpolator1D
@@ -408,7 +408,7 @@ class SpatioTemporalField(Grid):
         interpolation_method: str
     ) -> SpatioTemporalField:
         """
-        Create a SpatioTemporalField object from given arrays of values, time, latitude, and longitude.
+        Create a `pastax.SpatioTemporalField` object from given arrays of values, time, latitude, and longitude.
 
         Parameters
         ----------
@@ -426,7 +426,8 @@ class SpatioTemporalField(Grid):
         Returns
         -------
         SpatioTemporalField
-            An object containing the original values and temporal, spatial, and spatiotemporal interpolators.
+            A `pastax.SpatioTemporalField` object containing the original values and temporal, spatial, 
+            and spatiotemporal interpolators.
         """
         temporal_field = ipx.Interpolator1D(
             time,

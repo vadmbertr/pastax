@@ -1,3 +1,3 @@
 # pastax
 
-A **P**arameterizable **A**uto-differentiable **S**imulator of ocean **T**rajectories in j**AX**.
+**P**arameterizable **A**uto-differentiable **S**imulators of ocean **T**rajectories in j**AX**.

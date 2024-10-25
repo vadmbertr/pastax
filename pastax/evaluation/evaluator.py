@@ -9,22 +9,25 @@ class PairEvaluator(Evaluator):
 
     Methods
     -------
-    __call__(self, reference_trajectory: Trajectory, simulated_trajectory: Trajectory) -> Evaluation
-        Evaluates the `simulated_trajectory` against the `reference_trajectory` using the defined metrics.
+    __call__(self, reference_trajectory, simulated_trajectory)
+        Evaluates the `simulated_trajectory` against the `reference_trajectory` using the `self.metrics`.
     """
     
     def __call__(self, reference_trajectory: Trajectory, simulated_trajectory: Trajectory) -> Evaluation:
         """
-        Evaluates the `simulated_trajectory` against the `reference_trajectory` using the defined metrics.
+        Evaluates the `simulated_trajectory` against the `reference_trajectory` using `self.metrics`.
         
         Parameters
         ----------
-            reference_trajectory (Trajectory): The reference trajectory to compare against.
-            simulated_trajectory (Trajectory): The simulated trajectory to be evaluated.
+        reference_trajectory : Trajectory
+            The reference [`pastax.Trajectory`][] to compare against.
+        simulated_trajectory : Trajectory
+            The simulated [`pastax.Trajectory`][] to be evaluated.
         
         Returns
         -------
-            Evaluation: The result of the evaluation.
+        Evaluation
+            The result of the [`pastax.Evaluation`][].
         """
         metrics = {}
         for metric in self.metrics:
@@ -40,25 +43,25 @@ class EnsembleEvaluator(Evaluator):
 
     Methods
     -------
-    __call__(self, reference_trajectory: Trajectory, simulated_trajectory: TrajectoryEnsemble) -> Evaluation
-        Evaluates the `simulated_trajectories` ensemble against the `reference_trajectory` using the defined metrics.
+    __call__(self, reference_trajectory, simulated_trajectory)
+        Evaluates the `simulated_trajectories` ensemble against the `reference_trajectory` using `self.metrics`.
     """
 
     def __call__(self, reference_trajectory: Trajectory, simulated_trajectories: TrajectoryEnsemble) -> Evaluation:
         """
-        Evaluates the `simulated_trajectories` ensemble against the `reference_trajectory` using the defined metrics.
+        Evaluates the `simulated_trajectories` ensemble against the `reference_trajectory` using `self.metrics`.
         
         Parameters
         ----------
-        reference_trajectory (Trajectory)
-            The reference trajectory to compare against.
-        simulated_trajectory (Trajectory)
-            The simulated ensemble of trajectories to be evaluated.
+        reference_trajectory : Trajectory
+            The reference [`pastax.Trajectory`][] to compare against.
+        simulated_trajectory : TrajectoryEnsemble
+            The simulated [`pastax.TrajectoryEnsemble`][] to be evaluated.
         
         Returns
         -------
         Evaluation
-            The result of the evaluation.
+            The result of the [`pastax.Evaluation`][].
         """
         metrics = {}
         for metric in self.metrics:

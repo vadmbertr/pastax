@@ -7,7 +7,7 @@ import jax
 
 class Set(eqx.Module):
     """
-    Base class representing a set of Pytrees.
+    Base class representing a set of PyTrees.
 
     Attributes
     ----------

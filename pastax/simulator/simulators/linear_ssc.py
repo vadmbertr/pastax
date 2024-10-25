@@ -10,7 +10,7 @@ from ...utils import meters_to_degrees
 from ...grid import Dataset
 
 
-def _rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+def _linear_ssc_rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     t = jnp.asarray(t, dtype=float)
     dataset = args
     latitude, longitude = y[0], y[1]
@@ -21,9 +21,10 @@ def _rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     return dlatlon
 
 
-def rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
+def linear_ssc_rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     """
-    Computes the drift term of the solved Ordinary Differential Equation by interpolating in space and time the velocity fields.
+    Computes the drift term of the solved Ordinary Differential Equation by interpolating in space and 
+    time the velocity fields.
 
     Parameters
     ----------
@@ -32,14 +33,14 @@ def rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2"]:
     y : Float[Array, "2"]
         The current state (latitude and longitude in degrees).
     args : Dataset
-        The dataset containing the physical fields (only u and v here).
+        The [`pastax.Dataset`][] containing the physical fields (only u and v here).
 
     Returns
     -------
     Float[Array, "2"]
         The drift term (change in latitude and longitude in degrees).
     """
-    dlatlon = _rhs(t, y, args)
+    dlatlon = _linear_ssc_rhs(t, y, args)
 
     dataset = args
     if dataset.is_spherical_mesh and not dataset.use_degrees:
@@ -68,10 +69,10 @@ class IdentitySSC(DeterministicDiffrax):
     """
 
     id: str = eqx.field(static=True, default_factory=lambda: "identity_ssc")
-    rhs: Callable[[Float[Scalar, ""], Float[Array, "2"], Dataset], Float[Array, "2"]] = rhs
+    rhs: Callable[[Float[Scalar, ""], Float[Array, "2"], Dataset], Float[Array, "2"]] = linear_ssc_rhs
 
 
-class _RHS(eqx.Module):
+class LinearRHS(eqx.Module):
     """
     Attributes
     ----------
@@ -109,14 +110,14 @@ class _RHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude in degrees).
         args : Dataset
-            The dataset containing the physical fields (only u and v here).
+            The [`pastax.Dataset`][] containing the physical fields (only u and v here).
 
         Returns
         -------
         Float[Array, "2"]
             The drift term (change in latitude and longitude in degrees).
         """
-        vu = _rhs(t, y, args)
+        vu = _linear_ssc_rhs(t, y, args)
 
         dlatlon = self.intercept + self.slope * vu
 
@@ -136,12 +137,12 @@ class LinearSSC(DeterministicDiffrax):
     rhs : _RHS
         Computes the drift term of the solved Ordinary Differential Equation.
     id : str
-        The identifier for the LinearSSC model, defaults to "linear_ssc".
+        The identifier for the `pastax.LinearSSC` simulator, defaults to `"linear_ssc"`.
 
     Methods
     -------
     from_param(intercept=None, slope=None, id=None)
-        Creates a LinearSSC simulator with the given intercept, slope, and id.
+        Creates a `pastax.LinearSSC` simulator with the given intercept, slope, and id.
 
     Notes
     -----
@@ -149,7 +150,7 @@ class LinearSSC(DeterministicDiffrax):
     """
 
     id: str = eqx.field(static=True, default_factory=lambda: "linear_ssc")
-    rhs: _RHS = _RHS()
+    rhs: LinearRHS = LinearRHS()
     
     @classmethod
     def from_param(
@@ -159,7 +160,7 @@ class LinearSSC(DeterministicDiffrax):
         id: str = None
     ) -> LinearSSC:
         """
-        Creates a LinearSSC simulator with the given intercept and slope parameters for the linear relation.
+        Creates a `pastax.LinearSSC` simulator with the given intercept and slope parameters for the linear relation.
 
         Parameters
         ----------
@@ -173,7 +174,7 @@ class LinearSSC(DeterministicDiffrax):
         Returns
         -------
         LinearSSC
-            The LinearSSC simulator.
+            The `pastax.LinearSSC` simulator.
 
         Notes
         -----
@@ -189,4 +190,4 @@ class LinearSSC(DeterministicDiffrax):
         if id is not None:
             self_kwargs["id"] = id
 
-        return cls(rhs=_RHS(**rhs_kwargs), **self_kwargs)
+        return cls(rhs=LinearRHS(**rhs_kwargs), **self_kwargs)

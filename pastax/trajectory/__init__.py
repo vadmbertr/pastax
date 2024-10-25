@@ -1,5 +1,6 @@
 """
-This module provides various classes for handling states, timeseries, trajectories, and ensembles in JAX.
+This module provides classes for handling [`pastax.State`][], [`pastax.Timeseries`][], [`pastax.Trajectories`][], 
+and [`pastax.TrajectoriesEnsemble`][] in JAX.
 """
 
 

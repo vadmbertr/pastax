@@ -11,7 +11,7 @@ from ...utils import meters_to_degrees
 from .._diffrax_simulator import StochasticDiffrax
 
 
-class _RHS(eqx.Module):
+class SmagorinskyRHS(eqx.Module):
     """
     Attributes
     ----------
@@ -21,7 +21,7 @@ class _RHS(eqx.Module):
     Methods
     -------
     _neighborhood(*variables, t, y, dataset)
-        Restricts the dataset to a neighborhood around the given location and time.
+        Restricts the [`pastax.Dataset`][] to a neighborhood around the given location and time.
     _smagorinsky_coefficients(t, y, dataset)
         Computes the Smagorinsky coefficients.
     _drift_term(t, y, dataset, smag_ds)
@@ -41,7 +41,7 @@ class _RHS(eqx.Module):
     @staticmethod
     def _neighborhood(*variables: List[str], t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
         """
-        Restricts the dataset to a neighborhood around the given location and time.
+        Restricts the [`pastax.Dataset`][] to a neighborhood around the given location and time.
 
         Parameters
         ----------
@@ -52,12 +52,12 @@ class _RHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         dataset : Dataset
-            The dataset containing the physical fields.
+            The [`pastax.Dataset`][] containing the physical fields.
 
         Returns
         -------
         Dataset
-            The neighborhood dataset.
+            The neighborhood [`pastax.Dataset`][].
         """
         # restrict dataset to the neighborhood around X(t)
         neighborhood = dataset.neighborhood(
@@ -79,16 +79,17 @@ class _RHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         dataset : Dataset
-            The dataset containing the physical fields.
+            The [`pastax.Dataset`][] containing the physical fields.
 
         Returns
         -------
         Dataset
-            The dataset containing the Smagorinsky coefficients.
+            The [`pastax.Dataset`][] containing the Smagorinsky coefficients.
 
         Notes
         -----
-        The physical fields are first restricted to a small neighborhood, then interpolated in time and finally spatial derivatives are computed using finite central difference.
+        The physical fields are first restricted to a small neighborhood, then interpolated in time and 
+        finally spatial derivatives are computed using finite central difference.
         """
         neighborhood = self._neighborhood("u", "v", t=t, y=y, dataset=dataset)
 
@@ -131,9 +132,9 @@ class _RHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         dataset : Dataset
-            The dataset containing the physical fields.
+            The [`pastax.Dataset`][] containing the physical fields.
         smag_ds : Dataset
-            The dataset containing the Smagorinsky coefficients for the given fields.
+            The [`pastax.Dataset`][] containing the Smagorinsky coefficients for the given fields.
 
         Returns
         -------
@@ -180,7 +181,7 @@ class _RHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         smag_ds : Dataset
-            The dataset containing the Smagorinsky coefficients.
+            The [`pastax.Dataset`][] containing the Smagorinsky coefficients.
 
         Returns
         -------
@@ -206,7 +207,7 @@ class _RHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         args : Dataset
-            The dataset containing the velocity fields.
+            The [`pastax.Dataset`][] containing the velocity fields.
 
         Returns
         -------
@@ -235,15 +236,15 @@ class SmagorinskyDiffusion(StochasticDiffrax):
  
     Attributes
     ----------
-    rhs : _RHS
+    rhs : SmagorinskyRHS
         Computes the drift and diffusion terms of the Smagorinsky diffusion SDE.
     id : str
-        The identifier for the SmagorinskyDiffrax model (set to "smagorinsky_diffusion").
+        The identifier for the SmagorinskyDiffrax model (set to `"smagorinsky_diffusion"`).
 
     Methods
     -------
     from_param(cs)
-        Creates a SmagorinskyDiffusion simulator with the given Smagorinsky constant.
+        Creates a `pastax.SmagorinskyDiffusion` simulator with the given Smagorinsky constant.
 
     Notes
     -----
@@ -251,12 +252,12 @@ class SmagorinskyDiffusion(StochasticDiffrax):
     """
 
     id: str = eqx.field(static=True, default_factory=lambda: "smagorinsky_diffusion")
-    rhs: _RHS = _RHS()
+    rhs: SmagorinskyRHS = SmagorinskyRHS()
 
     @classmethod
     def from_param(cls, cs: Float[Array, ""] = None, id: str = None) -> SmagorinskyDiffusion:
         """
-        Creates a SmagorinskyDiffusion simulator with the given Smagorinsky constant.
+        Creates a `pastax.SmagorinskyDiffusion` simulator with the given Smagorinsky constant.
 
         Parameters
         ----------
@@ -268,7 +269,7 @@ class SmagorinskyDiffusion(StochasticDiffrax):
         Returns
         -------
         SmagorinskyDiffusion
-            The SmagorinskyDiffusion simulator.
+            The `pastax.SmagorinskyDiffusion` simulator.
 
         Notes
         -----
@@ -282,4 +283,4 @@ class SmagorinskyDiffusion(StochasticDiffrax):
         if id is not None:
             self_kwargs["id"] = id
 
-        return cls(rhs=_RHS(**rhs_kwargs), **self_kwargs)
+        return cls(rhs=SmagorinskyRHS(**rhs_kwargs), **self_kwargs)

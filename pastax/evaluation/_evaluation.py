@@ -1,5 +1,5 @@
 import math
-from typing import Dict, Tuple, Sequence
+from typing import Dict, Sequence
 
 import jax.numpy as jnp
 from jaxtyping import Array, Float
@@ -14,50 +14,46 @@ from ..utils import UNIT, seconds_to_days, units_to_str
 
 class Evaluation(Set):
     """
-    Class that manages a dictionary of metric timeseries or timeseries ensemble and provides methods to access and
-    visualise them.
+    Class for accessing and visualizing a dictionary of metric timeseries or timeseries ensemble.
 
     Attributes
     ----------
     _members : Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
         A dictionary holding the metrics.
-    size : int
-        The number of metrics in the set.
 
     Methods
     -------
-    __init__(states: Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]):
-        Initializes the Evaluation object with a dictionary of metric timeseries.
+    __init__(states):
+        Initializes the `Evaluation` object with a dictionary of metric timeseries or timeseries ensemble.
 
-    get(key: str) -> Timeseries | Sequence[TimeseriesEnsemble | Timeseries]:
+    get(key):
         Retrieves a metric by key.
     
-    items() -> Tuple[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]:
+    items():
         Returns the items of the metrics dictionary.
 
-    keys() -> Tuple[str]:
-        Returns the keys of the metric timeseries dictionary.
+    keys():
+        Returns the keys of the metrics dictionary.
     
-    values() -> Tuple[Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]:
+    values():
         Returns the values of the metrics dictionary.
 
-    plot(fig: plt.Figure, ti: int = None):
-        Plots the metric timeseries or timeseries ensemble up to a time index on the provided figure.
+    plot(fig, ti):
+        Plots the metrics timeseries or timeseries ensemble up to the time index `ti` on the figure `fig`.
 
-    __getitem__(key: str) -> Timeseries | TimeseriesEnsemble:
+    __getitem__(key):
         Retrieves a metric by key.
     """
     
     _members: Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
-    size: int
 
     def __init__(self, states: Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]):
         """
-        Initializes the Evaluation object with a dictionary of metric timeseries.
+        Initializes the `pastax.Evaluation` object with a dictionary of metric timeseries or timeseries ensemble.
 
         Parameters
         ----------
-        states (Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]])
+        states : Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
             The initial metrics dictionary.
         """
         self._members = states
@@ -69,7 +65,7 @@ class Evaluation(Set):
 
         Parameters
         ----------
-        key (str)
+        key : str
             The key of the metric to retrieve.
 
         Returns
@@ -79,71 +75,72 @@ class Evaluation(Set):
         """
         return self._members.get(key)
 
-    def items(self) -> Tuple[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]:
+    def items(self) -> tuple[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]:
         """
         Returns the items of the metrics dictionary.
 
         Returns
         -------
-        Tuple[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
+        tuple[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
             The items of the metrics dictionary.
         """
         return self._members.items()
 
-    def keys(self) -> Tuple[str]:
+    def keys(self) -> tuple[str]:
         """
         Returns the keys of the metric timeseries dictionary.
 
         Returns
         -------
-        Tuple[str]
+        tuple[str]
             The keys of the metrics dictionary.
         """
         return self._members.keys()
 
-    def values(self) -> Tuple[Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]:
+    def values(self) -> tuple[Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]:
         """
         Returns the values of the metrics dictionary.
 
         Returns
         -------
-        Tuple[Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
+        tuple[Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]
             The values of the metrics dictionary.
         """
         return self._members.values()
 
     def to_dataarray(self) -> Dict[str, xr.DataArray]:
         """
-        Converts the evaluation results to a dictionary of xarray DataArrays.
+        Converts the evaluation results to a dictionary of `xarray.DataArray`s.
 
         Returns
         -------
         Dict[str, xr.DataArray]
-            A dictionary where keys are the evaluation metric names and values are the corresponding xarray DataArrays.
+            A dictionary where keys are the evaluation metric names and values are the corresponding 
+            `xarray.DataArray`s.
         """
         return dict((key, value.to_dataarray()) for key, value in self.items())
 
     def to_dataset(self) -> xr.Dataset:
         """
-        Converts the evaluation results to an xarray Dataset.
+        Converts the evaluation results to a `xarray.Dataset`.
 
         Returns
         -------
         xr.Dataset
-            An xarray Dataset containing the evaluation results.
+            A `xarray.Dataset` containing the evaluation results.
         """
         return xr.Dataset(self.to_dataarray())
 
     def plot(self, fig: plt.Figure, ti: int = None):
         """
-        Plots the metric timeseries or timeseries ensemble up to a time index on the provided figure.
+        Plots the metric timeseries or timeseries ensemble up to the time index `ti` on the figure `fig`.
 
         Parameters
         ----------
-        fig (plt.Figure)
+        fig : plt.Figure
             The figure to plot on.
-        ti (int, optional)
-            The time index up to which to plot. If None, plots the full metric timeseries.
+        ti : int, optional
+            The time index up to which to plot. If `ti=None`, plots the full metric timeseries.
         """
         if ti is None:
             ti = next(iter(self.values())).length
@@ -178,7 +175,7 @@ class Evaluation(Set):
         add_legend: bool,
         ax: plt.Axes,
         has_label: bool = False
-    ) -> Tuple[Float[Array, ""], Float[Array, ""], Float[Array, "time"], str, str]:
+    ) -> tuple[Float[Array, ""], Float[Array, ""], Float[Array, "time"], str, str]:
         if isinstance(metric, Timeseries) or isinstance(metric, TimeseriesEnsemble):
             values, timedelta, unit = self.__parse_metric(metric)
 
@@ -216,7 +213,7 @@ class Evaluation(Set):
         return min_values, max_values, timedelta, unit, name
 
     @staticmethod
-    def __guess_metrics_fig_layout(n_metrics: int) -> Tuple[int, int]:
+    def __guess_metrics_fig_layout(n_metrics: int) -> tuple[int, int]:
         min_n_cells = float("inf")
         best_layout = (0, 0)
         for n_rows in range(1, int(math.ceil(n_metrics ** 0.5)) + 1):
@@ -231,7 +228,7 @@ class Evaluation(Set):
     @staticmethod
     def __parse_metric(
         metric: Timeseries | TimeseriesEnsemble
-    ) -> Tuple[Float[Array, "time"] | Float[Array, "member time"], Float[Array, "time"], str]:
+    ) -> tuple[Float[Array, "time"] | Float[Array, "member time"], Float[Array, "time"], str]:
         values = metric.states.value[..., 1:, :]
 
         unit = {}
@@ -303,10 +300,12 @@ class Evaluation(Set):
 
         Parameters
         ----------
-            y (str): The key of the metric to retrieve.
+        y : str
+            The key of the metric to retrieve.
             
         Returns
         -------
-            Timeseries | TimeseriesEnsemble: The metric timeseries or timeseries ensemble corresponding to the key.
+        Timeseries | TimeseriesEnsemble
+            The metric [`pastax.Timeseries`][] or [`pastax.TimeseriesEnsemble`][] corresponding to the key.
         """
         return self._members[key]

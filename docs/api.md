@@ -1,7 +1,7 @@
 # API
 
-::: sealagrangiax.simulator
-::: sealagrangiax.trajectory
-::: sealagrangiax.grid
-::: sealagrangiax.evaluation
-::: sealagrangiax.utils
+::: pastax.simulator
+::: pastax.trajectory
+::: pastax.grid
+::: pastax.evaluation
+::: pastax.utils

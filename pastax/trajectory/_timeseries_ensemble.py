@@ -22,49 +22,47 @@ def _in_axes_func(leaf):
 
 class TimeseriesEnsemble(Unitful):
     """
-    Base class representing an ensemble of timeseries data.
+    Class representing `pastax.TimeseriesEnsemble`.
 
     Attributes
     ----------
     members : Timeseries
-        The members of the timeseries ensemble.
+        The members of the `pastax.TimeseriesEnsemble`.
     _members_type : ClassVar
-        The type of the members in the ensemble.
+        The type of the members in the `pastax.TimeseriesEnsemble`.
     size : int
-        The number of members in the ensemble.
+        The number of members in the `pastax.TimeseriesEnsemble`.
 
     Methods
     -------
-    __init__(values, times, unit={}, name=None, **kwargs)
-        Initializes the TimeseriesEnsemble with given values, times, and optional parameters.
+    __init__(members)
+        Initializes the `pastax.TimeseriesEnsemble` with [`pastax.Timeseries`][] members.
     value
-        Returns the value of the ensemble.
+        Returns the value of the `pastax.TimeseriesEnsemble`.
     states
-        Returns the states of the ensemble.
+        Returns the [`pastax.State`][] of the `pastax.TimeseriesEnsemble`.
     times
-        Returns the time points of the ensemble.
+        Returns the [`pastax.Time`][] points of the `pastax.TimeseriesEnsemble`.
     unit
-        Returns the unit of the ensemble.
+        Returns the unit of the `pastax.TimeseriesEnsemble`.
     name
-        Returns the name of the ensemble.
+        Returns the name of the `pastax.TimeseriesEnsemble`.
     length
-        Returns the length of the ensemble.
+        Returns the length of the `pastax.TimeseriesEnsemble`.
     attach_name(name)
-        Attaches a name to the ensemble.
+        Attaches a name to the `pastax.TimeseriesEnsemble`.
     crps(other, distance_func=Timeseries.euclidean_distance)
-        Computes the Continuous Ranked Probability Score (CRPS) for the ensemble.
+        Computes the Continuous Ranked Probability Score (CRPS) for the `pastax.TimeseriesEnsemble`.
     ensemble_dispersion(distance_func=Timeseries.euclidean_distance)
-        Computes the ensemble dispersion.
+        Computes the `pastax.TimeseriesEnsemble` dispersion.
     map(func)
-        Applies a function to each timeseries of the ensemble.
+        Applies a function to each [`pastax.Timeseries`][] of the `pastax.TimeseriesEnsemble`.
     from_array(values, times, unit={}, name=None, **kwargs)
-        Creates a TimeseriesEnsemble from an array of values and time points.
+        Creates a `pastax.TimeseriesEnsemble` from an array of values and time points.
     to_dataarray()
-        Converts the ensemble states to a xarray DataArray.
+        Converts the `pastax.TimeseriesEnsemble` [`pastax.State`][] to a `xarray.DataArray`.
     to_dataset()
-        Converts the ensemble to a xarray Dataset.
-    __sub__(other)
-        Subtracts another ensemble, timeseries, state or array like from this ensemble.
+        Converts the `pastax.TimeseriesEnsemble` to a `xarray.Dataset`.
     """
 
     members: Timeseries
@@ -74,17 +72,14 @@ class TimeseriesEnsemble(Unitful):
     _value: None = eqx.field(repr=False)
     _unit: None = eqx.field(repr=False)
 
-    def __init__(
-        self,
-        members: Timeseries
-    ):
+    def __init__(self, members: Timeseries):
         """
-        Initializes the TimeseriesEnsemble with members.
+        Initializes the `pastax.TimeseriesEnsemble` with [`pastax.Timeseries`][] members.
 
         Parameters
         ----------
         members : Timeseries
-            The members of the ensemble.
+            The members of the `pastax.TimeseriesEnsemble`.
         """
         super().__init__()
         self.members = members
@@ -93,88 +88,88 @@ class TimeseriesEnsemble(Unitful):
     @property
     def value(self) -> Float[Array, "member time state"]:
         """
-        Returns the value of the ensemble.
+        Returns the value of the `pastax.TimeseriesEnsemble`.
 
         Returns
         -------
         Float[Array, "... member time state"]
-            The value of the ensemble.
+            The value of the `pastax.TimeseriesEnsemble`.
         """
         return self.members.value
 
     @property
     def states(self) -> State:
         """
-        Returns the states of the ensemble.
+        Returns the states of the `pastax.TimeseriesEnsemble`.
 
         Returns
         -------
         State
-            The states of the ensemble.
+            The states of the `pastax.TimeseriesEnsemble`.
         """
         return self.members.states
 
     @property
     def times(self) -> Time:
         """
-        Returns the time points of the ensemble.
+        Returns the time points of the `pastax.TimeseriesEnsemble`.
 
         Returns
         -------
         Time
-            The time points of the ensemble.
+            The time points of the `pastax.TimeseriesEnsemble`.
         """
         return self.members.times
 
     @property
     def unit(self) -> Dict[Unit, int | float]:
         """
-        Returns the unit of the ensemble.
+        Returns the unit of the `pastax.TimeseriesEnsemble`.
 
         Returns
         -------
         Dict[Unit, int | float]
-            The unit of the ensemble.
+            The unit of the `pastax.TimeseriesEnsemble`.
         """
         return self.members.unit
 
     @property
     def name(self) -> str:
         """
-        Returns the name of the ensemble.
+        Returns the name of the `pastax.TimeseriesEnsemble`.
 
         Returns
         -------
         str
-            The name of the ensemble.
+            The name of the `pastax.TimeseriesEnsemble`.
         """
         return self.members.name
 
     @property
     def length(self) -> int:
         """
-        Returns the length of the ensemble.
+        Returns the length of the `pastax.TimeseriesEnsemble`.
 
         Returns
         -------
         int
-            The length of the ensemble.
+            The length of the `pastax.TimeseriesEnsemble`.
         """
         return self.members.length
 
     def attach_name(self, name: str) -> TimeseriesEnsemble:
         """
-        Attaches a name to the ensemble.
+        Attaches a name to the `pastax.TimeseriesEnsemble`.
 
         Parameters
         ----------
         name : str
-            The name to attach to the ensemble.
+            The name to attach to the `pastax.TimeseriesEnsemble`.
 
         Returns
         -------
         TimeseriesEnsemble
-            A new ensemble with the attached name.
+            A new `pastax.TimeseriesEnsemble` with the attached name.
         """
         return self.__class__(self.states.value, self.times.value, unit=self.unit, name=name)
     
@@ -184,7 +179,7 @@ class TimeseriesEnsemble(Unitful):
         distance_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike] = Timeseries.euclidean_distance
     ) -> Timeseries:
         """
-        Computes the Continuous Ranked Probability Score (CRPS) for the ensemble.
+        Computes the Continuous Ranked Probability Score (CRPS) for the `pastax.TimeseriesEnsemble`.
 
         Parameters
         ----------
@@ -196,7 +191,7 @@ class TimeseriesEnsemble(Unitful):
         Returns
         -------
         Timeseries
-            The CRPS for the ensemble.
+            The CRPS for the `pastax.TimeseriesEnsemble`.
         """
         biases = self.map(lambda member: distance_func(other, member))
         bias = biases.mean(axis=0)
@@ -214,7 +209,7 @@ class TimeseriesEnsemble(Unitful):
         distance_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike] = Timeseries.euclidean_distance
     ) -> Timeseries:
         """
-        Computes the ensemble dispersion.
+        Computes the `pastax.TimeseriesEnsemble` dispersion.
 
         Parameters
         ----------
@@ -224,7 +219,7 @@ class TimeseriesEnsemble(Unitful):
         Returns
         -------
         Timeseries
-            The ensemble dispersion.
+            The `pastax.TimeseriesEnsemble` dispersion.
         """
         distances = self.map(lambda member1: self.map(lambda member2: distance_func(member1, member2)))
         # divide by 2 as pairs are duplicated (JAX efficient computation way)
@@ -236,17 +231,17 @@ class TimeseriesEnsemble(Unitful):
 
     def map(self, func: Callable[[Timeseries], Unitful | ArrayLike]) -> TimeseriesEnsemble:
         """
-        Applies a function to each member of the ensemble.
+        Applies a function to each [`pastax.Timeseries`][] of the `pastax.TimeseriesEnsemble`.
 
         Parameters
         ----------
         func : Callable[[Timeseries], Unitful | ArrayLike]
-            The function to apply to each member.
+            The function to apply to each [`pastax.Timeseries`][].
 
         Returns
         -------
         TimeseriesEnsemble
-            The result of applying the function to each timeseries.
+            The result of applying the function to each [`pastax.Timeseries`][].
         """
         unit = {}
         res = eqx.filter_vmap(func, in_axes=_in_axes_func)(self.members)
@@ -267,7 +262,7 @@ class TimeseriesEnsemble(Unitful):
         **kwargs: Dict
     ) -> TimeseriesEnsemble:
         """
-        Creates a TimeseriesEnsemble from an array of values and time points.
+        Creates a `pastax.TimeseriesEnsemble` from an array of values and time points.
 
         Parameters
         ----------
@@ -285,7 +280,7 @@ class TimeseriesEnsemble(Unitful):
         Returns
         -------
         TimeseriesEnsemble
-            The TimeseriesEnsemble created from the array of values and time points.
+            The `pastax.TimeseriesEnsemble` created from the array of values and time points.
         """
         members = eqx.filter_vmap(
             lambda s: cls._members_type.from_array(s, times, unit=unit, name=name, **kwargs),
@@ -296,12 +291,12 @@ class TimeseriesEnsemble(Unitful):
 
     def to_dataarray(self) -> xr.DataArray:
         """
-        Converts the ensemble states to an xarray DataArray.
+        Converts the `pastax.TimeseriesEnsemble` [`pastax.State`][] to a `xarray.DataArray`.
 
         Returns
         -------
         xr.DataArray
-            An xarray DataArray containing the ensemble states.
+            An `xarray.DataArray` containing the `pastax.TimeseriesEnsemble` [`pastax.State`][].
         """
         da = xr.DataArray(
             data=self.states.value,
@@ -318,12 +313,12 @@ class TimeseriesEnsemble(Unitful):
 
     def to_dataset(self) -> xr.Dataset:
         """
-        Converts the ensemble states to an xarray Dataset.
+        Converts the `pastax.TimeseriesEnsemble` [`pastax.State`][] to a `xarray.DataArray`.
 
         Returns
         -------
         xr.Dataset
-            An xarray Dataset containing the ensemble states.
+            A `xarray.DataArray` containing the `pastax.TimeseriesEnsemble` [`pastax.State`][].
         """
         da = self.to_dataarray()
         ds = da.to_dataset()

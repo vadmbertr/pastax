@@ -1,4 +1,4 @@
-name: sealagrangiax
+name: pastax
 channels:
   - conda-forge
   - defaults

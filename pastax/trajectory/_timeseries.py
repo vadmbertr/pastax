@@ -21,43 +21,41 @@ def _in_axes_func(leaf):
 
 class Timeseries(Unitful):
     """
-    Class representing a timeseries of states.
+    Class representing a `pastax.Timeseries`.
 
     Attributes
     ----------
     states : State
-        The states of the timeseries.
+        The [`pastax.State`][] of the `pastax.Timeseries`.
     _states_type : ClassVar
-        The type of the states in the timeseries.
+        The type of the [`pastax.State`][] in the `pastax.Timeseries`.
     times : Time
-        The time points of the timeseries.
+        The [`pastax.Time`][] points of the `pastax.Timeseries`.
     length : int
-        The length of the timeseries.
+        The length of the `pastax.Timeseries`.
 
     Methods
     -------
     __init__(states, times, **__)
-        Initializes the Timeseries with given states, times, and optional parameters.
+        Initializes the `pastax.Timeseries` with given [`pastax.State`][], [`pastax.Time`][], and optional parameters.
     value
-        Returns the value of the timeseries.
+        Returns the value of the `pastax.Timeseries`.
     unit
-        Returns the unit of the timeseries.
+        Returns the unit of the `pastax.Timeseries`.
     name
-        Returns the name of the timeseries.
+        Returns the name of the `pastax.Timeseries`.
     attach_name(name)
-        Attaches a name to the timeseries.
+        Attaches a name to the `pastax.Timeseries`.
     euclidean_distance(other)
-        Computes the Euclidean distance between this timeseries and another timeseries.
+        Computes the Euclidean distance between this `pastax.Timeseries` and another `pastax.Timeseries`.
     map(func)
-        Applies a function to each state in the timeseries.
+        Applies a function to each [`pastax.State`][] in the `pastax.Timeseries`.
     from_array(values, times, unit={}, name=None, **kwargs)
-        Creates a Timeseries from an array of values and time points.
+        Creates a `pastax.Timeseries` from an array of values and time points.
     to_dataarray()
-        Converts the timeseries states to an xarray DataArray.
+        Converts the `pastax.Timeseries` states to an xarray DataArray.
     to_dataset()
-        Converts the timeseries to a xarray Dataset.
-    __sub__(other)
-        Subtracts another ensemble, timeseries, state or array like from this timeseries.
+        Converts the `pastax.Timeseries` to a xarray Dataset.
     """
 
     states: State
@@ -68,21 +66,16 @@ class Timeseries(Unitful):
     _value: None = eqx.field(repr=False)
     _unit: None = eqx.field(repr=False)
 
-    def __init__(
-        self,
-        states: State,
-        times: Time,
-        **_: Dict
-    ):
+    def __init__(self, states: State, times: Time, **_: Dict):
         """
-        Initializes the Timeseries with given states, times, and optional parameters.
+        Initializes the `pastax.Timeseries` with given [`pastax.State`][], [`pastax.Time`][], and optional parameters.
 
         Parameters
         ----------
         states : Float[Array, "... time state"]
-            The states of the timeseries.
+            The states of the `pastax.Timeseries`.
         times : Float[Array, "time"]
-            The time points for the timeseries.
+            The time points for the `pastax.Timeseries`.
         """
         super().__init__()
         self.states = states
@@ -92,52 +85,52 @@ class Timeseries(Unitful):
     @property
     def value(self) -> Float[Array, "... time state"]:
         """
-        Returns the value of the timeseries.
+        Returns the value of the `pastax.Timeseries`.
 
         Returns
         -------
         Float[Array, "... time state"]
-            The value of the timeseries.
+            The value of the `pastax.Timeseries`.
         """
         return self.states.value
 
     @property
     def unit(self) -> Dict[Unit, int | float]:
         """
-        Returns the unit of the timeseries.
+        Returns the unit of the `pastax.Timeseries`.
 
         Returns
         -------
         Dict[Unit, int | float]
-            The unit of the timeseries.
+            The unit of the `pastax.Timeseries`.
         """
         return self.states.unit
 
     @property
     def name(self) -> str:
         """
-        Returns the name of the timeseries.
+        Returns the name of the `pastax.Timeseries`.
 
         Returns
         -------
         name
-            The name of the timeseries.
+            The name of the `pastax.Timeseries`.
         """
         return self.states.name
     
     def attach_name(self, name: str) -> Timeseries:
         """
-        Attaches a name to the timeseries.
+        Attaches a name to the `pastax.Timeseries`.
 
         Parameters
         ----------
         name : str
-            The name to attach to the timeseries.
+            The name to attach to the `pastax.Timeseries`.
 
         Returns
         -------
         Timeseries
-            A new timeseries with the attached name.
+            A new `pastax.Timeseries` with the attached name.
         """
         return self.__class__(self.states.value, self.times.value, unit=self.unit, name=name)
     
@@ -148,12 +141,12 @@ class Timeseries(Unitful):
         Parameters
         ----------
         other : Timeseries | ArrayLike
-            The other timeseries to compute the distance to.
+            The other `pastax.Timeseries` to compute the distance to.
 
         Returns
         -------
         Timeseries
-            The Euclidean distance between the two timeseries.
+            The Euclidean distance between the two `pastax.Timeseries`.
         """
         if isinstance(other, Timeseries):
             other = other.states
@@ -164,17 +157,17 @@ class Timeseries(Unitful):
 
     def map(self, func: Callable[[State], Unitful | ArrayLike]) -> Timeseries:
         """
-        Applies a function to each state in the timeseries.
+        Applies a function to each [`pastax.State`][] in the `pastax.Timeseries`.
 
         Parameters
         ----------
         func : Callable[[State], Unitful | ArrayLike]
-            The function to apply to each state.
+            The function to apply to each [`pastax.State`][].
 
         Returns
         -------
         Timeseries
-            The result of applying the function to each state.
+            The result of applying the function to each [`pastax.State`][].
         """
         unit = {}
         res = eqx.filter_vmap(func, in_axes=_in_axes_func)(self.states)
@@ -195,7 +188,7 @@ class Timeseries(Unitful):
         **kwargs: Dict
     ) -> Timeseries:
         """
-        Creates a timeseries from an array of values and time points.
+        Creates a `pastax.Timeseries` from an array of values and time points.
 
         Parameters
         ----------
@@ -213,7 +206,7 @@ class Timeseries(Unitful):
         Returns
         -------
         Timeseries
-            The timeseries created from the array of values and time points.
+            The `pastax.Timeseries` created from the array of values and time points.
         """
         values = jnp.asarray(values, dtype=float)
         times = jnp.asarray(times, dtype=float)
@@ -232,12 +225,12 @@ class Timeseries(Unitful):
 
     def to_dataarray(self) -> xr.DataArray:
         """
-        Converts the timeseries states to an xarray DataArray.
+        Converts the `pastax.Timeseries` [`pastax.State`][] to a `xarray.DataArray`.
 
         Returns
         -------
         xr.DataArray
-            An xarray DataArray containing the timeseries states.
+            A `xarray.DataArray` containing the `pastax.Timeseries` [`pastax.State`][].
         """
         da = xr.DataArray(
             data=self.states.value,
@@ -251,12 +244,12 @@ class Timeseries(Unitful):
 
     def to_dataset(self) -> xr.Dataset:
         """
-        Converts the timeseries states to an xarray Dataset.
+        Converts the `pastax.Timeseries` [`pastax.State`][] to a `xarray.Dataset`.
 
         Returns
         -------
         xr.Dataset
-            An xarray Dataset containing the timeseries states.
+            A `xarray.Dataset` containing the `pastax.Timeseries` [`pastax.State`][].
         """
         da = self.to_dataarray()
         ds = da.to_dataset()

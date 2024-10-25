@@ -10,30 +10,30 @@ from ._unitful import Unitful
 
 class State(Unitful):
     """
-    Class representing a state with a value, unit, and name.
+    Class representing a `pastax.State` with a value, unit, and name.
 
     Attributes
     ----------
     _value : Float[Array, "state"]
         The value of the state.
     _unit : Dict[Unit, int | float], optional
-        The unit of the state (default is an empty Dict).
+        The unit of the state, defaults is an empty Dict.
     name : str, optional
-        The name of the state (default is None).
+        The name of the state, default is None.
 
     Methods
     -------
     __init__(value, unit={}, name=None)
-        Initializes the State with given value, unit and name.
+        Initializes the `pastax.State` with given value, unit and name.
     attach_name(name)
-        Attaches a name to the state.
+        Attaches a name to the `pastax.State`.
     """
     
     name: str = eqx.field(static=True)
 
     def __init__ (self, value: ArrayLike, unit: Unit | Dict[Unit, int | float] = {}, name: str = None):
         """
-        Initializes the State with given value, unit and name.
+        Initializes the `pastax.State` with given value, unit and name.
 
         Parameters
         ----------
@@ -49,7 +49,7 @@ class State(Unitful):
     
     def attach_name(self, name: str) -> State:
         """
-        Attaches a name to the state.
+        Attaches a name to the `pastax.State`.
 
         Parameters
         ----------
@@ -59,7 +59,7 @@ class State(Unitful):
         Returns
         -------
         State
-            A new state with the attached name.
+            A new `pastax.State` with the attached name.
         """
         return self.__class__(self.value, self.unit, name)
     

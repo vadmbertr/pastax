@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sealagrangiax"
+name = "pastax"
 authors = [
     { name = "Vadim Bertrand", email = "vadim.bertrand@univ-grenoble-alpes.fr" },
     { name = "Emmanuel Cosme", email = "emmanuel.cosme@univ-grenoble-alpes.fr" },
@@ -11,10 +11,10 @@ authors = [
     { name = "Julien Le Sommer", email = "julien.lesommer@univ-grenoble-alpes.fr" }
 ]
 
-description = "Differentiable (and stochastic) simulators of sea surface drifting objects trajectories"
+description = "**P**arameterizable **A**uto-differentiable **S**imulators of ocean **T**rajectories in j**AX**."
 readme = "README.md"
 requires-python = ">=3.11"
-keywords = ["stochastic", "lagrangian", "trajectory", "sampler", "simulator", "ocean", "sea", "drift", "diffrentiable", "jax"]
+keywords = ["differentiable", "drift", "jax", "lagrangian", "ocean", "parameterizable", "sampler", "sea", "simulator", "stochastic", "trajectory"]
 license = {text = "Apache-2.0"}
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -26,11 +26,11 @@ dynamic = ["version", "dependencies"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
-version = {attr = "sealagrangiax._version.version"}
+version = {attr = "pastax._version.version"}
 
 [project.urls]
-"Homepage" = "https://github.com/vadmbertr/sealagrangiax"
-"Bug Tracker" = "https://github.com/vadmbertr/sealagrangiax/issues"
+"Homepage" = "https://github.com/vadmbertr/pastax"
+"Bug Tracker" = "https://github.com/vadmbertr/pastax/issues"
 
 [tool.setuptools.packages]
 find = {}
