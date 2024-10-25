@@ -1,3 +1,3 @@
-# sealagrangiax
+# pastax
 
-Differentiable (and stochastic) simulators of sea surface drifting object trajectories.
+A **P**arameterizable **A**uto-differentiable **S**imulator of ocean **T**rajectories in j**AX**.
