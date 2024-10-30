@@ -1,10 +1,10 @@
 """
-This module provides various geographical and unit conversion and manipulation utilities in JAX.
+This module provides various geographical and [`pastax.utils.Unit`][] conversion and manipulation utilities in JAX.
 """
 
 
 from .unit import (
-    Unit, Dimensionless,
+    Unit,
     Meters, Kilometers, LatLonDegrees,
     Seconds, Minutes, Hours, Days,
     UNIT,
@@ -19,7 +19,7 @@ from .geo import EARTH_RADIUS, distance_on_earth, longitude_in_180_180_degrees
 
 __all__ = [
     "EARTH_RADIUS", "distance_on_earth", "longitude_in_180_180_degrees", 
-    "Unit", "Dimensionless", 
+    "Unit", 
     "Meters", "Kilometers", "LatLonDegrees",
     "Seconds", "Minutes", "Hours", "Days", 
     "UNIT",

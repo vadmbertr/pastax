@@ -1,6 +1,6 @@
 """
-This module provides classes for handling [`pastax.State`][], [`pastax.Timeseries`][], [`pastax.Trajectories`][], 
-and [`pastax.TrajectoriesEnsemble`][] in JAX.
+This module provides classes for handling [`pastax.trajectory.State`][], [`pastax.trajectory.Timeseries`][], [`pastax.trajectory.Trajectory`][], 
+and [`pastax.trajectory.TrajectoryEnsemble`][] in JAX.
 """
 
 

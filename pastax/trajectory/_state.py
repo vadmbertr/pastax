@@ -10,7 +10,7 @@ from ._unitful import Unitful
 
 class State(Unitful):
     """
-    Class representing a `pastax.State` with a value, unit, and name.
+    Class representing a `pastax.trajectory.State` with a value, unit, and name.
 
     Attributes
     ----------
@@ -24,16 +24,16 @@ class State(Unitful):
     Methods
     -------
     __init__(value, unit={}, name=None)
-        Initializes the `pastax.State` with given value, unit and name.
+        Initializes the `pastax.trajectory.State` with given value, unit and name.
     attach_name(name)
-        Attaches a name to the `pastax.State`.
+        Attaches a name to the `pastax.trajectory.State`.
     """
     
     name: str = eqx.field(static=True)
 
     def __init__ (self, value: ArrayLike, unit: Unit | Dict[Unit, int | float] = {}, name: str = None):
         """
-        Initializes the `pastax.State` with given value, unit and name.
+        Initializes the `pastax.trajectory.State` with given value, unit and name.
 
         Parameters
         ----------
@@ -49,7 +49,7 @@ class State(Unitful):
     
     def attach_name(self, name: str) -> State:
         """
-        Attaches a name to the `pastax.State`.
+        Attaches a name to the `pastax.trajectory.State`.
 
         Parameters
         ----------
@@ -59,7 +59,7 @@ class State(Unitful):
         Returns
         -------
         State
-            A new `pastax.State` with the attached name.
+            A new `pastax.trajectory.State` with the attached name.
         """
         return self.__class__(self.value, self.unit, name)
     

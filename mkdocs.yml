@@ -30,11 +30,14 @@ site_url: https://pastax.readthedocs.io/en/latest/
 repo_url: https://github.com/vadmbertr/pastax
 repo_name: vadmbertr/pastax
 
-# strict: true
+strict: true
 
 extra_javascript:
   - _static/mathjax.js
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - _static/custom.css
 
 markdown_extensions:
   - pymdownx.arithmatex:
@@ -42,6 +45,7 @@ markdown_extensions:
   - pymdownx.superfences  # enable syntax highlighting
   - pymdownx.details  # allow hidden expandable regions denoted by ???
   - admonition
+  - codehilite
   - toc:
       permalink: true
       toc_depth: 4
@@ -53,7 +57,7 @@ plugins:
       exclude:
         - "_overrides"
   - include-markdown
-  - mknotebooks  # Jupyter notebooks
+  - mknotebooks:  # Jupyter notebooks
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -67,7 +71,7 @@ plugins:
             allow_inspection: true
             docstring_style: numpy
             heading_level: 3
-            inherited_members: true  # allow looking up inherited methods
+            inherited_members: false  # allow looking up inherited methods
             members_order: source  # order methods according to their order of definition in the source code
             filters:
             - "!^_"
@@ -79,9 +83,8 @@ plugins:
             show_signature_annotations: true
             show_signature_return_annotation: true
             show_signature_parameter_types: true
-          external:
-            numpy: https://numpy.org/doc/stable/
 
 nav:
   - "index.md"
+  - "demo.ipynb"
   - "api.md"

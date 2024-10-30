@@ -69,7 +69,7 @@ class Coordinate(Grid):
         Returns the nearest index for the given query coordinates.
         
     from_array(values, **interpolator_kwargs)
-        Creates a `pastax.Coordinate` instance from an array of values.
+        Creates a `pastax.grid.Coordinate` instance from an array of values.
     """
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
@@ -109,9 +109,9 @@ class Coordinate(Grid):
         **interpolator_kwargs: Any
     ) -> Coordinate:
         """
-        Create a `pastax.Coordinate` object from an array of values.
+        Create a `pastax.grid.Coordinate` object from an array of values.
 
-        This method initializes a `pastax.Coordinate` object using the provided array of values.
+        This method initializes a `pastax.grid.Coordinate` object using the provided array of values.
         It uses a 1D interpolator to generate indices from values, with the interpolation method set to `"nearest"`.
 
         Parameters
@@ -124,7 +124,7 @@ class Coordinate(Grid):
         Returns
         -------
         Coordinate
-            A  `pastax.Coordinate` object containing the provided values and corresponding indices interpolator.
+            A  `pastax.grid.Coordinate` object containing the provided values and corresponding indices interpolator.
         """
         interpolator_kwargs["method"] = "nearest"
         indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)

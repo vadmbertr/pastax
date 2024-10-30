@@ -14,9 +14,9 @@ class Evaluator(eqx.Module):  # TODO: should it be an eqx Module?
     Attributes
     -----------
     metrics : List[Metric]
-        A list of [`pastax.Metric`][]s used for evaluation. 
-        The default [`pastax.Metric`][]s are [`pastax.SeparationDistance`][], [`pastax.LiuIndex`][], [`pastax.Mae`][], 
-        and [`pastax.Rmse`][].
+        A list of [`pastax.evaluation.Metric`][]s used for evaluation. 
+        The default [`pastax.evaluation.Metric`][]s are [`pastax.evaluation.SeparationDistance`][], [`pastax.evaluation.LiuIndex`][], [`pastax.evaluation.Mae`][], 
+        and [`pastax.evaluation.Rmse`][].
 
     Methods
     -------
@@ -40,9 +40,9 @@ class Evaluator(eqx.Module):  # TODO: should it be an eqx Module?
         Parameters
         ----------
         reference_trajectory : Trajectory
-            The reference [`pastax.Trajectory`][] to compare against.
+            The reference [`pastax.trajectory.Trajectory`][] to compare against.
         simulated_trajectory : Trajectory | TrajectoryEnsemble
-            The simulated [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] to be evaluated.
+            The simulated [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][] to be evaluated.
 
         Returns
         -------

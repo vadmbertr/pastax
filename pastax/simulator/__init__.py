@@ -1,6 +1,6 @@
 """
-This module provides base and example [`pastax.Simulator`][] classes for [`pastax.Trajectory`][] 
-and [`pastax.TrajectoryEnsemble`][] simulation in JAX.
+This module provides base and example [`pastax.simulator.Simulator`][] classes for [`pastax.trajectory.Trajectory`][] 
+and [`pastax.trajectory.TrajectoryEnsemble`][] simulation in JAX.
 """
 
 

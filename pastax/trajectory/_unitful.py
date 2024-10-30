@@ -10,17 +10,17 @@ from ..utils.unit import compose_units, Unit
 
 def unit_converter(x: Unit | Dict[Unit, int]) -> Dict[Unit, int]:
     """
-    Converts a unit to a dictionary of units with their exponents if needed.
+    Converts a [`pastax.utils.Unit`][] to a dictionary with [`pastax.utils.Unit`][] as keys and their exponents as values.
 
     Parameters
     ----------
     x : Unit or Dict[Unit, int]
-        A unit or a dictionary of units with their exponents.
+        A [`pastax.utils.Unit`][] or a dictionary with [`pastax.utils.Unit`][] as keys and their exponents as values.
 
     Returns
     -------
     Dict[Unit, int]
-        A dictionary of units with their exponents.
+        A dictionary with [`pastax.utils.Unit`][] as keys and their exponents as values.
     """
     if isinstance(x, Unit):
         return {x: 1}
@@ -30,19 +30,19 @@ def unit_converter(x: Unit | Dict[Unit, int]) -> Dict[Unit, int]:
 
 class Unitful(eqx.Module):
     """
-    Class representing a quantity with a unit.
+    Class representing a quantity and its associated dictionary of [`pastax.utils.Unit`][].
 
     Attributes
     ----------
     _value : Float[Array, "quantity"]
         The value of the quantity.
     _unit : Dict[Unit, int | float], optional
-        The unit of the quantity (default is an empty Dict).
+        The dictionary of [`pastax.utils.Unit`][] of the quantity, defaults to an empty dictionary (i.e. no unit).
 
     Methods
     -------
     __init__(value, unit={}, name=None)
-        Initializes the Unitful with given value, type, and unit.
+        Initializes the `pastax.utils.Unitful` with given value, and unit.
     value
         Returns the value of the quantity.
     cumsum(axis=None)
@@ -55,13 +55,12 @@ class Unitful(eqx.Module):
         Computes the square root of the quantity.
     sum(axis=None)
         Computes the sum of the quantity along the specified axis.
-    __extract_from_other(other, additive_op)
-        Extract value and unit from other operand if it is a Unitful instance, 
-        and guess the class of the result of the operation type between self and other.
     __add__(other)
         Adds another quantity or array like to this quantity.
     __mul__(other)
         Multiplies this quantity by another quantity or array like.
+    __pow__(pow)
+        Raises this quantity to the power of pow.
     __truediv__(other)
         Divides this quantity by another quantity or array like.
     __sub__(other)
@@ -73,7 +72,7 @@ class Unitful(eqx.Module):
 
     def __init__ (self, value: ArrayLike = jnp.nan, unit: Unit | Dict[Unit, int | float] = {}):
         """
-        Initializes the Unitful with given value and unit.
+        Initializes the `pastax.utils.Unitful` with given value and unit.
 
         Parameters
         ----------
@@ -190,15 +189,14 @@ class Unitful(eqx.Module):
         additive_op: bool
     ) -> tuple[ArrayLike, str | None, Type]:
         """
-        Extract value and unit from other operand if it is a Unitful instance, 
-        and guess the class of the result of the operation type between self and other.
+        Extract value and unit from other operand if it is a `pastax.utils.Unitful` instance.
 
         Parameters
         ----------
         other : Unitful or ArrayLike
             The other operand to extract value and unit from if it is a Unitful.
         additive : bool
-            Type of operation perfomed with self and other.
+            Type of operation performed with self and other.
 
         Returns
         -------
@@ -241,7 +239,7 @@ class Unitful(eqx.Module):
 
         Notes
         -----
-        If the other operand is a quantity, the unit must match.
+        If the other operand is a `pastax.utils.Unitful`, the unit must match.
         """
         other_value, _ = self.__extract_from_other(other, additive_op=True)
         return Unitful(self.value + other_value, self.unit)
@@ -309,11 +307,11 @@ class Unitful(eqx.Module):
         Returns
         -------
         Unitful
-            The substraction of the two operands.
+            The subtraction of the two operands.
 
         Notes
         -----
-        If the other operand is a quantity, the units must match.
+        If the other operand is a `pastax.utils.Unitful`, the units must match.
         """
         other_value, _ = self.__extract_from_other(other, additive_op=True)
         return Unitful(self.value - other_value, self.unit)

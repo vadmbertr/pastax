@@ -21,7 +21,7 @@ class SmagorinskyRHS(eqx.Module):
     Methods
     -------
     _neighborhood(*variables, t, y, dataset)
-        Restricts the [`pastax.Dataset`][] to a neighborhood around the given location and time.
+        Restricts the [`pastax.grid.Dataset`][] to a neighborhood around the given location and time.
     _smagorinsky_coefficients(t, y, dataset)
         Computes the Smagorinsky coefficients.
     _drift_term(t, y, dataset, smag_ds)
@@ -41,7 +41,7 @@ class SmagorinskyRHS(eqx.Module):
     @staticmethod
     def _neighborhood(*variables: List[str], t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
         """
-        Restricts the [`pastax.Dataset`][] to a neighborhood around the given location and time.
+        Restricts the [`pastax.grid.Dataset`][] to a neighborhood around the given location and time.
 
         Parameters
         ----------
@@ -52,12 +52,12 @@ class SmagorinskyRHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         dataset : Dataset
-            The [`pastax.Dataset`][] containing the physical fields.
+            The [`pastax.grid.Dataset`][] containing the physical fields.
 
         Returns
         -------
         Dataset
-            The neighborhood [`pastax.Dataset`][].
+            The neighborhood [`pastax.grid.Dataset`][].
         """
         # restrict dataset to the neighborhood around X(t)
         neighborhood = dataset.neighborhood(
@@ -79,12 +79,12 @@ class SmagorinskyRHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         dataset : Dataset
-            The [`pastax.Dataset`][] containing the physical fields.
+            The [`pastax.grid.Dataset`][] containing the physical fields.
 
         Returns
         -------
         Dataset
-            The [`pastax.Dataset`][] containing the Smagorinsky coefficients.
+            The [`pastax.grid.Dataset`][] containing the Smagorinsky coefficients.
 
         Notes
         -----
@@ -132,9 +132,9 @@ class SmagorinskyRHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         dataset : Dataset
-            The [`pastax.Dataset`][] containing the physical fields.
+            The [`pastax.grid.Dataset`][] containing the physical fields.
         smag_ds : Dataset
-            The [`pastax.Dataset`][] containing the Smagorinsky coefficients for the given fields.
+            The [`pastax.grid.Dataset`][] containing the Smagorinsky coefficients for the given fields.
 
         Returns
         -------
@@ -181,7 +181,7 @@ class SmagorinskyRHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         smag_ds : Dataset
-            The [`pastax.Dataset`][] containing the Smagorinsky coefficients.
+            The [`pastax.grid.Dataset`][] containing the Smagorinsky coefficients.
 
         Returns
         -------
@@ -207,7 +207,7 @@ class SmagorinskyRHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude).
         args : Dataset
-            The [`pastax.Dataset`][] containing the velocity fields.
+            The [`pastax.grid.Dataset`][] containing the velocity fields.
 
         Returns
         -------

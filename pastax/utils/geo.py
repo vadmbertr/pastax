@@ -24,7 +24,7 @@ def distance_on_earth(latlon1: Float[Array, "... 2"], latlon2: Float[Array, "...
 
     Returns
     -------
-    State
+    ArrayLike
         The distance between the two (array of) points in meters.
     """
     lat1_rad = jnp.radians(latlon1[..., 0])
@@ -49,11 +49,11 @@ def longitude_in_180_180_degrees(longitude: ArrayLike) -> ArrayLike:
 
     Returns
     -------
-    Float[Scalar, ""]
+    ArrayLike
         The input longitudes adjusted to be within the range of -180 to 180 degrees.
 
     Notes
     -----
-    This function acts as the identy for longitudes that are already within the range of -180 to 180 degrees.
+    This function acts as the identity for longitudes that are already within the range of -180 to 180 degrees.
     """
     return (longitude + 180) % 360 - 180

@@ -33,7 +33,7 @@ def linear_ssc_rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array
     y : Float[Array, "2"]
         The current state (latitude and longitude in degrees).
     args : Dataset
-        The [`pastax.Dataset`][] containing the physical fields (only u and v here).
+        The [`pastax.grid.Dataset`][] containing the physical fields (only u and v here).
 
     Returns
     -------
@@ -110,7 +110,7 @@ class LinearRHS(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude in degrees).
         args : Dataset
-            The [`pastax.Dataset`][] containing the physical fields (only u and v here).
+            The [`pastax.grid.Dataset`][] containing the physical fields (only u and v here).
 
         Returns
         -------

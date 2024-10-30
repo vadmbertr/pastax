@@ -14,11 +14,11 @@ class Coordinates(eqx.Module):
     Attributes
     ----------
     time : Coordinate
-        The time [`pastax.Coordinate`][].
+        The time [`pastax.grid.Coordinate`][].
     latitude : Coordinate
-        The latitude [`pastax.Coordinate`][].
+        The latitude [`pastax.grid.Coordinate`][].
     longitude : Coordinate
-        The longitude [`pastax.Coordinate`][].
+        The longitude [`pastax.grid.Coordinate`][].
 
     Methods
     -------        
@@ -26,7 +26,7 @@ class Coordinates(eqx.Module):
         Returns the indices of the given time, latitude, and longitude arrays.
         
     from_arrays(time, latitude, longitude, is_spherical_mesh)
-        Creates a `pastax.Coordinates` object from arrays of time, latitude, and longitude.
+        Creates a `pastax.grid.Coordinates` object from arrays of time, latitude, and longitude.
     """
     time: Coordinate
     latitude: Coordinate
@@ -66,7 +66,7 @@ class Coordinates(eqx.Module):
         is_spherical_mesh: bool
     ) -> Coordinates:
         """
-        Create a `pastax.Coordinates` object from arrays of time, latitude, and longitude.
+        Create a `pastax.grid.Coordinates` object from arrays of time, latitude, and longitude.
 
         Parameters
         ----------
@@ -82,7 +82,7 @@ class Coordinates(eqx.Module):
         Returns
         -------
         Coordinates
-            A `pastax.Coordinates` object with time, latitude, and longitude.
+            A `pastax.grid.Coordinates` object with time, latitude, and longitude.
         """
         t = Coordinate.from_array(time, extrap=True)
         lat = Coordinate.from_array(latitude, extrap=True)

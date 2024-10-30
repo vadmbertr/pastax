@@ -1,5 +1,5 @@
 """
-This module provides classes for evaluating simulated [`pastax.Trajectory`][] and [`pastax.TrajectoryEnsemble`][].
+This module provides classes for evaluating simulated [`pastax.trajectory.Trajectory`][] and [`pastax.trajectory.TrajectoryEnsemble`][].
 """
 
 

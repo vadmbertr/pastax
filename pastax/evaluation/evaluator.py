@@ -20,9 +20,9 @@ class PairEvaluator(Evaluator):
         Parameters
         ----------
         reference_trajectory : Trajectory
-            The reference [`pastax.Trajectory`][] to compare against.
+            The reference [`pastax.trajectory.Trajectory`][] to compare against.
         simulated_trajectory : Trajectory
-            The simulated [`pastax.Trajectory`][] to be evaluated.
+            The simulated [`pastax.trajectory.Trajectory`][] to be evaluated.
         
         Returns
         -------
@@ -54,9 +54,9 @@ class EnsembleEvaluator(Evaluator):
         Parameters
         ----------
         reference_trajectory : Trajectory
-            The reference [`pastax.Trajectory`][] to compare against.
+            The reference [`pastax.trajectory.Trajectory`][] to compare against.
         simulated_trajectory : TrajectoryEnsemble
-            The simulated [`pastax.TrajectoryEnsemble`][] to be evaluated.
+            The simulated [`pastax.trajectory.TrajectoryEnsemble`][] to be evaluated.
         
         Returns
         -------

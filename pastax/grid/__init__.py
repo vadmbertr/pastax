@@ -1,5 +1,5 @@
 """
-This module provides classes and functions for handling coordinates, grids, and [`pastax.Dataset`][] in JAX.
+This module provides classes and functions for handling coordinates, grids, and [`pastax.grid.Dataset`][] in JAX.
 """
 
 

@@ -306,6 +306,6 @@ class Evaluation(Set):
         Returns
         -------
         Timeseries | TimeseriesEnsemble
-            The metric [`pastax.Timeseries`][] or [`pastax.TimeseriesEnsemble`][] corresponding to the key.
+            The metric [`pastax.trajectory.Timeseries`][] or [`pastax.trajectory.TimeseriesEnsemble`][] corresponding to the key.
         """
         return self._members[key]

@@ -11,7 +11,7 @@ from ..utils.unit import UNIT
 
 class Simulator(eqx.Module):
     """
-    Base class for defining differentiable [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] simulators.
+    Base class for defining differentiable [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][] simulators.
 
     Attributes
     ----------
@@ -23,14 +23,14 @@ class Simulator(eqx.Module):
     get_domain(x0, t0, ts)
         Computes the minimum and maximum time and location bounds of the simulation space-time domain.
     __call__(args, x0, ts, n_samples=None, key=None)
-        Simulates a [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] 
-        based on the initial [`pastax.Location`][] and time steps (including t0).
+        Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][] 
+        based on the initial [`pastax.trajectory.Location`][] and time steps (including t0).
     """
 
     id: str
 
     @staticmethod
-    def get_domain(
+    def get_domain(  # TODO: to be removed
         x0: Location,
         ts: Float[Array, "time"]
     ) -> tuple[Float[Array, ""], Float[Array, ""], Location, Location]:
@@ -40,7 +40,7 @@ class Simulator(eqx.Module):
         Parameters
         ----------
         x0 : Location
-            The initial [`pastax.Location`][].
+            The initial [`pastax.trajectory.Location`][].
         ts : Float[Array, "time"]
             The time steps for the simulation.
 
@@ -76,8 +76,8 @@ class Simulator(eqx.Module):
         key: jrd.PRNGKey = None
     ) -> Trajectory | TrajectoryEnsemble:
         """
-        Simulates a [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][] 
-        based on the initial [`pastax.Location`][] and time steps (including t0).
+        Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][] 
+        based on the initial [`pastax.trajectory.Location`][] and time steps (including t0).
 
         This method must be implemented by its subclasses.
 
@@ -85,9 +85,9 @@ class Simulator(eqx.Module):
         ----------
         args : PyTree
             Any PyTree of argument(s) used by the simulator.
-            Could be for example one or several `pastax.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
+            Could be for example one or several `pastax.grid.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
         x0 : Location
-            The initial [`pastax.Location`][].
+            The initial [`pastax.trajectory.Location`][].
         ts : Float[Array, "time"]
             The time steps for the simulation outputs (including t0).
         dt0 : Float[Scalar, ""], optional
@@ -95,14 +95,14 @@ class Simulator(eqx.Module):
         solver : Callable, optional
             The solver function to use for the simulation, defaults to None.
         n_samples : Int[Scalar, ""], optional
-            The number of samples to generate, default to None, meaning a single [`pastax.Trajectory`][].
+            The number of samples to generate, default to None, meaning a single [`pastax.trajectory.Trajectory`][].
         key : jrd.PRNGKey, optional
             The random key for sampling, defaults to None.
 
         Returns
         -------
         Trajectory | TrajectoryEnsemble
-            The simulated [`pastax.Trajectory`][] or [`pastax.TrajectoryEnsemble`][], 
+            The simulated [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][], 
             including the initial conditions (x0, t0).
 
         Raises
