@@ -58,6 +58,7 @@ plugins:
         - "_overrides"
   - include-markdown
   - mknotebooks:  # Jupyter notebooks
+      write_markdown: true
   - mkdocstrings:
       default_handler: python
       handlers:
