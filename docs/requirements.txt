@@ -6,6 +6,7 @@ mkdocs_include_exclude_files
 mkdocstrings[python]
 mknotebooks @ git+https://github.com/vadmbertr/mknotebooks@master
 nbconvert
+optax
 pygments
 pymdown-extensions
 pytkdocs_tweaks

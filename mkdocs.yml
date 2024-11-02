@@ -86,5 +86,5 @@ plugins:
 
 nav:
   - "index.md"
-  - "demo.ipynb"
+  - Usage: "demo.ipynb"
   - "api.md"
