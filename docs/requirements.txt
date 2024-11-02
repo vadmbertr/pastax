@@ -4,7 +4,7 @@ mkdocs-include-markdown-plugin
 mkdocs-pymdownx-material-extras
 mkdocs_include_exclude_files
 mkdocstrings[python]
-mknotebooks
+mknotebooks @ git+https://github.com/vadmbertr/mknotebooks@master
 nbconvert
 pygments
 pymdown-extensions

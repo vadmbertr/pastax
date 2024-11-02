@@ -5,3 +5,13 @@
 .md-nav__title {
     display: none !important;
 }
+
+.md-typeset details.note.code-block {
+    border-color: #3333aaab;
+}
+.md-typeset .note.code-block > summary::before {
+    background-color: #3333aaab;
+}
+.md-typeset .note.code-block > summary {
+    background-color: #33a1;
+}

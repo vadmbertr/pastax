@@ -57,8 +57,7 @@ plugins:
       exclude:
         - "_overrides"
   - include-markdown
-  - mknotebooks:  # Jupyter notebooks
-      write_markdown: true
+  - mknotebooks  # Jupyter notebooks
   - mkdocstrings:
       default_handler: python
       handlers:
