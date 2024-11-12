@@ -191,7 +191,14 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         """
         return self.map(lambda trajectory: other.mae(trajectory))
 
-    def plot(self, ax: plt.Axes, label: str | list[str], color: str, ti: int = None) -> plt.Axes:
+    def plot(
+        self,
+        ax: plt.Axes,
+        label: str | list[str],
+        color: str | list[str | float | int],
+        ti: int = None,
+        **kwargs
+    ) -> plt.Axes:
         """
         Plots the trajectories on a given matplotlib axis.
 
@@ -199,12 +206,14 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         ----------
         ax : plt.Axes
             The matplotlib axis to plot on.
-        label : str
-            The label for the plot.
-        color : str
-            The color for the plot.
+        label : str | list[str]
+            The label(s) for the plot.
+        color : str | list[str | float | int]
+            The color(s) for the plot.
         ti : int, optional
             The time index to plot up to (default is None).
+        kwargs: dict, optional
+            Additional arguments passed to `LineCollection`.
 
         Returns
         -------
@@ -214,18 +223,26 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         if ti is None:
             ti = self.length
 
-        alpha_factor = jnp.clip(1 / ((self.size / 10) ** 0.5), .05, 1).item()
-        alpha = jnp.geomspace(.25, 1, ti-1) * alpha_factor
+        alpha_factor = np.clip(1 / ((self.size / 10) ** 0.5), .05, 1).item()
+        alpha = np.geomspace(.25, 1, ti-1) * alpha_factor
 
         locations = self.locations.value.swapaxes(0, 1)[:ti, :, None, ::-1]
-        segments = jnp.concat([locations[:-1], locations[1:]], axis=2).reshape(-1, 2, 2)
-        alpha = jnp.repeat(alpha, self.size)
+        segments = np.concat([locations[:-1], locations[1:]], axis=2).reshape(-1, 2, 2)
+        alpha = np.repeat(alpha, self.size)
 
-        lc = LineCollection(segments, color=color, alpha=alpha)
+        if not isinstance(label, str):
+            colors = np.tile(color, ti-1)
+        else:
+            colors = color
+        lc = LineCollection(segments, color=colors, alpha=alpha, **kwargs)
         ax.add_collection(lc)
 
         # trick to display label with alpha=1
-        ax.plot(self.longitudes.value[0, -1], self.latitudes.value[0, -1], label=label, color=color)
+        if not isinstance(label, str):
+            for i in range(len(label)):
+                ax.plot(self.longitudes.value[i, -1], self.latitudes.value[i, -1], label=label[i], color=color[i])
+        else:
+            ax.plot(self.longitudes.value[0, -1], self.latitudes.value[0, -1], label=label, color=color)
 
         return ax
 

@@ -187,7 +187,7 @@ class Trajectory(Timeseries):
 
         return Timeseries.from_array(mae.value, self.times.value, mae.unit, name="MAE")
 
-    def plot(self, ax: plt.Axes, label: str, color: str, ti: int = None) -> plt.Axes:
+    def plot(self, ax: plt.Axes, label: str, color: str, ti: int = None, **kwargs) -> plt.Axes:
         """
         Plots the trajectory on a given matplotlib axis.
 
@@ -201,6 +201,8 @@ class Trajectory(Timeseries):
             The color for the plot.
         ti : int, optional
             The time index to plot up to (default is None).
+        kwargs: dict, optional
+            Additional arguments passed to `LineCollection`.
 
         Returns
         -------
@@ -215,7 +217,7 @@ class Trajectory(Timeseries):
         locations = self.locations.value[:ti, None, ::-1]
         segments = jnp.concat([locations[:-1], locations[1:]], axis=1)
 
-        lc = LineCollection(segments, color=color, alpha=alpha)
+        lc = LineCollection(segments, color=color, alpha=alpha, **kwargs)
         ax.add_collection(lc)
 
         # trick to display label with alpha=1
