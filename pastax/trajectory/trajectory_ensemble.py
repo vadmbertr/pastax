@@ -191,7 +191,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         """
         return self.map(lambda trajectory: other.mae(trajectory))
 
-    def plot(self, ax: plt.Axes, label: str, color: str, ti: int = None) -> plt.Axes:
+    def plot(self, ax: plt.Axes, label: str | list[str], color: str, ti: int = None) -> plt.Axes:
         """
         Plots the trajectories on a given matplotlib axis.
 
@@ -215,7 +215,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
             ti = self.length
 
         alpha_factor = jnp.clip(1 / ((self.size / 10) ** 0.5), .05, 1).item()
-        alpha = jnp.geomspace(.25, 1, ti) * alpha_factor
+        alpha = jnp.geomspace(.25, 1, ti-1) * alpha_factor
 
         locations = self.locations.value.swapaxes(0, 1)[:ti, :, None, ::-1]
         segments = jnp.concat([locations[:-1], locations[1:]], axis=2).reshape(-1, 2, 2)
@@ -224,10 +224,8 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         lc = LineCollection(segments, color=color, alpha=alpha)
         ax.add_collection(lc)
 
-        lc = LineCollection(segments[-self.size:, ...], color=color, alpha=alpha_factor)
-        ax.add_collection(lc)
-
-        ax.plot(self.longitudes.value[0, -1], self.latitudes.value[0, -1], label=label, color=color)  # for label display
+        # trick to display label with alpha=1
+        ax.plot(self.longitudes.value[0, -1], self.latitudes.value[0, -1], label=label, color=color)
 
         return ax
 
