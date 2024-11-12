@@ -17,7 +17,7 @@ pip install pastax
 ## Usage
 
 Documentation is under construction.
-Meanwhile, see the [demonstration notebook](docs/demo.ipynb) and the [(messy) API documentation](https://pastax.readthedocs.io/en/latest/api/).
+Meanwhile, see the [demonstration notebook](docs/demo.ipynb) and the (messy) [API documentation](https://pastax.readthedocs.io/en/latest/api/).
 
 ## Work in progress
 
