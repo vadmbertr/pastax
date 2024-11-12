@@ -1,5 +1,3 @@
-from typing import List
-
 import equinox as eqx
 
 from ..trajectory import TrajectoryEnsemble, Trajectory
@@ -13,7 +11,7 @@ class Evaluator(eqx.Module):  # TODO: should it be an eqx Module?
     
     Attributes
     -----------
-    metrics : List[Metric]
+    metrics : list[Metric]
         A list of [`pastax.evaluation.Metric`][]s used for evaluation. 
         The default [`pastax.evaluation.Metric`][]s are [`pastax.evaluation.SeparationDistance`][], [`pastax.evaluation.LiuIndex`][], [`pastax.evaluation.Mae`][], 
         and [`pastax.evaluation.Rmse`][].
@@ -25,7 +23,7 @@ class Evaluator(eqx.Module):  # TODO: should it be an eqx Module?
         against the `reference_trajectory` using `self.metrics`.
     """
 
-    metrics: List[Metric] = eqx.field(default_factory=lambda: [SeparationDistance(), LiuIndex(), Mae(), Rmse()])
+    metrics: list[Metric] = eqx.field(default_factory=lambda: [SeparationDistance(), LiuIndex(), Mae(), Rmse()])
 
     @eqx.filter_jit
     def __call__(

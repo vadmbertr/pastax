@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import List
 
 import equinox as eqx
 import interpax as ipx
@@ -39,13 +38,13 @@ class SmagorinskyRHS(eqx.Module):
     cs: Float[Scalar, ""] = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float), default_factory=lambda: 0.1)
 
     @staticmethod
-    def _neighborhood(*variables: List[str], t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
+    def _neighborhood(*variables: list[str], t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
         """
         Restricts the [`pastax.grid.Dataset`][] to a neighborhood around the given location and time.
 
         Parameters
         ----------
-        *variables : List[str]
+        *variables : list[str]
             The variables to retain in the neighborhood.
         t : Float[Scalar, ""]
             The current time.
