@@ -1,6 +1,10 @@
 # pastax
 
-**P**arameterizable **A**uto-differentiable **S**imulators of ocean **T**rajectories in j**AX**.
+<img src="_static/pastax-md.png" alt="pastax logo" width="33%" style="display: block; margin: 0 auto"/>
+
+<p style="text-align:center;">
+    <b>P</b>arameterizable <b>A</b>uto-differentiable <b>S</b>imulators of ocean <b>T</b>rajectories in j<b>AX</b>.
+</p>
 
 ## Installation
 
@@ -13,7 +17,21 @@ pip install pastax
 ## Usage
 
 Documentation is under construction.
-Meanwhile, see the [minimal demonstration notebook](docs/demo.ipynb) and the [full API documentation](https://pastax.readthedocs.io/en/latest/api/).
+Meanwhile, see the [demonstration notebook](docs/demo.ipynb) and the [(messy) API documentation](https://pastax.readthedocs.io/en/latest/api/).
+
+## Work in progress
+
+This package in under active developement and should still be considered as work in progress.
+
+In particular, the following changes are considered:
+
+- `pastax.grid`
+  - add support for C-grids,
+- `pastax.trajectory`
+  - use `unxt.Quantity` in place of `Unitful` (see [unxt](https://unxt.readthedocs.io/en/latest/)),
+  - remove `__add__` and like methods in favour of registered functions (see [quax](https://docs.kidger.site/quax/)),
+- `pastax.simulator`
+  - improve how the product operation is performed between the vector field and the control (support for `Location`, `Time` or `State` objects).
 
 ## Contributing
 

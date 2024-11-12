@@ -19,8 +19,8 @@ theme:
         name: Switch to light mode
   icon:
     repo: fontawesome/brands/github # GitHub logo (top right)
-  # logo: "_static/logo.png"  # package logo (top left)
-  # favicon: "_static/favicon.png"  # package favicon
+  logo: "_static/pastax-sm.png"  # package logo (top left)
+  favicon: "_static/pastax-sm.png"  # package favicon
 
 site_name: pastax
 site_description: The documentation for the pastax package.
