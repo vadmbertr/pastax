@@ -229,7 +229,7 @@ class SmagorinskyRHS(eqx.Module):
         return dlatlon
 
 
-class SmagorinskyDiffusion(StochasticDiffrax):
+class SmagorinskySimulator(StochasticDiffrax):
     """
     Stochastic simulator using Smagorinsky diffusion.
  
@@ -243,7 +243,7 @@ class SmagorinskyDiffusion(StochasticDiffrax):
     Methods
     -------
     from_param(cs)
-        Creates a `pastax.SmagorinskyDiffusion` simulator with the given Smagorinsky constant.
+        Creates a `pastax.SmagorinskySimulator` simulator with the given Smagorinsky constant.
 
     Notes
     -----
@@ -254,9 +254,9 @@ class SmagorinskyDiffusion(StochasticDiffrax):
     rhs: SmagorinskyRHS = SmagorinskyRHS()
 
     @classmethod
-    def from_param(cls, cs: Float[Array, ""] = None, id: str = None) -> SmagorinskyDiffusion:
+    def from_param(cls, cs: Float[Array, ""] = None, id: str = None) -> SmagorinskySimulator:
         """
-        Creates a `pastax.SmagorinskyDiffusion` simulator with the given Smagorinsky constant.
+        Creates a `pastax.SmagorinskySimulator` simulator with the given Smagorinsky constant.
 
         Parameters
         ----------
@@ -267,8 +267,8 @@ class SmagorinskyDiffusion(StochasticDiffrax):
 
         Returns
         -------
-        SmagorinskyDiffusion
-            The `pastax.SmagorinskyDiffusion` simulator.
+        SmagorinskySimulator
+            The `pastax.SmagorinskySimulator` simulator.
 
         Notes
         -----
