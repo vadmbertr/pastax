@@ -49,14 +49,14 @@ def linear_ssc_rhs(t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array
     return dlatlon
 
 
-class IdentitySSC(DeterministicDiffrax):
+class IdentitySimulator(DeterministicDiffrax):
     """
     Deterministic simulator considering only Sea Surface Currents.
 
     Attributes
     ----------
     id : str
-        The identifier for the IdentitySSC model, defaults to "identity_ssc".
+        The identifier for the IdentitySimulator model, defaults to "identity_ssc".
         
     Methods
     -------
@@ -128,7 +128,7 @@ class LinearRHS(eqx.Module):
         return dlatlon
 
 
-class LinearSSC(DeterministicDiffrax):
+class LinearSimulator(DeterministicDiffrax):
     """
     Trainable (intercept and slope) linear deterministic simulator considering only Sea Surface Currents.
 
@@ -137,12 +137,12 @@ class LinearSSC(DeterministicDiffrax):
     rhs : _RHS
         Computes the drift term of the solved Ordinary Differential Equation.
     id : str
-        The identifier for the `pastax.LinearSSC` simulator, defaults to `"linear_ssc"`.
+        The identifier for the `pastax.LinearSimulator` simulator, defaults to `"linear_ssc"`.
 
     Methods
     -------
     from_param(intercept=None, slope=None, id=None)
-        Creates a `pastax.LinearSSC` simulator with the given intercept, slope, and id.
+        Creates a `pastax.LinearSimulator` simulator with the given intercept, slope, and id.
 
     Notes
     -----
@@ -158,9 +158,9 @@ class LinearSSC(DeterministicDiffrax):
         intercept: Float[Array, ""] | Float[Array, "2"] = None, 
         slope: Float[Array, ""] | Float[Array, "2"] = None, 
         id: str = None
-    ) -> LinearSSC:
+    ) -> LinearSimulator:
         """
-        Creates a `pastax.LinearSSC` simulator with the given intercept and slope parameters for the linear relation.
+        Creates a `pastax.LinearSimulator` simulator with the given intercept and slope parameters for the linear relation.
 
         Parameters
         ----------
@@ -173,8 +173,8 @@ class LinearSSC(DeterministicDiffrax):
 
         Returns
         -------
-        LinearSSC
-            The `pastax.LinearSSC` simulator.
+        LinearSimulator
+            The `pastax.LinearSimulator` simulator.
 
         Notes
         -----
