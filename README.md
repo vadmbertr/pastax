@@ -56,7 +56,7 @@ Here is a (probably) non-comprehensive (and hopefuly correct, please reach-out i
 - you want to calibrate your simulator ***on-line*** (i.e. by differenting through your simulator): go with `pastax`,
 - you want to run on both CPUs and GPUs (or TPUs): go with `pastax`.
 
-Worth mentionning that for now I did not compare runtime performances (especially for typical use-cases with `Parcels` or `Drifters.jl` of advecting a very large amount of particules with the same velocity field).
+Worth mentionning that I did not compare runtime performances (especially for typical use-cases with `Parcels` or `Drifters.jl` of advecting a very large amount of particules with the same velocity field).
 
 It might be worth mentionning also [py-eddy-tracker](https://github.com/AntSimi/py-eddy-tracker) altough it targets more specifically eddy related routines.
 
