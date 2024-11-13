@@ -40,7 +40,7 @@ And I should stress that the package lacks (unit-)tests for now.
 
 ## Related projects
 
-Several other open-source projects already exist with close objectives.
+Several other open-source projects already exist with similar objectives.
 The two closest ones are probably [(Ocean)Parcels](https://github.com/OceanParcels/parcels) and [Drifters.jl](https://github.com/JuliaClimate/Drifters.jl).
 
 Here is a (probably) non-comprehensive (and hopefuly correct, please reach-out if not) use-cases comparison between those:
