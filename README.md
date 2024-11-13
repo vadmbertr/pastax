@@ -58,7 +58,7 @@ Here is a (probably) non-comprehensive (and hopefuly correct, please reach-out i
 
 Worth mentionning that I did not compare runtime performances (especially for typical use-cases with `Parcels` or `Drifters.jl` of advecting a very large amount of particules with the same velocity field).
 
-It might be worth mentionning also [py-eddy-tracker](https://github.com/AntSimi/py-eddy-tracker) altough it targets more specifically eddy related routines.
+I could also cite [py-eddy-tracker](https://github.com/AntSimi/py-eddy-tracker), altough it targets more specifically eddy related routines.
 
 ## Contributing
 
