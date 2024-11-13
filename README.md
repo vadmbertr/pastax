@@ -53,7 +53,10 @@ Here is a (probably) non-comprehensive (and hopefuly correct, please reach-out i
 - you want a better control of the right-hand-side term of your Differential Equation: go with `pastax` (probably the most flexible) or `Parcels`,
 - you solve Stochastic Differential Equations: go with `pastax` (probably the most flexible) or `Parcels`,
 - you need a **wide** range of solvers: go with `pastax` or `Drifters.jl` (if you solve ODE),
-- you want to calibrate your simulator ***on-line*** (i.e. by differenting through your simulator): go with `pastax`!
+- you want to calibrate your simulator ***on-line*** (i.e. by differenting through your simulator): go with `pastax`,
+- you want to run on both CPUs and GPUs (or TPUs): go with `pastax`.
+
+Worth mentionning that for now I did not compare runtime performances (especially for typical use-cases with `Parcels` or `Drifters.jl` of advecting a very large amount of particules with the same velocity field).
 
 It might be worth mentionning also [py-eddy-tracker](https://github.com/AntSimi/py-eddy-tracker) altough it targets more specifically eddy related routines.
 
