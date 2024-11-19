@@ -51,7 +51,6 @@ markdown_extensions:
       toc_depth: 4
 
 plugins:
-  - search  # default search plugin; needs manually re-enabling when using any other plugins
   - autorefs  # cross-links to headings
   - include_exclude_files:
       exclude:
@@ -67,14 +66,15 @@ plugins:
             - pytkdocs_tweaks.main()
             - import jaxtyping
             - jaxtyping.set_array_name_format("array")
+          import:
+            - https://docs.kidger.site/diffrax/objects.inv
+            - https://docs.kidger.site/equinox/objects.inv
           options:
             allow_inspection: true
             docstring_style: numpy
             heading_level: 3
             inherited_members: false  # allow looking up inherited methods
             members_order: source  # order methods according to their order of definition in the source code
-            filters:
-            - "!^_"
             show_bases: true
             show_if_no_docstring: false
             show_inheritance_diagram: true
@@ -83,6 +83,7 @@ plugins:
             show_signature_annotations: true
             show_signature_return_annotation: true
             show_signature_parameter_types: true
+  - search  # default search plugin; needs manually re-enabling when using any other plugins
 
 nav:
   - "index.md"

@@ -22,47 +22,47 @@ def _in_axes_func(leaf):
 
 class TimeseriesEnsemble(Unitful):
     """
-    Class representing `pastax.trajectory.TimeseriesEnsemble`.
+    Class representing [`pastax.trajectory.TimeseriesEnsemble`].
 
     Attributes
     ----------
     members : Timeseries
-        The members of the `pastax.trajectory.TimeseriesEnsemble`.
+        The members of the [`pastax.trajectory.TimeseriesEnsemble`].
     _members_type : ClassVar
-        The type of the members in the `pastax.trajectory.TimeseriesEnsemble`.
+        The type of the members in the [`pastax.trajectory.TimeseriesEnsemble`].
     size : int
-        The number of members in the `pastax.trajectory.TimeseriesEnsemble`.
+        The number of members in the [`pastax.trajectory.TimeseriesEnsemble`].
 
     Methods
     -------
     __init__(members)
-        Initializes the `pastax.trajectory.TimeseriesEnsemble` with [`pastax.trajectory.Timeseries`][] members.
+        Initializes the [`pastax.trajectory.TimeseriesEnsemble`] with [`pastax.trajectory.Timeseries`][] members.
     value
-        Returns the value of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the value of the [`pastax.trajectory.TimeseriesEnsemble`].
     states
-        Returns the [`pastax.trajectory.State`][] of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the [`pastax.trajectory.State`][] of the [`pastax.trajectory.TimeseriesEnsemble`].
     times
-        Returns the [`pastax.trajectory.Time`][] points of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the [`pastax.trajectory.Time`][] points of the [`pastax.trajectory.TimeseriesEnsemble`].
     unit
-        Returns the unit of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the unit of the [`pastax.trajectory.TimeseriesEnsemble`].
     name
-        Returns the name of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the name of the [`pastax.trajectory.TimeseriesEnsemble`].
     length
-        Returns the length of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the length of the [`pastax.trajectory.TimeseriesEnsemble`].
     attach_name(name)
-        Attaches a name to the `pastax.trajectory.TimeseriesEnsemble`.
+        Attaches a name to the [`pastax.trajectory.TimeseriesEnsemble`].
     crps(other, distance_func=Timeseries.euclidean_distance)
-        Computes the Continuous Ranked Probability Score (CRPS) for the `pastax.trajectory.TimeseriesEnsemble`.
+        Computes the Continuous Ranked Probability Score (CRPS) for the [`pastax.trajectory.TimeseriesEnsemble`].
     ensemble_dispersion(distance_func=Timeseries.euclidean_distance)
-        Computes the `pastax.trajectory.TimeseriesEnsemble` dispersion.
+        Computes the [`pastax.trajectory.TimeseriesEnsemble`] dispersion.
     map(func)
-        Applies a function to each [`pastax.trajectory.Timeseries`][] of the `pastax.trajectory.TimeseriesEnsemble`.
+        Applies a function to each [`pastax.trajectory.Timeseries`][] of the [`pastax.trajectory.TimeseriesEnsemble`].
     from_array(values, times, unit={}, name=None, **kwargs)
-        Creates a `pastax.trajectory.TimeseriesEnsemble` from an array of values and time points.
+        Creates a [`pastax.trajectory.TimeseriesEnsemble`] from an array of values and time points.
     to_dataarray()
-        Converts the `pastax.trajectory.TimeseriesEnsemble` [`pastax.trajectory.State`][] to a `xarray.DataArray`.
+        Converts the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
     to_dataset()
-        Converts the `pastax.trajectory.TimeseriesEnsemble` to a `xarray.Dataset`.
+        Converts the [`pastax.trajectory.TimeseriesEnsemble`] to a `xarray.Dataset`.
     """
 
     members: Timeseries
@@ -74,12 +74,12 @@ class TimeseriesEnsemble(Unitful):
 
     def __init__(self, members: Timeseries):
         """
-        Initializes the `pastax.trajectory.TimeseriesEnsemble` with [`pastax.trajectory.Timeseries`][] members.
+        Initializes the [`pastax.trajectory.TimeseriesEnsemble`] with [`pastax.trajectory.Timeseries`][] members.
 
         Parameters
         ----------
         members : Timeseries
-            The members of the `pastax.trajectory.TimeseriesEnsemble`.
+            The members of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         super().__init__()
         self.members = members
@@ -88,88 +88,88 @@ class TimeseriesEnsemble(Unitful):
     @property
     def value(self) -> Float[Array, "member time state"]:
         """
-        Returns the value of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the value of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
         Float[Array, "... member time state"]
-            The value of the `pastax.trajectory.TimeseriesEnsemble`.
+            The value of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         return self.members.value
 
     @property
     def states(self) -> State:
         """
-        Returns the states of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the states of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
         State
-            The states of the `pastax.trajectory.TimeseriesEnsemble`.
+            The states of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         return self.members.states
 
     @property
     def times(self) -> Time:
         """
-        Returns the time points of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the time points of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
         Time
-            The time points of the `pastax.trajectory.TimeseriesEnsemble`.
+            The time points of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         return self.members.times
 
     @property
     def unit(self) -> Dict[Unit, int | float]:
         """
-        Returns the unit of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the unit of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
         Dict[Unit, int | float]
-            The unit of the `pastax.trajectory.TimeseriesEnsemble`.
+            The unit of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         return self.members.unit
 
     @property
     def name(self) -> str:
         """
-        Returns the name of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the name of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
         str
-            The name of the `pastax.trajectory.TimeseriesEnsemble`.
+            The name of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         return self.members.name
 
     @property
     def length(self) -> int:
         """
-        Returns the length of the `pastax.trajectory.TimeseriesEnsemble`.
+        Returns the length of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
         int
-            The length of the `pastax.trajectory.TimeseriesEnsemble`.
+            The length of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         return self.members.length
 
     def attach_name(self, name: str) -> TimeseriesEnsemble:
         """
-        Attaches a name to the `pastax.trajectory.TimeseriesEnsemble`.
+        Attaches a name to the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Parameters
         ----------
         name : str
-            The name to attach to the `pastax.trajectory.TimeseriesEnsemble`.
+            The name to attach to the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
         TimeseriesEnsemble
-            A new `pastax.trajectory.TimeseriesEnsemble` with the attached name.
+            A new [`pastax.trajectory.TimeseriesEnsemble`] with the attached name.
         """
         return self.__class__(self.states.value, self.times.value, unit=self.unit, name=name)
     
@@ -179,7 +179,7 @@ class TimeseriesEnsemble(Unitful):
         distance_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike] = Timeseries.euclidean_distance
     ) -> Timeseries:
         """
-        Computes the Continuous Ranked Probability Score (CRPS) for the `pastax.trajectory.TimeseriesEnsemble`.
+        Computes the Continuous Ranked Probability Score (CRPS) for the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Parameters
         ----------
@@ -191,7 +191,7 @@ class TimeseriesEnsemble(Unitful):
         Returns
         -------
         Timeseries
-            The CRPS for the `pastax.trajectory.TimeseriesEnsemble`.
+            The CRPS for the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         biases = self.map(lambda member: distance_func(other, member))
         bias = biases.mean(axis=0)
@@ -209,7 +209,7 @@ class TimeseriesEnsemble(Unitful):
         distance_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike] = Timeseries.euclidean_distance
     ) -> Timeseries:
         """
-        Computes the `pastax.trajectory.TimeseriesEnsemble` dispersion.
+        Computes the [`pastax.trajectory.TimeseriesEnsemble`] dispersion.
 
         Parameters
         ----------
@@ -219,7 +219,7 @@ class TimeseriesEnsemble(Unitful):
         Returns
         -------
         Timeseries
-            The `pastax.trajectory.TimeseriesEnsemble` dispersion.
+            The [`pastax.trajectory.TimeseriesEnsemble`] dispersion.
         """
         distances = self.map(lambda member1: self.map(lambda member2: distance_func(member1, member2)))
         # divide by 2 as pairs are duplicated (JAX efficient computation way)
@@ -231,7 +231,7 @@ class TimeseriesEnsemble(Unitful):
 
     def map(self, func: Callable[[Timeseries], Unitful | ArrayLike]) -> TimeseriesEnsemble:
         """
-        Applies a function to each [`pastax.trajectory.Timeseries`][] of the `pastax.trajectory.TimeseriesEnsemble`.
+        Applies a function to each [`pastax.trajectory.Timeseries`][] of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Parameters
         ----------
@@ -262,7 +262,7 @@ class TimeseriesEnsemble(Unitful):
         **kwargs: Dict
     ) -> TimeseriesEnsemble:
         """
-        Creates a `pastax.trajectory.TimeseriesEnsemble` from an array of values and time points.
+        Creates a [`pastax.trajectory.TimeseriesEnsemble`] from an array of values and time points.
 
         Parameters
         ----------
@@ -280,7 +280,7 @@ class TimeseriesEnsemble(Unitful):
         Returns
         -------
         TimeseriesEnsemble
-            The `pastax.trajectory.TimeseriesEnsemble` created from the array of values and time points.
+            The [`pastax.trajectory.TimeseriesEnsemble`] created from the array of values and time points.
         """
         members = eqx.filter_vmap(
             lambda s: cls._members_type.from_array(s, times, unit=unit, name=name, **kwargs),
@@ -291,12 +291,12 @@ class TimeseriesEnsemble(Unitful):
 
     def to_dataarray(self) -> xr.DataArray:
         """
-        Converts the `pastax.trajectory.TimeseriesEnsemble` [`pastax.trajectory.State`][] to a `xarray.DataArray`.
+        Converts the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
 
         Returns
         -------
         xr.DataArray
-            An `xarray.DataArray` containing the `pastax.trajectory.TimeseriesEnsemble` [`pastax.trajectory.State`][].
+            An `xarray.DataArray` containing the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][].
         """
         da = xr.DataArray(
             data=self.states.value,
@@ -313,12 +313,12 @@ class TimeseriesEnsemble(Unitful):
 
     def to_dataset(self) -> xr.Dataset:
         """
-        Converts the `pastax.trajectory.TimeseriesEnsemble` [`pastax.trajectory.State`][] to a `xarray.DataArray`.
+        Converts the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
 
         Returns
         -------
         xr.Dataset
-            A `xarray.DataArray` containing the `pastax.trajectory.TimeseriesEnsemble` [`pastax.trajectory.State`][].
+            A `xarray.DataArray` containing the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][].
         """
         da = self.to_dataarray()
         ds = da.to_dataset()

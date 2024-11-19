@@ -27,7 +27,7 @@ class PairEvaluator(Evaluator):
         Returns
         -------
         Evaluation
-            The result of the [`pastax.Evaluation`][].
+            The result of the [`pastax.evaluation.Evaluation`][].
         """
         metrics = {}
         for metric in self.metrics:
@@ -55,13 +55,13 @@ class EnsembleEvaluator(Evaluator):
         ----------
         reference_trajectory : Trajectory
             The reference [`pastax.trajectory.Trajectory`][] to compare against.
-        simulated_trajectory : TrajectoryEnsemble
+        simulated_trajectories : TrajectoryEnsemble
             The simulated [`pastax.trajectory.TrajectoryEnsemble`][] to be evaluated.
         
         Returns
         -------
         Evaluation
-            The result of the [`pastax.Evaluation`][].
+            The result of the [`pastax.evaluation.Evaluation`][].
         """
         metrics = {}
         for metric in self.metrics:

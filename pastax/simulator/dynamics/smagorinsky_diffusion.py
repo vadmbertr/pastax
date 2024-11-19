@@ -7,15 +7,32 @@ from jaxtyping import Array, Float, Scalar
 
 from ...grid import Dataset, spatial_derivative
 from ...utils import meters_to_degrees
-from .._diffrax_simulator import StochasticDiffrax
 
 
-class SmagorinskyRHS(eqx.Module):
-    """
+class SmagorinskyDiffusion(eqx.Module):
+    r"""
+    Trainable Smagorinsky diffusion dynamics.
+
+    !!! example "Formulation"
+
+        This dynamics allows to formulate a displacement at time $t$ from the position $\mathbf{X}(t)$ as:
+
+        $$
+        d\mathbf{X}(t) = (\mathbf{u} + \nabla K)(t, \mathbf{X}(t)) dt + V(t, \mathbf{X}(t)) d\mathbf{W}(t)
+        $$
+
+        where $V = \sqrt{2 K}$ and $K$ is the Smagorinsky diffusion:
+        
+        $$
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        $$
+
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the rest of the expression represents the horizontal diffusion.
+
     Attributes
     ----------
     cs : Float[Scalar, ""], optional
-        The Smagorinsky constant, defaults to 0.1.
+        The Smagorinsky constant, defaults to `jnp.asarray(0.1)`.
 
     Methods
     -------
@@ -32,7 +49,7 @@ class SmagorinskyRHS(eqx.Module):
 
     Notes
     -----
-    As the class inherits from `eqx.Module`, its `cs` attribute can be treated as a trainable parameter.
+    As the class inherits from [`equinox.Module`][], its `cs` attribute can be treated as a trainable parameter.
     """
 
     cs: Float[Scalar, ""] = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float), default_factory=lambda: 0.1)
@@ -67,9 +84,16 @@ class SmagorinskyRHS(eqx.Module):
 
         return neighborhood
 
-    def _smagorinsky_coefficients(self, t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
-        """
-        Computes the Smagorinsky coefficients.
+    def _smagorinsky_diffusion(self, t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
+        r"""
+        Computes the Smagorinsky diffusion:
+
+        $$
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        $$
+
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, 
+        and the rest of the expression represents the horizontal diffusion.
 
         Parameters
         ----------
@@ -115,14 +139,15 @@ class SmagorinskyRHS(eqx.Module):
         return smag_ds
 
     @staticmethod
-    def _drift_term(
+    def _deterministic_dynamics(
         t: Float[Scalar, ""],
         y: Float[Array, "2"],
         dataset: Dataset,
         smag_ds: Dataset
     ) -> Float[Array, "2"]:
-        """
-        Computes the drift term of the Stochastic Differential Equation.
+        r"""
+        Computes the deterministic part of the dynamics (i.e. the Lagrangian velocity): 
+        $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$.
 
         Parameters
         ----------
@@ -138,7 +163,7 @@ class SmagorinskyRHS(eqx.Module):
         Returns
         -------
         Float[Array, "2"]
-            The drift term (change in latitude and longitude).
+            The deterministic part of the dynamics (i.e. the Lagrangian velocity).
         """
         latitude, longitude = y[0], y[1]
 
@@ -171,9 +196,10 @@ class SmagorinskyRHS(eqx.Module):
         return vu + gradk
 
     @staticmethod
-    def _diffusion_term(y: Float[Array, "2"], smag_ds: Dataset) -> Float[Array, "2 2"]:
-        """
-        Computes the diffusion term of the Stochastic Differential Equation.
+    def _stochastic_dynamics(y: Float[Array, "2"], smag_ds: Dataset) -> Float[Array, "2 2"]:
+        r"""
+        Computes the stochastic part of the dynamics (i.e. the diffusion): 
+        $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$.
 
         Parameters
         ----------
@@ -185,7 +211,7 @@ class SmagorinskyRHS(eqx.Module):
         Returns
         -------
         Float[Array, "2 2"]
-            The diffusion term.
+            The stochastic part of the dynamics (i.e. the diffusion).
         """
         latitude, longitude = y[0], y[1]
 
@@ -196,8 +222,9 @@ class SmagorinskyRHS(eqx.Module):
         return jnp.eye(2) * smag_k
 
     def __call__(self, t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2 3"]:
-        """
-        Computes the drift and diffusion terms of the Stochastic Differential Equation.
+        r"""
+        Computes the determinist (i.e. Lagrangian velocity): $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$ 
+        and stochastic (i.e. diffusion): $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$ parts of the dynamics.
 
         Parameters
         ----------
@@ -211,15 +238,15 @@ class SmagorinskyRHS(eqx.Module):
         Returns
         -------
         Float[Array, "2 3"]
-            The stacked drift and diffusion terms.
+            The stacked determinist and stochastic parts of the dynamics.
         """
         t = jnp.asarray(t)
         dataset = args
 
-        smag_ds = self._smagorinsky_coefficients(t, y, dataset)  # "1 x_width-2 x_width-2"
+        smag_ds = self._smagorinsky_diffusion(t, y, dataset)  # "1 x_width-2 x_width-2"
 
-        dlatlon_drift = self._drift_term(t, y, dataset, smag_ds)
-        dlatlon_diffusion = self._diffusion_term(y, smag_ds)
+        dlatlon_drift = self._deterministic_dynamics(t, y, dataset, smag_ds)
+        dlatlon_diffusion = self._stochastic_dynamics(y, smag_ds)
 
         dlatlon = jnp.column_stack([dlatlon_drift, dlatlon_diffusion])
 
@@ -227,59 +254,3 @@ class SmagorinskyRHS(eqx.Module):
             dlatlon = meters_to_degrees(dlatlon.T, latitude=y[0]).T
 
         return dlatlon
-
-
-class SmagorinskySimulator(StochasticDiffrax):
-    """
-    Stochastic simulator using Smagorinsky diffusion.
- 
-    Attributes
-    ----------
-    rhs : SmagorinskyRHS
-        Computes the drift and diffusion terms of the Smagorinsky diffusion SDE.
-    id : str
-        The identifier for the SmagorinskyDiffrax model (set to `"smagorinsky_diffusion"`).
-
-    Methods
-    -------
-    from_param(cs)
-        Creates a `pastax.SmagorinskySimulator` simulator with the given Smagorinsky constant.
-
-    Notes
-    -----
-    In this example, the `rhs` attribute is an `eqx.Module` with the Smagorinsky constant as attribute, allowing to treat it as a trainable parameter.
-    """
-
-    id: str = eqx.field(static=True, default_factory=lambda: "smagorinsky_diffusion")
-    rhs: SmagorinskyRHS = SmagorinskyRHS()
-
-    @classmethod
-    def from_param(cls, cs: Float[Array, ""] = None, id: str = None) -> SmagorinskySimulator:
-        """
-        Creates a `pastax.SmagorinskySimulator` simulator with the given Smagorinsky constant.
-
-        Parameters
-        ----------
-        cs : Float[Array, ""], optional
-            The Smagorinsky constant, defaults to None.
-        id : str, optional
-            The identifier for the simulator, defaults to None.
-
-        Returns
-        -------
-        SmagorinskySimulator
-            The `pastax.SmagorinskySimulator` simulator.
-
-        Notes
-        -----
-        If any of the parameters is None, its default value is used.
-        """
-        rhs_kwargs = {}
-        if cs is not None:
-            rhs_kwargs["cs"] = cs
-
-        self_kwargs = {}
-        if id is not None:
-            self_kwargs["id"] = id
-
-        return cls(rhs=SmagorinskyRHS(**rhs_kwargs), **self_kwargs)

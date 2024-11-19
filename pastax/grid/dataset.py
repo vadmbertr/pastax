@@ -50,11 +50,11 @@ class Dataset(eqx.Module):
         Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`, 
         `longitude`.
     from_arrays(variables, time, latitude, longitude, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
-        Constructs a `pastax.grid.Dataset` object from arrays of variables and coordinates `time`, `latitude`, `longitude`.
+        Constructs a [`pastax.grid.Dataset`] object from arrays of variables and coordinates `time`, `latitude`, `longitude`.
     from_xarray(dataset, variables, coordinates, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
-        Constructs a `pastax.grid.Dataset` object from a `xarray.Dataset`.
+        Constructs a [`pastax.grid.Dataset`] object from a `xarray.Dataset`.
     to_xarray()
-        Returns the `pastax.grid.Dataset` object as a `xarray.Dataset`.
+        Returns the [`pastax.grid.Dataset`] object as a `xarray.Dataset`.
     """
     is_spherical_mesh: bool
     use_degrees: bool
@@ -201,7 +201,7 @@ class Dataset(eqx.Module):
         Returns
         -------
         Dataset
-            A `pastax.grid.Dataset` object containing the extracted neighborhood data.
+            A [`pastax.grid.Dataset`] object containing the extracted neighborhood data.
         """
         t_i, lat_i, lon_i = self.indices(time, latitude, longitude)
 
@@ -246,7 +246,7 @@ class Dataset(eqx.Module):
         is_uv_mps: bool = True
     ) -> Dataset:
         """
-        Create a `pastax.grid.Dataset` object from arrays of variables, time, latitude, and longitude.
+        Create a [`pastax.grid.Dataset`] object from arrays of variables, time, latitude, and longitude.
 
         Parameters
         ----------
@@ -271,7 +271,7 @@ class Dataset(eqx.Module):
         Returns
         -------
         Dataset
-            A `pastax.grid.Dataset` object containing the processed variables, land mask, grid spacing in 
+            A [`pastax.grid.Dataset`] object containing the processed variables, land mask, grid spacing in 
             meters, cell area in square meters, and coordinates.
         """
         def compute_cell_dlatlon(dright: Float[Array, "latlon-1"], axis: int) -> Float[Array, "latlon"]:
@@ -377,7 +377,7 @@ class Dataset(eqx.Module):
         use_degrees: bool = False
     ) -> Dataset:
         """
-        Create a `pastax.grid.Dataset` object from an `xarray.Dataset`.
+        Create a [`pastax.grid.Dataset`] object from an `xarray.Dataset`.
 
         Parameters
         ----------
@@ -401,7 +401,7 @@ class Dataset(eqx.Module):
         Returns
         -------
         Dataset
-            An instance of the `pastax.grid.Dataset` class created from the provided `xarray.Dataset`.
+            An instance of the [`pastax.grid.Dataset`] class created from the provided `xarray.Dataset`.
         """
         variables, t, lat, lon = cls.to_arrays(dataset, variables, coordinates, to_jax=True)
 
@@ -454,7 +454,7 @@ class Dataset(eqx.Module):
 
     def to_xarray(self) -> xr.Dataset:
         """
-        Converts the `pastax.grid.Dataset` to a `xarray.Dataset`.
+        Converts the [`pastax.grid.Dataset`] to a `xarray.Dataset`.
 
         This method constructs an xarray Dataset from the object's variables and coordinates.
         The variables are added as data variables with dimensions ["time", "latitude", "longitude"].
