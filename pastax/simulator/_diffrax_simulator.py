@@ -66,7 +66,7 @@ class DiffraxSimulator(Simulator):
                 The current state (latitude and longitude in degrees).
             args : PyTree
                 Any PyTree of argument(s) used by the simulator.
-                Could be for example one or several [`pastax.grid.Dataset`] of gridded physical fields 
+                Could be for example one or several [`pastax.grid.Dataset`][] of gridded physical fields 
                 (SSC, SSH, SST, etc...).
 
             Returns
@@ -85,11 +85,11 @@ class DiffraxSimulator(Simulator):
         dt0 : Float[Scalar, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
-            The [`diffrax.AbstractSolver`][] to use for the simulation (default is [`diffrax.Heun`][]).
+            The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
         n_samples : Int[Scalar, ""], optional
-            The number of samples to generate (default is None, meaning a single trajectory).
+            The number of samples to generate, defaults to None, meaning a single trajectory.
         key : jrd.PRNGKey, optional
-            The random key for sampling (default is None, useless for the deterministic simulator).
+            The random key for sampling, defaults to None, useless for the deterministic simulator.
 
         Returns
         -------

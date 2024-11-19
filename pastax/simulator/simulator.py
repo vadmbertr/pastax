@@ -84,7 +84,7 @@ class DeterministicSimulator(DiffraxSimulator):
         dt0 : Float[Scalar, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
-            The [`diffrax.AbstractSolver`][] to use for the simulation (default is [`diffrax.Heun`][]).
+            The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
         n_samples : Int[Scalar, ""], optional
             The number of samples to generate, defaults to None, not use with deterministic simulators.
         key : jrd.PRNGKey, optional
@@ -123,7 +123,7 @@ class SDEControl(dfx.AbstractPath):
     t1 : Float[Scalar, ""]
         The final time.
     brownian_motion : dfx.VirtualBrownianTree
-        The [`diffrax.VirtualBrownianTree`] used in the Stochastic Differential Equation.
+        The [`diffrax.VirtualBrownianTree`][] used in the Stochastic Differential Equation.
 
     Methods
     -------
@@ -150,11 +150,11 @@ class SDEControl(dfx.AbstractPath):
         t0 : Float[Scalar, ""]
             The initial time.
         t1 : Float[Scalar, ""], optional
-            The final time (default is None).
+            The final time, defaults to None.
         left : bool, optional
-            Whether to use the left limit (default is True).
+            Whether to use the left limit, defaults to True.
         use_levy : bool, optional
-            Whether to use the Levy area (default is False).
+            Whether to use the Levy area, defaults to False.
 
         Returns
         -------
@@ -240,7 +240,7 @@ class StochasticSimulator(DiffraxSimulator):
         dt0 : Float[Scalar, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
-            The [`diffrax.AbstractSolver`][] to use for the simulation (default is [`diffrax.Heun`][]).
+            The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
         n_samples : Int[Scalar, ""], optional
             The number of samples to generate, defaults to `jnp.asarray(100)`.
         key : jrd.PRNGKey, optional

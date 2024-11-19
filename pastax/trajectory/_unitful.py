@@ -42,7 +42,7 @@ class Unitful(eqx.Module):
     Methods
     -------
     __init__(value, unit={}, name=None)
-        Initializes the [`pastax.utils.Unitful`] with given value, and unit.
+        Initializes the [`pastax.utils.Unitful`][] with given value, and unit.
     value
         Returns the value of the quantity.
     cumsum(axis=None)
@@ -72,14 +72,14 @@ class Unitful(eqx.Module):
 
     def __init__ (self, value: ArrayLike = jnp.nan, unit: Unit | Dict[Unit, int | float] = {}):
         """
-        Initializes the [`pastax.utils.Unitful`] with given value and unit.
+        Initializes the [`pastax.utils.Unitful`][] with given value and unit.
 
         Parameters
         ----------
         value : ArrayLike
             The value of the quantity.
         unit : Unit | Dict[Unit, int | float], optional
-            The unit of the quantity (default is an empty Dict).
+            The unit of the quantity, defaults to an empty Dict.
         """
         self._value = value
         self._unit = unit
@@ -147,7 +147,7 @@ class Unitful(eqx.Module):
         Parameters
         ----------
         axis : ArrayLike, optional
-            The axis along which to compute the mean (default is None, meaning along all axes).
+            The axis along which to compute the mean, defaults to None, meaning along all axes.
 
         Returns
         -------
@@ -189,7 +189,7 @@ class Unitful(eqx.Module):
         additive_op: bool
     ) -> tuple[ArrayLike, str | None, Type]:
         """
-        Extract value and unit from other operand if it is a [`pastax.utils.Unitful`] instance.
+        Extract value and unit from other operand if it is a [`pastax.utils.Unitful`][] instance.
 
         Parameters
         ----------

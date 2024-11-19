@@ -14,7 +14,7 @@ from .geo import EARTH_RADIUS
 ft.total_ordering
 class Unit(eqx.Module):
     """
-    Base class representing [`pastax.utils.Unit`] of measurement.
+    Base class representing [`pastax.utils.Unit`][] of measurement.
 
     Attributes
     ----------
@@ -24,9 +24,9 @@ class Unit(eqx.Module):
     Methods
     -------
     __eq__(other)
-        Checks if two [`pastax.utils.Unit`] are equal.
+        Checks if two [`pastax.utils.Unit`][] are equal.
     __lt__(other)
-        Checks if one [`pastax.utils.Unit`] is less than another (using their name).
+        Checks if one [`pastax.utils.Unit`][] is less than another (using their name).
     __hash__()
         Returns the hash of the [`pastax.utils.Unit`].
     __repr__()
@@ -56,7 +56,7 @@ class Unit(eqx.Module):
     @staticmethod
     def _pre_convert(value: ArrayLike, exp: int | float) -> ArrayLike:
         """
-        Prepares the value for conversion between "base" [`pastax.utils.Unit`] by raising it to the power of the reciprocal of the 
+        Prepares the value for conversion between "base" [`pastax.utils.Unit`][] by raising it to the power of the reciprocal of the 
         exponent.
 
         Parameters
@@ -78,7 +78,7 @@ class Unit(eqx.Module):
     @staticmethod
     def _post_convert(value: ArrayLike, exp: int | float) -> ArrayLike:
         """
-        Finalizes the conversion between "base" [`pastax.utils.Unit`] by raising the value to the power of the exponent.
+        Finalizes the conversion between "base" [`pastax.utils.Unit`][] by raising the value to the power of the exponent.
 
         Parameters
         ----------
@@ -103,11 +103,11 @@ class Unit(eqx.Module):
         Parameters
         ----------
         unit : Unit
-            The [`pastax.utils.Unit`] to convert to.
+            The [`pastax.utils.Unit`][] to convert to.
         value : ArrayLike
             The value to convert.
         exp : int or float, optional
-            The exponent to use for conversion (default is 1).
+            The exponent to use for conversion, defaults to 1.
         *args
             Additional arguments for conversion.
 
@@ -126,7 +126,7 @@ class Unit(eqx.Module):
 
 class Meters(Unit):
     """
-    Class representing meters as a [`pastax.utils.Unit`] of measurement.
+    Class representing meters as a [`pastax.utils.Unit`][] of measurement.
 
     Attributes
     ----------
@@ -143,11 +143,11 @@ class Meters(Unit):
         Parameters
         ----------
         unit : Unit
-            The [`pastax.utils.Unit`] to convert to.
+            The [`pastax.utils.Unit`][] to convert to.
         value : ArrayLike
             The value to convert.
         exp : int or float, optional
-            The exponent to use for conversion (default is 1).
+            The exponent to use for conversion, defaults to 1.
         *args
             Additional arguments for conversion.
 
@@ -178,7 +178,7 @@ class Meters(Unit):
 
 class Kilometers(Unit):
     """
-    Class representing kilometers as a [`pastax.utils.Unit`] of measurement.
+    Class representing kilometers as a [`pastax.utils.Unit`][] of measurement.
 
     Attributes
     ----------
@@ -195,11 +195,11 @@ class Kilometers(Unit):
         Parameters
         ----------
         unit : Unit
-            The [`pastax.utils.Unit`] to convert to.
+            The [`pastax.utils.Unit`][] to convert to.
         value : ArrayLike
             The value to convert.
         exp : int or float, optional
-            The exponent to use for conversion (default is 1).
+            The exponent to use for conversion, defaults to 1.
         *args
             Additional arguments for conversion.
 
@@ -230,7 +230,7 @@ class Kilometers(Unit):
 
 class LatLonDegrees(Unit):
     """
-    Class representing latitude and longitude degrees as a [`pastax.utils.Unit`] of measurement.
+    Class representing latitude and longitude degrees as a [`pastax.utils.Unit`][] of measurement.
 
     Attributes
     ----------
@@ -247,11 +247,11 @@ class LatLonDegrees(Unit):
         Parameters
         ----------
         unit : Unit
-            The [`pastax.utils.Unit`] to convert to.
+            The [`pastax.utils.Unit`][] to convert to.
         value : ArrayLike
             The value to convert.
         exp : int or float, optional
-            The exponent to use for conversion (default is 1).
+            The exponent to use for conversion, defaults to 1.
         *args
             Additional arguments for conversion.
 
@@ -282,7 +282,7 @@ class LatLonDegrees(Unit):
 
 class Seconds(Unit):
     """
-    Class representing seconds as a [`pastax.utils.Unit`] of measurement.
+    Class representing seconds as a [`pastax.utils.Unit`][] of measurement.
 
     Attributes
     ----------
@@ -299,11 +299,11 @@ class Seconds(Unit):
         Parameters
         ----------
         unit : Unit
-            The [`pastax.utils.Unit`] to convert to.
+            The [`pastax.utils.Unit`][] to convert to.
         value : ArrayLike
             The value to convert.
         exp : int or float, optional
-            The exponent to use for conversion (default is 1).
+            The exponent to use for conversion, defaults to 1.
         *args
             Additional arguments for conversion.
 
@@ -336,7 +336,7 @@ class Seconds(Unit):
 
 class Minutes(Unit):
     """
-    Class representing minutes as a [`pastax.utils.Unit`] of measurement.
+    Class representing minutes as a [`pastax.utils.Unit`][] of measurement.
 
     Attributes
     ----------
@@ -353,11 +353,11 @@ class Minutes(Unit):
         Parameters
         ----------
         unit : Unit
-            The [`pastax.utils.Unit`] to convert to.
+            The [`pastax.utils.Unit`][] to convert to.
         value : ArrayLike
             The value to convert.
         exp : int or float, optional
-            The exponent to use for conversion (default is 1).
+            The exponent to use for conversion, defaults to 1.
         *args
             Additional arguments for conversion.
 
@@ -390,7 +390,7 @@ class Minutes(Unit):
 
 class Hours(Unit):
     """
-    Class representing hours as a [`pastax.utils.Unit`] of measurement.
+    Class representing hours as a [`pastax.utils.Unit`][] of measurement.
 
     Attributes
     ----------
@@ -407,11 +407,11 @@ class Hours(Unit):
         Parameters
         ----------
         unit : Unit
-            The [`pastax.utils.Unit`] to convert to.
+            The [`pastax.utils.Unit`][] to convert to.
         value : ArrayLike
             The value to convert.
         exp : int or float, optional
-            The exponent to use for conversion (default is 1).
+            The exponent to use for conversion, defaults to 1.
         *args
             Additional arguments for conversion.
 
@@ -444,7 +444,7 @@ class Hours(Unit):
 
 class Days(Unit):
     """
-    Class representing days as a [`pastax.utils.Unit`] of measurement.
+    Class representing days as a [`pastax.utils.Unit`][] of measurement.
 
     Attributes
     ----------
@@ -461,11 +461,11 @@ class Days(Unit):
         Parameters
         ----------
         unit : Unit
-            The [`pastax.utils.Unit`] to convert to.
+            The [`pastax.utils.Unit`][] to convert to.
         value : ArrayLike
             The value to convert.
         exp : int or float, optional
-            The exponent to use for conversion (default is 1).
+            The exponent to use for conversion, defaults to 1.
         *args
             Additional arguments for conversion.
 
@@ -501,45 +501,45 @@ UNIT = {
     "s": Seconds(), "min": Minutes(), "h": Hours(), "d": Days()
 }
 """
-A dictionary mapping unit symbols to their corresponding [`pastax.utils.Unit`] objects.
+A dictionary mapping unit symbols to their corresponding [`pastax.utils.Unit`][] objects.
 
 Keys
 ----
 "m" : Meters
-    Represents meters as a [`pastax.utils.Unit`] of measurement.
+    Represents meters as a [`pastax.utils.Unit`][] of measurement.
 "km" : Kilometers
-    Represents kilometers as a [`pastax.utils.Unit`] of measurement.
+    Represents kilometers as a [`pastax.utils.Unit`][] of measurement.
 "°" : LatLonDegrees
-    Represents latitude and longitude degrees as a [`pastax.utils.Unit`] of measurement.
+    Represents latitude and longitude degrees as a [`pastax.utils.Unit`][] of measurement.
 "s" : Seconds
-    Represents seconds as a [`pastax.utils.Unit`] of measurement.
+    Represents seconds as a [`pastax.utils.Unit`][] of measurement.
 "min" : Minutes
-    Represents minutes as a [`pastax.utils.Unit`] of measurement.
+    Represents minutes as a [`pastax.utils.Unit`][] of measurement.
 "h" : Hours
-    Represents hours as a [`pastax.utils.Unit`] of measurement.
+    Represents hours as a [`pastax.utils.Unit`][] of measurement.
 "d" : Days
-    Represents days as a [`pastax.utils.Unit`] of measurement.
+    Represents days as a [`pastax.utils.Unit`][] of measurement.
 
 Values
 ------
 Unit
-    The corresponding [`pastax.utils.Unit`] object for each unit symbol.
+    The corresponding [`pastax.utils.Unit`][] object for each unit symbol.
 """
 
 
 def units_to_str(unit: Dict[Unit, int | float]) -> str:
     """
-    Converts a dictionary of [`pastax.utils.Unit`] with their exponents to a string representation.
+    Converts a dictionary of [`pastax.utils.Unit`][] with their exponents to a string representation.
 
     Parameters
     ----------
     unit : Dict[Unit, int or float]
-        A dictionary of [`pastax.utils.Unit`] with their exponents.
+        A dictionary of [`pastax.utils.Unit`][] with their exponents.
 
     Returns
     -------
     str
-        A string representation of the [`pastax.utils.Unit`] with their exponents.
+        A string representation of the [`pastax.utils.Unit`][] with their exponents.
     """
     def get_exp_str(exp: int | float) -> str:
         if exp == 1:
@@ -562,23 +562,23 @@ def compose_units(
         mul: Literal[-1, 1]
     ) -> Dict[Unit, int | float]:
         """
-        Compose two [`pastax.utils.Unit`] dictionaries by combining their values, 
+        Compose two [`pastax.utils.Unit`][] dictionaries by combining their values, 
         optionally multiplying the second dictionary's values by a factor to account for multiplication or division.
 
         Parameters
         ----------
         unit1 : Dict[Unit, int | float]
-            The first [`pastax.utils.Unit`] dictionary.
+            The first [`pastax.utils.Unit`][] dictionary.
         unit2 : Dict[Unit, int | float]
-            The second [`pastax.utils.Unit`] dictionary.
+            The second [`pastax.utils.Unit`][] dictionary.
         mul : Literal[-1, 1]
-            The multiplier for the second [`pastax.utils.Unit`] dictionary's values.
+            The multiplier for the second [`pastax.utils.Unit`][] dictionary's values.
             Should be either 1 in case of multiplication or -1 in case of division.
 
         Returns
         -------
         Dict[Unit, int | float]
-            The composed [`pastax.utils.Unit`] dictionary, or an empty dictionary if both input dictionaries are empty.
+            The composed [`pastax.utils.Unit`][] dictionary, or an empty dictionary if both input dictionaries are empty.
         """
         if (not unit1) and (not unit2):
             return {}
