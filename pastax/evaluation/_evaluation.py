@@ -49,7 +49,7 @@ class Evaluation(Set):
 
     def __init__(self, states: Dict[str, Timeseries | Sequence[TimeseriesEnsemble | Timeseries]]):
         """
-        Initializes the `pastax.Evaluation` object with a dictionary of metric timeseries or timeseries ensemble.
+        Initializes the [`pastax.evaluation.Evaluation`] object with a dictionary of metric timeseries or timeseries ensemble.
 
         Parameters
         ----------
@@ -300,7 +300,7 @@ class Evaluation(Set):
 
         Parameters
         ----------
-        y : str
+        key : str
             The key of the metric to retrieve.
             
         Returns

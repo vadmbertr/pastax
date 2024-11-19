@@ -11,7 +11,8 @@ from ..utils.unit import UNIT
 
 class Simulator(eqx.Module):
     """
-    Base class for defining differentiable [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][] simulators.
+    Base class for defining differentiable [`pastax.trajectory.Trajectory`][] or 
+    [`pastax.trajectory.TrajectoryEnsemble`][] simulators.
 
     Attributes
     ----------
@@ -22,15 +23,17 @@ class Simulator(eqx.Module):
     -------
     get_domain(x0, t0, ts)
         Computes the minimum and maximum time and location bounds of the simulation space-time domain.
-    __call__(args, x0, ts, n_samples=None, key=None)
+    __call__(dynamics, args, x0, ts, dt0, solver, n_samples=None, key=None)
         Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][] 
-        based on the initial [`pastax.trajectory.Location`][] and time steps (including t0).
+        following the prescribe drift `dynamics` and physical field(s) `args`, 
+        from the initial [`pastax.trajectory.Location`][] `x0` at time steps (including t0) `ts`,
+        using a given `solver`.
     """
 
-    id: str
+    id: str = None
 
     @staticmethod
-    def get_domain(  # TODO: to be removed
+    def get_domain(  # TODO: to be removed?
         x0: Location,
         ts: Float[Array, "time"]
     ) -> tuple[Float[Array, ""], Float[Array, ""], Location, Location]:
@@ -67,6 +70,7 @@ class Simulator(eqx.Module):
 
     def __call__(
         self,
+        dynamics: Callable[[int, Float[Array, "2"], PyTree], PyTree],
         args: PyTree,
         x0: Location,
         ts: Float[Array, "time"],
@@ -75,17 +79,36 @@ class Simulator(eqx.Module):
         n_samples: Int[Scalar, ""] = None,
         key: jrd.PRNGKey = None
     ) -> Trajectory | TrajectoryEnsemble:
-        """
+        r"""
         Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][] 
-        based on the initial [`pastax.trajectory.Location`][] and time steps (including t0).
+        following the prescribe drift `dynamics` and physical field(s) `args`, 
+        from the initial [`pastax.trajectory.Location`][] `x0` at time steps (including t0) `ts`,
+        using a given `solver`.
 
         This method must be implemented by its subclasses.
 
         Parameters
         ----------
+        dynamics: Callable[[int, Float[Array, "2"], PyTree], PyTree]
+            A Callable (including an [`equinox.Module`][] with a __call__ method) describing the dynamics of the 
+            right-hand-side of the solved Differential Equation.
+
+            !!! example
+
+                Formulating the displacement at time $t$ from the position $\mathbf{X}(t)$ as:
+
+                $$
+                d\mathbf{X}(t) = f(t, \mathbf{X}(t), \text{args}) dt
+                $$
+
+                `dynamics` is here the function $f$ returning the displacement speed.
+                In the simpliest case, $f$ is the function interpolating a velocity field $\mathbf{u}$ 
+                in space and time.
+
         args : PyTree
-            Any PyTree of argument(s) used by the simulator.
-            Could be for example one or several `pastax.grid.Dataset` of gridded physical fields (SSC, SSH, SST, etc.).
+            The PyTree of argument(s) required to compute the `dynamics`.
+            Could be for example one or several [`pastax.grid.Dataset`][] of gridded physical fields 
+            (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].
         ts : Float[Array, "time"]
@@ -93,7 +116,7 @@ class Simulator(eqx.Module):
         dt0 : Float[Scalar, ""], optional
             The initial time step of the solver, in seconds.
         solver : Callable, optional
-            The solver function to use for the simulation, defaults to None.
+            The solver to use for the simulation, defaults to None.
         n_samples : Int[Scalar, ""], optional
             The number of samples to generate, default to None, meaning a single [`pastax.trajectory.Trajectory`][].
         key : jrd.PRNGKey, optional

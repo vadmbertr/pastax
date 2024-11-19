@@ -28,13 +28,15 @@ This package in under active developement and should still be considered as work
 In particular, the following changes are considered:
 
 - `pastax.grid`
-  - add support for C-grids,
+    - add support for C-grids,
+    - maybe some refactoring of the structures,
 - `pastax.trajectory`
-  - use `unxt.Quantity` in place of `Unitful` (see [unxt](https://unxt.readthedocs.io/en/latest/)),
-  - remove `__add__` and like methods in favour of registered functions (see [quax](https://docs.kidger.site/quax/)),
+    - use `unxt.Quantity` in place of `Unitful` (see [unxt](https://unxt.readthedocs.io/en/latest/)),
+    - remove `__add__` and like methods in favour of registered functions (see [quax](https://docs.kidger.site/quax/)),
 - `pastax.simulator`
-  - improve how the product operation is performed between the vector field and the control (support for `Location`, `Time` or `State` objects) (see `diffrax` doc [here](https://docs.kidger.site/diffrax/api/terms/#diffrax.ControlTerm)),
-  - add support/examples for interrupting the solve when a trajectory reaches land (see `diffrax` doc [here](https://docs.kidger.site/diffrax/api/events/)).
+    - improve how the product operation is performed between the vector field and the control (support for `Location`, `Time` or `State` objects) (see `diffrax` doc [here](https://docs.kidger.site/diffrax/api/terms/#diffrax.ControlTerm)),
+    - add support/examples for interrupting the solve when a trajectory reaches land (see `diffrax` doc [here](https://docs.kidger.site/diffrax/api/events/)),
+    - make `pastax.simulator.dynamics` a module of its own.
 
 And I should stress that the package lacks (unit-)tests for now.
 
@@ -49,7 +51,7 @@ Here is a (probably) non-comprehensive (and hopefuly correct, please reach-out i
 - you use Julia: go with `Drifters.jl`,
 - you want I/O inter operability with `xarray` Datasets: go with `pastax`, `Parcels` or `Drifters.jl`,
 - you need support for Arakawa C-grid: go with `Parcels` or `Drifters.jl` (but keep an eye on `pastax` as it might come in the future),
-- you want some post-precessing routines: go with `Drifters.jl` (but keep an eye on `pastax` as some might come in the future),
+- you want some post-processing routines: go with `Drifters.jl` (but keep an eye on `pastax` as some might come in the future),
 - you want a better control of the right-hand-side term of your Differential Equation: go with `pastax` (probably the most flexible) or `Parcels`,
 - you solve Stochastic Differential Equations: go with `pastax` (probably the most flexible) or `Parcels`,
 - you need a **wide** range of solvers: go with `pastax` or `Drifters.jl` (if you solve ODE),

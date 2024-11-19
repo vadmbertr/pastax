@@ -45,7 +45,7 @@ class Evaluator(eqx.Module):  # TODO: should it be an eqx Module?
         Returns
         -------
         Evaluation
-            The result of the [`pastax.Evaluation`][].
+            The result of the [`pastax.evaluation.Evaluation`][].
 
         Raises
         ------

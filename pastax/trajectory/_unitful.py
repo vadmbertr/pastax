@@ -42,7 +42,7 @@ class Unitful(eqx.Module):
     Methods
     -------
     __init__(value, unit={}, name=None)
-        Initializes the `pastax.utils.Unitful` with given value, and unit.
+        Initializes the [`pastax.utils.Unitful`] with given value, and unit.
     value
         Returns the value of the quantity.
     cumsum(axis=None)
@@ -72,7 +72,7 @@ class Unitful(eqx.Module):
 
     def __init__ (self, value: ArrayLike = jnp.nan, unit: Unit | Dict[Unit, int | float] = {}):
         """
-        Initializes the `pastax.utils.Unitful` with given value and unit.
+        Initializes the [`pastax.utils.Unitful`] with given value and unit.
 
         Parameters
         ----------
@@ -189,7 +189,7 @@ class Unitful(eqx.Module):
         additive_op: bool
     ) -> tuple[ArrayLike, str | None, Type]:
         """
-        Extract value and unit from other operand if it is a `pastax.utils.Unitful` instance.
+        Extract value and unit from other operand if it is a [`pastax.utils.Unitful`] instance.
 
         Parameters
         ----------
@@ -239,7 +239,7 @@ class Unitful(eqx.Module):
 
         Notes
         -----
-        If the other operand is a `pastax.utils.Unitful`, the unit must match.
+        If the other operand is a [`pastax.utils.Unitful`], the unit must match.
         """
         other_value, _ = self.__extract_from_other(other, additive_op=True)
         return Unitful(self.value + other_value, self.unit)
@@ -311,7 +311,7 @@ class Unitful(eqx.Module):
 
         Notes
         -----
-        If the other operand is a `pastax.utils.Unitful`, the units must match.
+        If the other operand is a [`pastax.utils.Unitful`], the units must match.
         """
         other_value, _ = self.__extract_from_other(other, additive_op=True)
         return Unitful(self.value - other_value, self.unit)
