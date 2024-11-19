@@ -43,22 +43,22 @@ And I should stress that the package lacks (unit-)tests for now.
 ## Related projects
 
 Several other open-source projects already exist with similar objectives.
-The two closest ones are probably [(Ocean)Parcels](https://github.com/OceanParcels/parcels) and [Drifters.jl](https://github.com/JuliaClimate/Drifters.jl).
+The closest ones are probably [(Ocean)Parcels](https://github.com/OceanParcels/parcels), [OpenDrift](https://github.com/OpenDrift/opendrift) and [Drifters.jl](https://github.com/JuliaClimate/Drifters.jl).
 
 Here is a (probably) non-comprehensive (and hopefuly correct, please reach-out if not) use-cases comparison between those:
 
-- you use Python: go with `pastax` or `Parcels`,
+- you use Python: go with `pastax`, `OpenDrift` or `Parcels`,
 - you use Julia: go with `Drifters.jl`,
-- you want I/O inter operability with `xarray` Datasets: go with `pastax`, `Parcels` or `Drifters.jl`,
-- you need support for Arakawa C-grid: go with `Parcels` or `Drifters.jl` (but keep an eye on `pastax` as it might come in the future),
+- you want I/O inter operability with `xarray` Datasets: go with `pastax`, `OpenDrift`, `Parcels` or `Drifters.jl`,
+- you need support for Arakawa C-grid: go with `OpenDrift`, `Parcels` or `Drifters.jl` (but keep an eye on `pastax` as it might come in the future),
 - you want some post-processing routines: go with `Drifters.jl` (but keep an eye on `pastax` as some might come in the future),
 - you want a better control of the right-hand-side term of your Differential Equation: go with `pastax` (probably the most flexible) or `Parcels`,
-- you solve Stochastic Differential Equations: go with `pastax` (probably the most flexible) or `Parcels`,
+- you solve Stochastic Differential Equations: go with `pastax`, `OpenDrift` or `Parcels`,
 - you need a **wide** range of solvers: go with `pastax` or `Drifters.jl` (if you solve ODE),
 - you want to calibrate your simulator ***on-line*** (i.e. by differenting through your simulator): go with `pastax`,
 - you want to run on both CPUs and GPUs (or TPUs): go with `pastax`.
 
-Worth mentionning that I did not compare runtime performances (especially for typical use-cases with `Parcels` or `Drifters.jl` of advecting a very large amount of particules with the same velocity field).
+Worth mentionning that I did not compare runtime performances (especially for typical use-cases with `OpenDrift`, `Parcels` or `Drifters.jl` of advecting a very large amount of particules with the same velocity field).
 
 I could also cite [py-eddy-tracker](https://github.com/AntSimi/py-eddy-tracker), altough it targets more specifically eddy related routines.
 
