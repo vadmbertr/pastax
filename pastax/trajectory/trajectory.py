@@ -200,7 +200,7 @@ class Trajectory(Timeseries):
         color : str
             The color for the plot.
         ti : int, optional
-            The time index to plot up to (default is None).
+            The time index to plot up to, defaults to None.
         kwargs: dict, optional
             Additional arguments passed to `LineCollection`.
 
@@ -306,7 +306,7 @@ class Trajectory(Timeseries):
         times : Float[Array, "... time"]
             The time points for the trajectory.
         id : Int[Array, ""], optional
-            The ID of the trajectory (default is None).
+            The ID of the trajectory, defaults to None.
 
         Returns
         -------

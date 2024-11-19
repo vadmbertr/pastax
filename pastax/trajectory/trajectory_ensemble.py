@@ -139,7 +139,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         other : Trajectory
             The other trajectory to compare against.
         distance_func : Callable[[Trajectory, Trajectory], Unitful | ArrayLike], optional
-            The distance function to use (default is Trajectory.separation_distance).
+            The distance function to use, defaults to Trajectory.separation_distance.
 
         Returns
         -------
@@ -211,7 +211,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         color : str | list[str | float | int]
             The color(s) for the plot.
         ti : int, optional
-            The time index to plot up to (default is None).
+            The time index to plot up to, defaults to None.
         kwargs: dict, optional
             Additional arguments passed to `LineCollection`.
 
@@ -310,7 +310,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         unit : Unit | Dict[Unit, int], optional
             Unit of the trajectory locations, defaults to UNIT["°"].
         id : Int[Array, ""], optional
-            The ID of the trajectory (default is None).
+            The ID of the trajectory, defaults to None.
 
         Returns
         -------

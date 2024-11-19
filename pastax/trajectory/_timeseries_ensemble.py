@@ -36,7 +36,7 @@ class TimeseriesEnsemble(Unitful):
     Methods
     -------
     __init__(members)
-        Initializes the [`pastax.trajectory.TimeseriesEnsemble`] with [`pastax.trajectory.Timeseries`][] members.
+        Initializes the [`pastax.trajectory.TimeseriesEnsemble`][] with [`pastax.trajectory.Timeseries`][] members.
     value
         Returns the value of the [`pastax.trajectory.TimeseriesEnsemble`].
     states
@@ -54,15 +54,15 @@ class TimeseriesEnsemble(Unitful):
     crps(other, distance_func=Timeseries.euclidean_distance)
         Computes the Continuous Ranked Probability Score (CRPS) for the [`pastax.trajectory.TimeseriesEnsemble`].
     ensemble_dispersion(distance_func=Timeseries.euclidean_distance)
-        Computes the [`pastax.trajectory.TimeseriesEnsemble`] dispersion.
+        Computes the [`pastax.trajectory.TimeseriesEnsemble`][] dispersion.
     map(func)
         Applies a function to each [`pastax.trajectory.Timeseries`][] of the [`pastax.trajectory.TimeseriesEnsemble`].
     from_array(values, times, unit={}, name=None, **kwargs)
-        Creates a [`pastax.trajectory.TimeseriesEnsemble`] from an array of values and time points.
+        Creates a [`pastax.trajectory.TimeseriesEnsemble`][] from an array of values and time points.
     to_dataarray()
-        Converts the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
+        Converts the [`pastax.trajectory.TimeseriesEnsemble`][] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
     to_dataset()
-        Converts the [`pastax.trajectory.TimeseriesEnsemble`] to a `xarray.Dataset`.
+        Converts the [`pastax.trajectory.TimeseriesEnsemble`][] to a `xarray.Dataset`.
     """
 
     members: Timeseries
@@ -74,7 +74,7 @@ class TimeseriesEnsemble(Unitful):
 
     def __init__(self, members: Timeseries):
         """
-        Initializes the [`pastax.trajectory.TimeseriesEnsemble`] with [`pastax.trajectory.Timeseries`][] members.
+        Initializes the [`pastax.trajectory.TimeseriesEnsemble`][] with [`pastax.trajectory.Timeseries`][] members.
 
         Parameters
         ----------
@@ -169,7 +169,7 @@ class TimeseriesEnsemble(Unitful):
         Returns
         -------
         TimeseriesEnsemble
-            A new [`pastax.trajectory.TimeseriesEnsemble`] with the attached name.
+            A new [`pastax.trajectory.TimeseriesEnsemble`][] with the attached name.
         """
         return self.__class__(self.states.value, self.times.value, unit=self.unit, name=name)
     
@@ -186,7 +186,7 @@ class TimeseriesEnsemble(Unitful):
         other : Timeseries
             The other timeseries to compare against.
         distance_func : Callable[[Timeseries, Timeseries], Unitful | ArrayLike], optional
-            The distance function to use (default is Timeseries.euclidean_distance).
+            The distance function to use, defaults to Timeseries.euclidean_distance.
 
         Returns
         -------
@@ -209,17 +209,17 @@ class TimeseriesEnsemble(Unitful):
         distance_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike] = Timeseries.euclidean_distance
     ) -> Timeseries:
         """
-        Computes the [`pastax.trajectory.TimeseriesEnsemble`] dispersion.
+        Computes the [`pastax.trajectory.TimeseriesEnsemble`][] dispersion.
 
         Parameters
         ----------
         distance_func : Callable[[Timeseries, Timeseries], Unitful | ArrayLike], optional
-            The distance function to use (default is Timeseries.euclidean_distance).
+            The distance function to use, defaults to Timeseries.euclidean_distance.
 
         Returns
         -------
         Timeseries
-            The [`pastax.trajectory.TimeseriesEnsemble`] dispersion.
+            The [`pastax.trajectory.TimeseriesEnsemble`][] dispersion.
         """
         distances = self.map(lambda member1: self.map(lambda member2: distance_func(member1, member2)))
         # divide by 2 as pairs are duplicated (JAX efficient computation way)
@@ -262,7 +262,7 @@ class TimeseriesEnsemble(Unitful):
         **kwargs: Dict
     ) -> TimeseriesEnsemble:
         """
-        Creates a [`pastax.trajectory.TimeseriesEnsemble`] from an array of values and time points.
+        Creates a [`pastax.trajectory.TimeseriesEnsemble`][] from an array of values and time points.
 
         Parameters
         ----------
@@ -271,16 +271,16 @@ class TimeseriesEnsemble(Unitful):
         times : Float[Array, "time"]
             The time points for the timeseries.
         name : str, optional
-            The name of the timeseries (default is None).
+            The name of the timeseries, defaults to None.
         unit : Unit | Dict[Unit, int | float], optional
-            The unit of the timeseries (default is {}).
+            The unit of the timeseries, defaults to {}.
         **kwargs : Dict
             Additional keyword arguments.
 
         Returns
         -------
         TimeseriesEnsemble
-            The [`pastax.trajectory.TimeseriesEnsemble`] created from the array of values and time points.
+            The [`pastax.trajectory.TimeseriesEnsemble`][] created from the array of values and time points.
         """
         members = eqx.filter_vmap(
             lambda s: cls._members_type.from_array(s, times, unit=unit, name=name, **kwargs),
@@ -291,12 +291,12 @@ class TimeseriesEnsemble(Unitful):
 
     def to_dataarray(self) -> xr.DataArray:
         """
-        Converts the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
+        Converts the [`pastax.trajectory.TimeseriesEnsemble`][] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
 
         Returns
         -------
         xr.DataArray
-            An `xarray.DataArray` containing the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][].
+            An `xarray.DataArray` containing the [`pastax.trajectory.TimeseriesEnsemble`][] [`pastax.trajectory.State`][].
         """
         da = xr.DataArray(
             data=self.states.value,
@@ -313,12 +313,12 @@ class TimeseriesEnsemble(Unitful):
 
     def to_dataset(self) -> xr.Dataset:
         """
-        Converts the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
+        Converts the [`pastax.trajectory.TimeseriesEnsemble`][] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
 
         Returns
         -------
         xr.Dataset
-            A `xarray.DataArray` containing the [`pastax.trajectory.TimeseriesEnsemble`] [`pastax.trajectory.State`][].
+            A `xarray.DataArray` containing the [`pastax.trajectory.TimeseriesEnsemble`][] [`pastax.trajectory.State`][].
         """
         da = self.to_dataarray()
         ds = da.to_dataset()

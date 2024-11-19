@@ -105,7 +105,7 @@ class Location(State):
 
 class Displacement(State):
     """
-    Class representing a [`pastax.trajectory.Displacement`] with latitude and longitude components.
+    Class representing a [`pastax.trajectory.Displacement`][] with latitude and longitude components.
 
     Attributes
     ----------
@@ -119,7 +119,7 @@ class Displacement(State):
     Methods
     -------
     __init__(value, unit)
-        Initializes the [`pastax.trajectory.Displacement`] with given latitude and longitude components and unit.
+        Initializes the [`pastax.trajectory.Displacement`][] with given latitude and longitude components and unit.
     latitude
         Returns the latitude component of the [`pastax.trajectory.Displacement`].
     longitude
@@ -128,7 +128,7 @@ class Displacement(State):
 
     def __init__(self, value: Float[Array, "... 2"], unit: Unit = UNIT["°"], **_):
         """
-        Initializes the [`pastax.trajectory.Displacement`] with given latitude and longitude components and [`pastax.utils.Unit`][].
+        Initializes the [`pastax.trajectory.Displacement`][] with given latitude and longitude components and [`pastax.utils.Unit`][].
 
         Parameters
         ----------
@@ -166,12 +166,12 @@ class Displacement(State):
 
 class Time(State):
     """
-    Class representing a [`pastax.trajectory.Time`] value.
+    Class representing a [`pastax.trajectory.Time`][] value.
 
     Attributes
     ----------
     _value : ArrayLike
-        The [`pastax.trajectory.Time`] value.
+        The [`pastax.trajectory.Time`][] value.
     _unit : Dict[Unit, int | float]
         The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Time`], defaults to [`pastax.utils.Seconds`][].
     name : str
@@ -180,14 +180,14 @@ class Time(State):
     Methods
     -------
     __init__(value, unit)
-        Initializes the [`pastax.trajectory.Time`] with given time value.
+        Initializes the [`pastax.trajectory.Time`][] with given time value.
     to_datetime()
-        Converts the [`pastax.trajectory.Time`] to a `numpy.ndarray` of `datetime64[s]`.
+        Converts the [`pastax.trajectory.Time`][] to a `numpy.ndarray` of `datetime64[s]`.
     """
 
     def __init__(self, value: ArrayLike, unit: Unit = UNIT["s"], **_):
         """
-        Initializes the [`pastax.trajectory.Time`] with given time value.
+        Initializes the [`pastax.trajectory.Time`][] with given time value.
 
         Parameters
         ----------
@@ -200,11 +200,11 @@ class Time(State):
 
     def to_datetime(self) -> np.ndarray:
         """
-        Converts the [`pastax.trajectory.Time`] to a `numpy.ndarray` of `datetime64[s]`.
+        Converts the [`pastax.trajectory.Time`][] to a `numpy.ndarray` of `datetime64[s]`.
 
         Returns
         -------
         np.ndarray
-            The [`pastax.trajectory.Time`] as a `numpy.ndarray` of `datetime64[s]`.
+            The [`pastax.trajectory.Time`][] as a `numpy.ndarray` of `datetime64[s]`.
         """
         return np.asarray(self.value).astype("datetime64[s]")

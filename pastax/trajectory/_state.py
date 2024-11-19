@@ -10,7 +10,7 @@ from ._unitful import Unitful
 
 class State(Unitful):
     """
-    Class representing a [`pastax.trajectory.State`] with a value, unit, and name.
+    Class representing a [`pastax.trajectory.State`][] with a value, unit, and name.
 
     Attributes
     ----------
@@ -24,7 +24,7 @@ class State(Unitful):
     Methods
     -------
     __init__(value, unit={}, name=None)
-        Initializes the [`pastax.trajectory.State`] with given value, unit and name.
+        Initializes the [`pastax.trajectory.State`][] with given value, unit and name.
     attach_name(name)
         Attaches a name to the [`pastax.trajectory.State`].
     """
@@ -33,16 +33,16 @@ class State(Unitful):
 
     def __init__ (self, value: ArrayLike, unit: Unit | Dict[Unit, int | float] = {}, name: str = None):
         """
-        Initializes the [`pastax.trajectory.State`] with given value, unit and name.
+        Initializes the [`pastax.trajectory.State`][] with given value, unit and name.
 
         Parameters
         ----------
         value : ArrayLike
             The value of the state.
         unit : Unit | Dict[Unit, int | float], optional
-            The unit of the state (default is an empty Dict).
+            The unit of the state, defaults to an empty Dict.
         name : str, optional
-            The type of the state (default is None).
+            The type of the state, defaults to None.
         """
         super().__init__(value, unit)
         self.name = name
@@ -59,7 +59,7 @@ class State(Unitful):
         Returns
         -------
         State
-            A new [`pastax.trajectory.State`] with the attached name.
+            A new [`pastax.trajectory.State`][] with the attached name.
         """
         return self.__class__(self.value, self.unit, name)
     
