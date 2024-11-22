@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Callable, ClassVar, Dict
 
-import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float, Int
 from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt

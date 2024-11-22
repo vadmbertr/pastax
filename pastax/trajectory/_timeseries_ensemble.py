@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Dict, Callable, ClassVar
 
 import equinox as eqx
+import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 import numpy as np
 import xarray as xr
@@ -221,9 +222,17 @@ class TimeseriesEnsemble(Unitful):
         Timeseries
             The [`pastax.trajectory.TimeseriesEnsemble`][] dispersion.
         """
-        distances = self.map(lambda member1: self.map(lambda member2: distance_func(member1, member2)))
-        # divide by 2 as pairs are duplicated (JAX efficient computation way)
-        dispersion = distances.sum((-3, -2)) / 2
+        # apply the distance function to all pairs of members
+        ijs = jnp.column_stack(jnp.triu_indices(self.size, k=1))
+        vmap_metric_fn = eqx.filter_vmap(
+            lambda ij: distance_func(
+                self._members_type.from_array(self.value[ij[0], ...], self.times.value), 
+                self._members_type.from_array(self.value[ij[1], ...], self.times.value)
+            )
+        )
+
+        distances = vmap_metric_fn(ijs)
+        dispersion = distances.sum(0)
 
         return Timeseries.from_array(
             dispersion.value, self.times.value, dispersion.unit, name=f"{distances.name} (ensemble dispersion)"

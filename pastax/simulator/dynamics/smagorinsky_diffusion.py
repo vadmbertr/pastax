@@ -52,7 +52,9 @@ class SmagorinskyDiffusion(eqx.Module):
     As the class inherits from [`equinox.Module`][], its `cs` attribute can be treated as a trainable parameter.
     """
 
-    cs: Float[Scalar, ""] = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float), default_factory=lambda: 0.1)
+    cs: Float[Scalar, ""] = eqx.field(
+        converter=lambda x: jnp.clip(jnp.asarray(x, dtype=float), min=0), default_factory=lambda: 0.1
+    )
 
     @staticmethod
     def _neighborhood(*variables: list[str], t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
