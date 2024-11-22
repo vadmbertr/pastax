@@ -161,11 +161,12 @@ class Trajectory(Timeseries):
         Timeseries
             The Liu Index between the two trajectories.
         """
-        error = self.separation_distance(other).cumsum()
-        cum_lengths = self.lengths().cumsum()
+        error = self.separation_distance(other).value.cumsum()
+        cum_lengths = self.lengths().value.cumsum()
+        cum_lengths = jnp.where(cum_lengths == 0, jnp.inf, cum_lengths)
         liu_index = error / cum_lengths
 
-        return Timeseries.from_array(liu_index.value, self.times.value, name="Liu index")
+        return Timeseries.from_array(liu_index, self.times.value, name="Liu index")
 
     def mae(self, other: Trajectory) -> Timeseries:
         """
@@ -182,7 +183,7 @@ class Trajectory(Timeseries):
             The MAE between the two trajectories.
         """
         error = self.separation_distance(other).cumsum()
-        length = jnp.arange(self.length)  # we consider that traj starts from the same x0
+        length = jnp.arange(self.length) + 1
         mae = error / length
 
         return Timeseries.from_array(mae.value, self.times.value, mae.unit, name="MAE")
@@ -240,7 +241,7 @@ class Trajectory(Timeseries):
             The RMSE between the two trajectories.
         """
         error = (self.separation_distance(other) ** 2).cumsum()
-        length = jnp.arange(self.length)  # we consider that traj starts from the same x0
+        length = jnp.arange(self.length) + 1
         rmse = (error / length) ** (1 / 2)
 
         return Timeseries.from_array(rmse.value, self.times.value, rmse.unit, name="RMSE")
