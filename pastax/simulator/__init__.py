@@ -1,18 +1,14 @@
 """
-This module provides base [`pastax.simulator.Simulator`][] classes for [`pastax.trajectory.Trajectory`][] 
+This module provides base [`pastax.simulator.BaseSimulator`][] classes for [`pastax.trajectory.Trajectory`][] 
 and [`pastax.trajectory.TrajectoryEnsemble`][] simulation in JAX.
 """
 
 
-from ._simulator import Simulator
-from ._diffrax_simulator import DiffraxSimulator
-from .simulator import DeterministicSimulator, StochasticSimulator, SDEControl
-# from .dynamics import linear_uv, LinearUV, SmagorinskyDiffusion
-from .dynamics import __all__ as dynamics_all
+from ._base_simulator import BaseSimulator
+from ._diffrax_simulator import DiffraxSimulator, DeterministicSimulator, StochasticSimulator, SDEControl
 
 
 __all__ = [
-    "Simulator", 
-    "DiffraxSimulator", 
-    "DeterministicSimulator", "StochasticSimulator", "SDEControl",
-] + dynamics_all
+    "BaseSimulator", 
+    "DiffraxSimulator", "DeterministicSimulator", "StochasticSimulator", "SDEControl",
+]

@@ -5,8 +5,16 @@ import interpax as ipx
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Scalar
 
-from ...grid import Dataset, spatial_derivative
-from ...utils import meters_to_degrees
+from ..grid import Grid, spatial_derivative
+from ..utils import meters_to_degrees
+
+
+def _to_cs(x: Float[Scalar, ""]) -> Float[Scalar, ""]:
+    return jnp.exp(x)
+
+
+def _from_cs(x: Float[Scalar, ""]) -> Float[Scalar, ""]:
+    return jnp.log(jnp.clip(x, min=1e-4))
 
 
 class SmagorinskyDiffusion(eqx.Module):
@@ -31,16 +39,17 @@ class SmagorinskyDiffusion(eqx.Module):
 
     Attributes
     ----------
-    cs : Float[Scalar, ""], optional
+    _cs : Float[Scalar, ""], optional
         The Smagorinsky constant, defaults to `jnp.asarray(0.1)`.
+        Internally a transformation of the Smagorinsky constant ensuring it remains positive is used.
 
     Methods
     -------
-    _neighborhood(*variables, t, y, dataset)
-        Restricts the [`pastax.grid.Dataset`][] to a neighborhood around the given location and time.
-    _smagorinsky_coefficients(t, y, dataset)
+    _neighborhood(*fields, t, y, grid)
+        Restricts the [`pastax.grid.Grid`][] to a neighborhood around the given location and time.
+    _smagorinsky_coefficients(t, y, grid)
         Computes the Smagorinsky coefficients.
-    _drift_term(t, y, dataset, smag_ds)
+    _drift_term(t, y, grid, smag_ds)
         Computes the drift term of the Stochastic Differential Equation.
     _diffusion_term(y, smag_ds)
         Computes the diffusion term of the Stochastic Differential Equation.
@@ -52,41 +61,48 @@ class SmagorinskyDiffusion(eqx.Module):
     As the class inherits from [`equinox.Module`][], its `cs` attribute can be treated as a trainable parameter.
     """
 
-    cs: Float[Scalar, ""] = eqx.field(
-        converter=lambda x: jnp.clip(jnp.asarray(x, dtype=float), min=0), default_factory=lambda: 0.1
+    _cs: Float[Scalar, ""] = eqx.field(
+        converter=lambda x: jnp.asarray(x, dtype=float), default_factory=lambda: _from_cs(jnp.asarray(0.1))
     )
 
-    @staticmethod
-    def _neighborhood(*variables: list[str], t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
+    @property
+    def cs(self) -> Float[Scalar, ""]:
         """
-        Restricts the [`pastax.grid.Dataset`][] to a neighborhood around the given location and time.
+        The Smagorinsky constant.
+        """
+        return _to_cs(self._cs)
+
+    @staticmethod
+    def _neighborhood(*fields: list[str], t: Float[Scalar, ""], y: Float[Array, "2"], grid: Grid) -> Grid:
+        """
+        Restricts the [`pastax.grid.Grid`][] to a neighborhood around the given location and time.
 
         Parameters
         ----------
-        *variables : list[str]
-            The variables to retain in the neighborhood.
+        *fields : list[str]
+            The fields to retain in the neighborhood.
         t : Float[Scalar, ""]
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        dataset : Dataset
-            The [`pastax.grid.Dataset`][] containing the physical fields.
+        grid : Grid
+            The [`pastax.grid.Grid`][] containing the physical fields.
 
         Returns
         -------
-        Dataset
-            The neighborhood [`pastax.grid.Dataset`][].
+        Grid
+            The neighborhood [`pastax.grid.Grid`][].
         """
-        # restrict dataset to the neighborhood around X(t)
-        neighborhood = dataset.neighborhood(
-            *variables,
+        # restrict grid to the neighborhood around X(t)
+        neighborhood = grid.neighborhood(
+            *fields,
             time=t, latitude=y[0], longitude=y[1],
             t_width=3, x_width=7
         )  # "x_width x_width"
 
         return neighborhood
 
-    def _smagorinsky_diffusion(self, t: Float[Scalar, ""], y: Float[Array, "2"], dataset: Dataset) -> Dataset:
+    def _smagorinsky_diffusion(self, t: Float[Scalar, ""], y: Float[Array, "2"], grid: Grid) -> Grid:
         r"""
         Computes the Smagorinsky diffusion:
 
@@ -103,20 +119,20 @@ class SmagorinskyDiffusion(eqx.Module):
             The simulation time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        dataset : Dataset
-            The [`pastax.grid.Dataset`][] containing the physical fields.
+        grid : Grid
+            The [`pastax.grid.Grid`][] containing the physical fields.
 
         Returns
         -------
-        Dataset
-            The [`pastax.grid.Dataset`][] containing the Smagorinsky coefficients.
+        Grid
+            The [`pastax.grid.Grid`][] containing the Smagorinsky coefficients.
 
         Notes
         -----
         The physical fields are first restricted to a small neighborhood, then interpolated in time and 
         finally spatial derivatives are computed using finite central difference.
         """
-        neighborhood = self._neighborhood("u", "v", t=t, y=y, dataset=dataset)
+        neighborhood = self._neighborhood("u", "v", t=t, y=y, grid=grid)
 
         u, v = neighborhood.interp_temporal("u", "v", time=t)  # "x_width x_width"
         dudx, dudy, dvdx, dvdy = spatial_derivative(
@@ -127,7 +143,7 @@ class SmagorinskyDiffusion(eqx.Module):
         cell_area = neighborhood.cell_area[1:-1, 1:-1]  # "x_width-2 x_width-2"
         smag_k = self.cs * cell_area * ((dudx ** 2 + dvdy ** 2 + 0.5 * (dudy + dvdx) ** 2) ** (1 / 2))
 
-        smag_ds = Dataset.from_arrays(
+        smag_ds = Grid.from_array(
             {"smag_k": smag_k[None, ...]},
             time=t[None],
             latitude=neighborhood.coordinates.latitude.values[1:-1],
@@ -144,8 +160,8 @@ class SmagorinskyDiffusion(eqx.Module):
     def _deterministic_dynamics(
         t: Float[Scalar, ""],
         y: Float[Array, "2"],
-        dataset: Dataset,
-        smag_ds: Dataset
+        grid: Grid,
+        smag_ds: Grid
     ) -> Float[Array, "2"]:
         r"""
         Computes the deterministic part of the dynamics (i.e. the Lagrangian velocity): 
@@ -157,10 +173,10 @@ class SmagorinskyDiffusion(eqx.Module):
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        dataset : Dataset
-            The [`pastax.grid.Dataset`][] containing the physical fields.
-        smag_ds : Dataset
-            The [`pastax.grid.Dataset`][] containing the Smagorinsky coefficients for the given fields.
+        grid : Grid
+            The [`pastax.grid.Grid`][] containing the physical fields.
+        smag_ds : Grid
+            The [`pastax.grid.Grid`][] containing the Smagorinsky coefficients for the given fields.
 
         Returns
         -------
@@ -169,10 +185,10 @@ class SmagorinskyDiffusion(eqx.Module):
         """
         latitude, longitude = y[0], y[1]
 
-        smag_k = jnp.squeeze(smag_ds.variables["smag_k"].values)  # "x_width-2 x_width-2"
+        smag_k = jnp.squeeze(smag_ds.fields["smag_k"].values)  # "x_width-2 x_width-2"
 
         # $\mathbf{u}(t, \mathbf{X}(t))$ term
-        u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
+        u, v = grid.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
         vu = jnp.asarray([v, u], dtype=float)  # "2"
 
         # $(\nabla \cdot \mathbf{K})(t, \mathbf{X}(t))$ term
@@ -198,7 +214,7 @@ class SmagorinskyDiffusion(eqx.Module):
         return vu + gradk
 
     @staticmethod
-    def _stochastic_dynamics(y: Float[Array, "2"], smag_ds: Dataset) -> Float[Array, "2 2"]:
+    def _stochastic_dynamics(y: Float[Array, "2"], smag_ds: Grid) -> Float[Array, "2 2"]:
         r"""
         Computes the stochastic part of the dynamics (i.e. the diffusion): 
         $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$.
@@ -207,8 +223,8 @@ class SmagorinskyDiffusion(eqx.Module):
         ----------
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        smag_ds : Dataset
-            The [`pastax.grid.Dataset`][] containing the Smagorinsky coefficients.
+        smag_ds : Grid
+            The [`pastax.grid.Grid`][] containing the Smagorinsky coefficients.
 
         Returns
         -------
@@ -223,7 +239,7 @@ class SmagorinskyDiffusion(eqx.Module):
 
         return jnp.eye(2) * smag_k
 
-    def __call__(self, t: float, y: Float[Array, "2"], args: Dataset) -> Float[Array, "2 3"]:
+    def __call__(self, t: float, y: Float[Array, "2"], args: Grid) -> Float[Array, "2 3"]:
         r"""
         Computes the determinist (i.e. Lagrangian velocity): $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$ 
         and stochastic (i.e. diffusion): $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$ parts of the dynamics.
@@ -234,8 +250,8 @@ class SmagorinskyDiffusion(eqx.Module):
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        args : Dataset
-            The [`pastax.grid.Dataset`][] containing the velocity fields.
+        args : Grid
+            The [`pastax.grid.Grid`][] containing the velocity fields.
 
         Returns
         -------
@@ -243,16 +259,33 @@ class SmagorinskyDiffusion(eqx.Module):
             The stacked determinist and stochastic parts of the dynamics.
         """
         t = jnp.asarray(t)
-        dataset = args
+        grid = args
 
-        smag_ds = self._smagorinsky_diffusion(t, y, dataset)  # "1 x_width-2 x_width-2"
+        smag_ds = self._smagorinsky_diffusion(t, y, grid)  # "1 x_width-2 x_width-2"
 
-        dlatlon_drift = self._deterministic_dynamics(t, y, dataset, smag_ds)
+        dlatlon_drift = self._deterministic_dynamics(t, y, grid, smag_ds)
         dlatlon_diffusion = self._stochastic_dynamics(y, smag_ds)
 
         dlatlon = jnp.column_stack([dlatlon_drift, dlatlon_diffusion])
 
-        if dataset.is_spherical_mesh and not dataset.use_degrees:
+        if grid.is_spherical_mesh and not grid.use_degrees:
             dlatlon = meters_to_degrees(dlatlon.T, latitude=y[0]).T
 
         return dlatlon
+
+    @classmethod
+    def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1)):
+        """
+        Initializes the Smagorinsky diffusion with the given Smagorinsky constant.
+
+        Parameters
+        ----------
+        cs : Float[Scalar, ""], optional
+            The Smagorinsky constant, defaults to `jnp.asarray(0.1)`.
+
+        Returns
+        -------
+        SmagorinskyDiffusion
+            The [`pastax.dynamics.SmagorinskyDiffusion`][] initialized with the given Smagorinsky constant.
+        """
+        return SmagorinskyDiffusion(_cs=_from_cs(cs))

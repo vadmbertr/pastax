@@ -3,7 +3,7 @@ This module provides various geographical and [`pastax.utils.Unit`][] conversion
 """
 
 
-from .unit import (
+from ._unit import (
     Unit,
     Meters, Kilometers, LatLonDegrees,
     Seconds, Minutes, Hours, Days,
@@ -14,7 +14,7 @@ from .unit import (
     time_in_seconds, seconds_to_days,
     units_to_str, compose_units,
 )
-from .geo import EARTH_RADIUS, distance_on_earth, longitude_in_180_180_degrees
+from ._geo import EARTH_RADIUS, distance_on_earth, longitude_in_180_180_degrees
 
 
 __all__ = [

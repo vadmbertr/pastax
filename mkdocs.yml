@@ -87,5 +87,5 @@ plugins:
 
 nav:
   - "index.md"
-  - Getting started: "demo.ipynb"
+  - Getting started: "getting_started.ipynb"
   - "api.md"

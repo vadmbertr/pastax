@@ -5,11 +5,11 @@ and [`pastax.trajectory.TrajectoryEnsemble`][] in JAX.
 
 
 from ._state import State
-from .state import Location, Displacement, Time
+from ._states import Location, Displacement, Time
 from ._timeseries import Timeseries
-from .trajectory import Trajectory
+from ._trajectory import Trajectory
 from ._timeseries_ensemble import TimeseriesEnsemble
-from .trajectory_ensemble import TrajectoryEnsemble
+from ._trajectory_ensemble import TrajectoryEnsemble
 from ._set import Set
 
 

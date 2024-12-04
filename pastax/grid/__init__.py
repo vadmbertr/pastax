@@ -1,17 +1,16 @@
 """
-This module provides classes and functions for handling coordinates, grids, and [`pastax.grid.Dataset`][] in JAX.
+This module provides classes and functions for handling coordinates, grids, and [`pastax.grid.Grid`][] in JAX.
 """
 
 
-from .dataset import Dataset
-from ._coordinates import Coordinates
-from ._grid import Grid, Coordinate, LongitudeCoordinate, SpatialField, SpatioTemporalField
-from ._utils import spatial_derivative
+from ._grid import Grid
+from ._coordinate import Coordinate, LongitudeCoordinate, Coordinates
+from ._field import Field, SpatialField, SpatioTemporalField
+from ._operators import spatial_derivative
 
 __all__ = [
-    "Dataset",
-    "Coordinates",
-    "Grid", "Coordinate", "LongitudeCoordinate", 
-    "SpatialField", "SpatioTemporalField",
+    "Grid",
+    "Coordinates", "Coordinate", "LongitudeCoordinate",
+    "Field", "SpatialField", "SpatioTemporalField",    
     "spatial_derivative",
 ]

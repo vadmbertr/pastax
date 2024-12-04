@@ -1,453 +1,477 @@
 from __future__ import annotations
-from typing import Any
+from typing import Dict
 
 import equinox as eqx
-import interpax as ipx
+import jax
 import jax.numpy as jnp
-from jaxtyping import Float, Int, Array
+from jaxtyping import Array, Bool, Float, Int, Scalar
+import numpy as np
+import xarray as xr
+
+from ..utils._unit import degrees_to_meters, meters_to_degrees
+from ._coordinate import Coordinates
+from ._field import SpatioTemporalField
 
 
 class Grid(eqx.Module):
     """
-    Base class for representing a grid of values, which can be either floating-point or integer arrays.
+    Class providing some routines for handling gridded spatiotemporal data in JAX.
 
     Attributes
     ----------
-    _values : Float[Array, "..."] | Int[Array, "..."]
-        The grid values stored as either floating-point or integer arrays.
+    cell_area : Bool[Array, "lat lon"]
+        Array of cell areas in square meters.
+    coordinates : Coordinates
+        Coordinates object containing time, latitude, and longitude.
+    dx : Float[Array, "lat lon-1"]
+        Array of longitudinal distances in meters.
+    dy : Float[Array, "lat-1 lon"]
+        Array of latitudinal distances in meters.
+    fields : Dict[str, SpatioTemporalField]
+        Dictionary of spatiotemporal fields.
+    is_land : Bool[Array, "lat lon"]
+        Boolean array indicating land presence.
+    is_spherical_mesh: bool
+        Boolean indicating whether the mesh uses spherical coordinates.
+    use_degrees : bool
+        Boolean indicating whether distance units are degrees.
 
     Methods
     -------
-    __getitem__(item:)
-        Retrieves the value(s) at the specified index or slice from the grid.
+    indices(time, latitude, longitude)
+        Gets nearest indices of the spatio-temporal point `time`, `latitude`, `longitude`.
+    interp_temporal(*fields, time)
+        Interpolates the specified fields temporally at the given time.
+    interp_spatial(*fields, latitude, longitude)
+        Interpolates the specified fields spatially at the given latitude and longitude.
+    interp_spatiotemporal(*fields, time, latitude, longitude)
+        Interpolates the specified fields spatiotemporally at the given time, latitude, and longitude.
+    neighborhood(*fields, time, latitude, longitude, t_width, x_width)
+        Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`, 
+        `longitude`.
+    to_xarray()
+        Returns the [`pastax.grid.Grid`][] object as a `xarray.Dataset`.
+    from_array(fields, time, latitude, longitude, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
+        Constructs a [`pastax.grid.Grid`][] object from arrays of fields and coordinates `time`, `latitude`, `longitude`.
+    from_xarray(dataset, fields, coordinates, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
+        Constructs a [`pastax.grid.Grid`][] object from a `xarray.Dataset`.
     """
-    _values: Float[Array, "..."] | Int[Array, "..."]
+    coordinates: Coordinates
+    dx: Float[Array, "lat lon-1"]
+    dy: Float[Array, "lat-1 lon"]
+    cell_area: Bool[Array, "lat lon"]
+    fields: Dict[str, SpatioTemporalField]
+    is_land: Bool[Array, "lat lon"]
+    is_spherical_mesh: bool
+    use_degrees: bool
 
-    @property
-    def values(self) -> Float[Array, "dim"]:
+    def indices(
+        self,
+        time: Int[Scalar, ""],
+        latitude: Float[Scalar, ""],
+        longitude: Float[Scalar, ""]
+    ) -> tuple[Int[Scalar, ""], Int[Scalar, ""], Int[Scalar, ""]]:
         """
-        Returns the grid values.
-# 
-        Returns
-        -------
-        Float[Array, "dim"]
-            The grid values.
-        """
-        return self._values
-
-    def __getitem__(self, item: Any) -> Float[Array, "..."] | Int[Array, "..."]:
-        """
-        Retrieve an item from the values array.
+        Get nearest indices of the spatio-temporal point `time`, `latitude`, `longitude`.
 
         Parameters
         ----------
-        item : Any
-            The index or slice used to retrieve the item from the values array.
+        time : Int[Scalar, ""]
+            The nearest time index.
+        latitude : Float[Scalar, ""]
+            The nearest time index.
+        longitude : Float[Scalar, ""]
+            The nearest time index.
 
         Returns
         -------
-        Float[Array, "..."] | Int[Array, "..."]
-            The item retrieved from the values array, which can be either a float or an integer array.
+        tuple[Int[Scalar, ""], Int[Scalar, ""], Int[Scalar, ""]]
+            A tuple of arrays containing the nearest indices of the spatio-temporal point.
         """
-        return self.values.__getitem__(item)
+        return self.coordinates.indices(time, latitude, longitude)
 
-
-class Coordinate(Grid):
-    """
-    Class for handling 1D coordinates (i.e. of rectilinear grids).
-
-    Attributes
-    ----------
-    _values : Float[Array, "dim"]
-        1D array of coordinate values.
-    indices : ipx.Interpolator1D
-        Interpolator for nearest index interpolation.
-
-    Methods
-    -------
-    index(query)
-        Returns the nearest index for the given query coordinates.
-        
-    from_array(values, **interpolator_kwargs)
-        Creates a [`pastax.grid.Coordinate`][] instance from an array of values.
-    """
-    _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
-    indices: ipx.Interpolator1D
-
-    @property
-    def values(self) -> Float[Array, "dim"]:
+    def interp_temporal(
+        self,
+        *fields: tuple[str, ...],
+        time: Float[Array, "..."]
+    ) -> tuple[Float[Array, "... ... ..."], ...]:
         """
-        Returns the coordinate values.
-# 
-        Returns
-        -------
-        Float[Array, "dim"]
-            The coordinate values.
-        """
-        return self._values
-
-    def index(self, query: Float[Array, "..."]) -> Int[Array, "..."]:
-        """
-        Returns the nearest index interpolation for the given query.
+        Interpolates the given fields in time.
 
         Parameters
         ----------
-        query : Float[Array, "..."]
-            The query array for which the nearest indices are to be found.
+        fields : tuple[str, ...]
+            Fields names to be interpolated.
+        time : Float[Array, "..."]
+            The time points at which to interpolate the fields.
 
         Returns
         -------
-        Int[Array, "..."]
-            An array of integers representing the nearest indices.
+        tuple[Float[Array, "... ... ..."], ...]
+            A tuple of arrays containing the interpolated values for each field.
         """
-        return self.indices(query).astype(int)
-
-    @classmethod
-    def from_array(
-        cls,
-        values: Float[Array, "dim"],
-        **interpolator_kwargs: Any
-    ) -> Coordinate:
-        """
-        Create a [`pastax.grid.Coordinate`][] object from an array of values.
-
-        This method initializes a [`pastax.grid.Coordinate`][] object using the provided array of values.
-        It uses a 1D interpolator to generate indices from values, with the interpolation method set to `"nearest"`.
-
-        Parameters
-        ----------
-        values : Float[Array, "dim"]
-            An array of coordinate values.
-        **interpolator_kwargs : Any
-            Additional keyword arguments for the interpolator.
-
-        Returns
-        -------
-        Coordinate
-            A  [`pastax.grid.Coordinate`][] object containing the provided values and corresponding indices interpolator.
-        """
-        interpolator_kwargs["method"] = "nearest"
-        indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
-
-        return cls(_values=values, indices=indices)
-
-class LongitudeCoordinate(Coordinate):
-    """
-    Class for handling 1D longitude coordinates (i.e. of rectilinear grids). 
-    This class handles the circular nature of longitudes coordinates.
-
-    Attributes
-    ----------
-    _values : Float[Array, "dim"]
-        1D array of longitude coordinate values.
-    indices : ipx.Interpolator1D
-        Interpolator for nearest index interpolation.
-
-    Methods
-    -------
-    index(query)
-        Returns the nearest index for the given query coordinates.
-        
-    from_array(values, **interpolator_kwargs)
-        Creates a [`pastax.grid.LongitudeCoordinate`][] instance from an array of values.
-    """
-    _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
-    indices: ipx.Interpolator1D
-
-    @property
-    def values(self) -> Float[Array, "dim"]:
-        """
-        Returns the coordinate values.
-# 
-        Returns
-        -------
-        Float[Array, "dim"]
-            The coordinate values.
-        """
-        return self._values - 180
-
-    def index(self, query: Float[Array, "..."]) -> Int[Array, "..."]:
-        """
-        Returns the nearest index interpolation for the given query.
-
-        Parameters
-        ----------
-        query : Float[Array, "..."]
-            The query array for which the nearest indices are to be found.
-
-        Returns
-        -------
-        Int[Array, "..."]
-            An array of integers representing the nearest indices.
-        """
-        return self.indices(query + 180).astype(int)
-
-    @classmethod
-    def from_array(
-        cls,
-        values: Float[Array, "dim"],
-        **interpolator_kwargs: Any
-    ) -> LongitudeCoordinate:
-        """
-        Create a LongitudeCoordinate object from an array of values.
-
-        This method initializes a LongitudeCoordinate object using the provided array of values.
-        It uses a 1D interpolator to generate indices from values, with the interpolation method set to "nearest".
-
-        Parameters
-        ----------
-        values : Float[Array, "dim"]
-            An array of coordinate values.
-        **interpolator_kwargs : Any
-            Additional keyword arguments for the interpolator.
-
-        Returns
-        -------
-        LongitudeCoordinate
-            A [`pastax.grid.LongitudeCoordinate`][] object containing the provided values and corresponding indices interpolator.
-        """
-        values += 180
-
-        interpolator_kwargs["method"] = "nearest"
-        indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
-
-        return cls(_values=values, indices=indices)
-
-
-class SpatialField(Grid):
-    """
-    Class representing a spatial field with interpolation capabilities.
-
-    Attributes
-    ----------
-    _values : Float[Array, "lat lon"]
-        The gridded data values.
-    spatial_field : ipx.Interpolator2D
-        The interpolator for spatial data.
-
-    Methods
-    -------
-    interp_spatial(latitude, longitude)
-        Interpolates the spatial data at the given latitude and longitude.
-        
-    from_array(values, latitude, longitude, interpolation_method)
-        Creates a [`pastax.grid.SpatialField`][] instance from the given array of values, latitude, and longitude 
-        using the specified interpolation method.
-    """
-    _values: Float[Array, "lat lon"]
-    spatial_field: ipx.Interpolator2D
+        return tuple(self.fields[field_name].interp_temporal(time) for field_name in fields)
 
     def interp_spatial(
         self,
+        *fields: tuple[str, ...],
         latitude: Float[Array, "..."],
         longitude: Float[Array, "..."]
-    ) -> Float[Array, "... ..."]:
+    ) -> tuple[Float[Array, "... ... ..."], ...]:
         """
-        Interpolates spatial data based on given latitude and longitude arrays.
+        Interpolates the given fields in space.
 
         Parameters
         ----------
+        *fields : tuple[str, ...]
+            Fields names to be interpolated.
         latitude : Float[Array, "..."]
-            Array of latitude values.
+            The latitude values at which to interpolate the fields.
         longitude : Float[Array, "..."]
-            Array of longitude values.
+            The latitude values at which to interpolate the fields.
 
         Returns
         -------
-        Float[Array, "... ..."]
-            Interpolated spatial data array.
+        tuple[Float[Array, "... ... ..."], ...]
+            A tuple of arrays containing interpolated values for each field.
         """
-        longitude += 180  # circular domain
-
-        return self.spatial_field(latitude, longitude)
-
-    @classmethod
-    def from_array(
-        cls,
-        values: Float[Array, "lat lon"],
-        latitude: Float[Array, "lat"],
-        longitude: Float[Array, "lon"],
-        interpolation_method: str
-    ) -> SpatialField:
-        """
-        Create a [`pastax.grid.SpatialField`][] object from given arrays of values, latitude, and longitude.
-
-        Parameters
-        ----------
-        values : Float[Array, "lat lon"]
-            A 2D array of values representing the spatial data.
-        latitude : Float[Array, "lat"]
-            A 1D array of latitude values.
-        longitude : Float[Array, "lon"]
-            A 1D array of longitude values.
-        interpolation_method : str
-            The method to use for interpolation.
-
-        Returns
-        -------
-        SpatialField
-            A [`pastax.grid.SpatialField`][] object containing the values and the interpolated spatial field.
-        """
-        spatial_field = ipx.Interpolator2D(
-            latitude, longitude + 180,  # circular domain
-            values,
-            method=interpolation_method, extrap=True, period=(None, 360)
+        return tuple(
+            self.fields[field_name].interp_spatial(latitude, longitude)
+            for field_name in fields
         )
-
-        return cls(_values=values, spatial_field=spatial_field)
-
-
-class SpatioTemporalField(Grid):
-    """
-    Class representing a spatiotemporal field with interpolation capabilities.
-
-    Attributes
-    ----------
-    values : Float[Array, "time lat lon"]
-        The values of the spatiotemporal field.
-    temporal_field : ipx.Interpolator1D
-        Interpolator for the temporal dimension.
-    spatial_field : ipx.Interpolator2D
-        Interpolator for the spatial dimensions (latitude and longitude).
-    spatiotemporal_field : ipx.Interpolator3D
-        Interpolator for the spatiotemporal dimensions.
-
-    Methods
-    -------
-    interp_temporal(tq)
-        Interpolates the spatiotemporal field at the given times.
     
-    interp_spatial(latitude, longitude)
-        Interpolates the spatiotemporal field at the given latitudes and longitudes.
-    
-    interp_spatiotemporal(time, latitude, longitude)
-        Interpolates the spatiotemporal field at the given times, latitudes, and longitudes.
-    
-    from_array(values, time, latitude, longitude, interpolation_method)
-        Creates a [`pastax.grid.SpatioTemporalField`][] instance from the given array of values and coordinates.
-    """
-    _values: Float[Array, "time lat lon"]
-    temporal_field: ipx.Interpolator1D
-    spatial_field: ipx.Interpolator2D
-    spatiotemporal_field: ipx.Interpolator3D
-
-    def interp_temporal(self, tq: Float[Array, "..."]) -> Float[Array, "... ... ..."]:
-        """
-        Interpolates the spatiotemporal field at the given time points.
-
-        Parameters
-        ----------
-        tq : Float[Array, "..."]
-            An array of time points at which to interpolate the spatiotemporal field.
-
-        Returns
-        -------
-        Float[Array, "... ... ..."]
-            Interpolated values at the given time points.
-        """
-        return self.temporal_field(tq)
-
-    def interp_spatial(
-        self,
-        latitude: Float[Array, "..."],
-        longitude: Float[Array, "..."]
-    ) -> Float[Array, "... ... ..."]:
-        """
-        Interpolates the spatiotemporal field at the given latitude/longitude points.
-
-        Parameters
-        ----------
-        latitude : Float[Array, "..."]
-            Array of latitude values.
-        longitude : Float[Array, "..."]
-            Array of longitude values.
-
-        Returns
-        -------
-        Float[Array, "... ... ..."]
-            Interpolated values at the given latitude/longitude points.
-        """
-        longitude += 180  # circular domain
-
-        return jnp.moveaxis(self.spatial_field(latitude, longitude), -1, 0)
-
     def interp_spatiotemporal(
         self,
+        *fields: tuple[str, ...],
         time: Float[Array, "..."],
         latitude: Float[Array, "..."],
         longitude: Float[Array, "..."]
-    ) -> Float[Array, "... ... ..."]:
+    ) -> tuple[Float[Array, "... ... ..."], ...]:
         """
-        Interpolates the spatiotemporal field at the given time/latitude/longitude points.
+        Interpolates the specified fields spatiotemporally at the given time, latitude, and longitude.
 
         Parameters
         ----------
+        *fields : tuple[str, ...]
+            Field names to interpolate.
         time : Float[Array, "..."]
-            Array of time values.
+            The time values at which to interpolate the fields.
         latitude : Float[Array, "..."]
-            Array of latitude values.
+            The latitude values at which to interpolate the fields.
         longitude : Float[Array, "..."]
-            Array of longitude values.
+            The latitude values at which to interpolate the fields.
 
         Returns
         -------
-        Float[Array, "... ... ..."]
-            Interpolated values at the given time/latitude/longitude points.
+        tuple[Float[Array, "... ... ..."], ...]
+            A tuple of arrays containing the interpolated values for each field.
         """
-        longitude += 180  # circular domain
+        return tuple(
+            self.fields[field_name].interp_spatiotemporal(time, latitude, longitude)
+            for field_name in fields
+        )
 
-        return self.spatiotemporal_field(time, latitude, longitude)
+    def neighborhood(  # TODO: handle edge cases
+        self,
+        *fields: tuple[str, ...],
+        time: Int[Scalar, ""],
+        latitude: Float[Scalar, ""],
+        longitude: Float[Scalar, ""],
+        t_width: int,
+        x_width: int
+    ) -> Grid:
+        """
+        Extracts a neighborhood of data around a specified point in time and space.
+
+        Parameters
+        ----------
+        *fields : tuple[str, ...]
+            Fields names to extract from the dataset.
+        time : Int[Scalar, ""]
+            The time coordinate for the center of the neighborhood.
+        latitude : Float[Scalar, ""]
+            The latitude coordinate for the center of the neighborhood.
+        longitude : Float[Scalar, ""]
+            The longitude coordinate for the center of the neighborhood.
+        t_width : int
+            The width of the neighborhood in the time dimension.
+        x_width : int
+            The width of the neighborhood in the spatial dimensions (latitude and longitude).
+
+        Returns
+        -------
+        Dataset
+            A [`pastax.grid.Grid`][] object restricted to the neighborhing data.
+        """
+        t_i, lat_i, lon_i = self.indices(time, latitude, longitude)
+
+        from_t_i = t_i - t_width // 2
+        from_lat_i = lat_i - x_width // 2
+        from_lon_i = lon_i - x_width // 2
+
+        fields = dict(
+            (
+                field_name,
+                jax.lax.dynamic_slice(
+                    self.fields[field_name].values,
+                    (from_t_i, from_lat_i, from_lon_i),
+                    (t_width, x_width, x_width)
+                )
+            )
+            for field_name in fields
+        )
+
+        t = jax.lax.dynamic_slice_in_dim(self.coordinates.time.values, from_t_i, t_width)
+        lat = jax.lax.dynamic_slice_in_dim(self.coordinates.latitude.values, from_lat_i, x_width)
+        lon = jax.lax.dynamic_slice_in_dim(self.coordinates.longitude.values, from_lon_i, x_width)
+
+        return Grid.from_array(
+            fields, 
+            t, lat, lon, 
+            interpolation_method="linear", 
+            is_spherical_mesh=self.is_spherical_mesh, 
+            use_degrees=self.use_degrees
+        )
+
+    def to_xarray(self) -> xr.Dataset:
+        """
+        Converts the [`pastax.grid.Grid`][] to a `xarray.Dataset`.
+
+        This method constructs an xarray Dataset from the object's fields and coordinates.
+        The fields are added as data variables with dimensions ["time", "latitude", "longitude"].
+        The coordinates are added as coordinate variables.
+
+        Returns
+        -------
+        xr.Dataset
+            The corresponding `xarray.Dataset`.
+        """
+        dataset = xr.Dataset(
+            data_vars=dict(
+                (var_name, (["time", "latitude", "longitude"], var.values)) for var_name, var in self.variables.items()
+            ),
+            coords=dict(
+                time=np.asarray(self.coordinates.time.values, dtype="datetime64[s]"),
+                latitude=self.coordinates.latitude.values,
+                longitude=self.coordinates.longitude.values
+            )
+        )
+
+        return dataset
 
     @classmethod
     def from_array(
         cls,
-        values: Float[Array, "time lat lon"],
-        time: Float[Array, "time"],
+        fields: Dict[str, Float[Array, "time lat lon"]],
+        time: Int[Array, "time"],
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"],
-        interpolation_method: str
-    ) -> SpatioTemporalField:
+        interpolation_method: str = "linear",
+        is_spherical_mesh: bool = True,
+        use_degrees: bool = False,
+        is_uv_mps: bool = True
+    ) -> Grid:
         """
-        Create a [`pastax.grid.SpatioTemporalField`][] object from given arrays of values, time, latitude, and longitude.
+        Create a [`pastax.grid.Grid`][] object from arrays of fields, time, latitude, and longitude.
 
         Parameters
         ----------
-        values : Float[Array, "time lat lon"]
-            The array of values representing the data over time, latitude, and longitude.
-        time : Float[Array, "time"]
-            The array of time points.
+        fields : Dict[str, Float[Array, "time lat lon"]]
+            A dictionary where keys are fields names and values are 3D arrays representing 
+            the field data over time, latitude, and longitude.
+        time : Int[Array, "time"]
+            A 1D array representing the time dimension.
         latitude : Float[Array, "lat"]
-            The array of latitude points.
+            A 1D array representing the latitude dimension.
         longitude : Float[Array, "lon"]
-            The array of longitude points.
-        interpolation_method : str
-            The method to be used for interpolation (e.g., 'linear', 'nearest', ...).
+            A 1D array representing the longitude dimension.
+        interpolation_method : str, optional
+            The method to use for latter possible interpolation of the fields, defaults to `"linear"`.
+        is_spherical_mesh : bool, optional
+            Whether the mesh uses spherical coordinate, defaults to `True`.
+        use_degrees : bool, optional
+            Whether distance units should be degrees rather than meters, defaults to `False`.
+        is_uv_mps : bool, optional
+            Whether the velocity data is in m/s, defaults to `True`.
 
         Returns
         -------
-        SpatioTemporalField
-            A [`pastax.grid.SpatioTemporalField`][] object containing the original values and temporal, spatial, 
-            and spatiotemporal interpolators.
+        Dataset
+            The corresponding [`pastax.grid.Grid`][].
         """
-        temporal_field = ipx.Interpolator1D(
-            time,
-            values,
-            method=interpolation_method, extrap=True
-        )
-        spatial_field = ipx.Interpolator2D(
-            latitude, longitude + 180,  # circular domain
-            jnp.moveaxis(values, 0, -1),
-            method=interpolation_method, extrap=True, period=(None, 360)
-        )
-        spatiotemporal_field = ipx.Interpolator3D(
-            time, latitude, longitude + 180,  # circular domain
-            values,
-            method=interpolation_method, extrap=True, period=(None, None, 360)
+        def compute_cell_dlatlon(dright: Float[Array, "latlon-1"], axis: int) -> Float[Array, "latlon"]:
+            if axis == 0:
+                dcentered = (dright[1:, :] + dright[:-1, :]) / 2
+                dstart =((dright[0, :] - dcentered[0, :] / 2) * 2)[None, :]
+                dend = ((dright[-1, :] - dcentered[-1, :] / 2) * 2)[None, :]
+            else:
+                dcentered = (dright[:, 1:] + dright[:, :-1]) / 2
+                dstart = ((dright[:, 0] - dcentered[:, 0] / 2) * 2)[:, None]
+                dend = ((dright[:, -1] - dcentered[:, -1] / 2) * 2)[:, None]
+            return jnp.concat((dstart, dcentered, dend), axis=axis)
+        
+        use_degrees = use_degrees & is_spherical_mesh  # if flat mesh, no reason to use degrees
+
+        coordinates = Coordinates.from_array(time, latitude, longitude, is_spherical_mesh)
+
+        # compute grid spacings and cells area
+        dlat = jnp.diff(latitude)
+        dlon = jnp.diff(longitude)
+
+        if is_spherical_mesh and not use_degrees:
+            dlatlon = degrees_to_meters(
+                jnp.stack([dlat, jnp.zeros_like(dlat)], axis=-1), (latitude[:-1] + latitude[1:]) / 2
+            )
+            dlat = dlatlon[:, 0]
+            _, dlat = jnp.meshgrid(longitude, dlat)
+
+            dlatlon = jax.vmap(
+                lambda lat: jax.vmap(
+                    lambda _dlon: degrees_to_meters(jnp.stack([jnp.zeros_like(_dlon), _dlon], axis=-1), lat)
+                )(dlon)
+            )(latitude)
+            dlon = dlatlon[:, :, 1]
+        else:
+            _, dlat = jnp.meshgrid(longitude, dlat)
+            dlon, _ = jnp.meshgrid(dlon, latitude)
+
+        cell_dlat = compute_cell_dlatlon(dlat, axis=0)
+        cell_dlon = compute_cell_dlatlon(dlon, axis=1)
+        cell_area = cell_dlat * cell_dlon
+
+        # compute land mask
+        is_land = jnp.zeros((latitude.size, longitude.size), dtype=bool)
+        for field in fields.values():
+            _is_land = jnp.isnan(field).sum(axis=0, dtype=bool)
+            is_land = jnp.logical_or(is_land, _is_land)
+
+        # apply it
+        for field_name in fields:
+            field = fields[field_name]
+            field = jnp.where(is_land, 0, field)
+            fields[field_name] = field
+
+        # if required, convert uv from m/s to °/s
+        if use_degrees and is_uv_mps:
+            vu = jnp.stack((fields["v"], fields["u"]), axis=-1)
+            original_shape = vu.shape
+            vu = vu.reshape(vu.shape[0], -1, 2)
+
+            _, lat_grid = jnp.meshgrid(longitude, latitude)
+            lat_grid = lat_grid.ravel()
+             
+            vu = eqx.filter_vmap(lambda x: meters_to_degrees(x, lat_grid))(vu)
+            vu = vu.reshape(original_shape)
+
+            fields["v"] = vu[..., 0]
+            fields["u"] = vu[..., 1]
+
+            is_uv_mps = False
+
+        fields = dict(
+            (
+                field_name,
+                SpatioTemporalField.from_array(
+                    values,
+                    coordinates.time.values, coordinates.latitude.values, coordinates.longitude.values,
+                    interpolation_method=interpolation_method
+                )
+            ) for field_name, values in fields.items()
         )
 
         return cls(
-            _values=values,                            
-            temporal_field=temporal_field,            
-            spatial_field=spatial_field,              
-            spatiotemporal_field=spatiotemporal_field,
+            cell_area=cell_area,
+            coordinates=coordinates,
+            dx=dlon,
+            dy=dlat,
+            fields=fields,
+            is_land=is_land,
+            is_spherical_mesh=is_spherical_mesh,
+            use_degrees=use_degrees
         )
+
+    @classmethod
+    def from_xarray(
+        cls,
+        dataset: xr.Dataset,
+        fields: Dict[str, str],
+        coordinates: Dict[str, str],
+        interpolation_method: str = "linear",
+        is_spherical_mesh: bool = True,
+        is_uv_mps: bool = True,
+        use_degrees: bool = False
+    ) -> Grid:
+        """
+        Create a [`pastax.grid.Grid`][] object from a `xarray.Dataset`.
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            The `xarray.Dataset` containing the data.
+        fields : Dict[str, str]
+            A dictionary mapping the target field names (keys) to the source variable names in the dataset (values).
+        coordinates : Dict[str, str]
+            A dictionary mapping the coordinate names ('time', 'latitude', 'longitude') to their corresponding names in
+            the dataset.
+        interpolation_method : str, optional
+            The method to use for latter possible interpolation of the fields, defaults to `"linear"`.
+        is_spherical_mesh : bool, optional
+            Whether the mesh uses spherical coordinate, defaults to `True`.
+        is_uv_mps : bool, optional
+            Whether the velocity data is in m/s, defaults to `True`.
+        use_degrees : bool, optional
+            Whether distance unit should be degrees rather than meters, defaults to `False`.
+
+        Returns
+        -------
+        Dataset
+            The corresponding [`pastax.grid.Grid`][].
+        """
+        fields, t, lat, lon = cls._to_array(dataset, fields, coordinates, to_jax=True)
+
+        return cls.from_array(fields, t, lat, lon, interpolation_method, is_spherical_mesh, use_degrees, is_uv_mps)
+
+    @staticmethod
+    def _to_array(
+        dataset: xr.Dataset,
+        fields: Dict[str, str],  # to -> from
+        coordinates: Dict[str, str],  # to -> from
+        to_jax: bool = True
+    ) -> tuple[Dict[str, Float[Array, "..."]], Float[Array, "..."], Float[Array, "..."], Float[Array, "..."]]:
+        """
+        Converts an `xarray.Dataset` to arrays for specified fields and coordinates.
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            The `xarray.Dataset` to convert.
+        fields : Dict[str, str]
+            A dictionary mapping the target field names to the source variable names in the dataset.
+        coordinates : Dict[str, str]
+            A dictionary mapping the target coordinate names to the source coordinate names in the dataset.
+        to_jax : bool, optional
+            Whether to convert the arrays to JAX arrays, defaults to `True`.
+
+        Returns
+        -------
+        tuple[Dict[str, Float[Array, "..."]], Float[Array, "..."], Float[Array, "..."], Float[Array, "..."]]
+            A tuple containing:
+            - A dictionary of converted fields.
+            - The time coordinate array.
+            - The latitude coordinate array.
+            - The longitude coordinate array.
+        """
+        if to_jax:
+            transform_fn = lambda arr: jnp.asarray(arr, dtype=float)
+        else:
+            transform_fn = lambda arr: np.asarray(arr, dtype=float)
+
+        fields = dict(
+            (to_name, transform_fn(dataset[from_name].data)) for to_name, from_name in fields.items()
+        )
+
+        t = transform_fn(dataset[coordinates["time"]].data.astype("datetime64[s]").astype(int))
+        lat = transform_fn(dataset[coordinates["latitude"]].data)
+        lon = transform_fn(dataset[coordinates["longitude"]].data)
+
+        return fields, t, lat, lon

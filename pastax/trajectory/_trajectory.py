@@ -8,10 +8,10 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 import xarray as xr
 
-from ..utils.geo import distance_on_earth
-from ..utils.unit import UNIT, Unit, units_to_str
+from ..utils._geo import distance_on_earth
+from ..utils._unit import time_in_seconds, UNIT, Unit, units_to_str
 from ._state import State
-from .state import Location, Time
+from ._states import Location, Time
 from ._timeseries import Timeseries
 
 
@@ -54,12 +54,12 @@ class Trajectory(Timeseries):
         Computes the separation distance between this trajectory and another trajectory.
     steps()
         Returns the steps of the trajectory.
+    to_xarray()
+        Converts the [`pastax.trajectory.Trajectory`][] to a `xarray.Dataset`.
     from_array(values, times, unit=UNIT["°"], id=None)
-        Creates a Trajectory from an array of values and time points.
-    to_dataarray()
-        Converts the trajectory locations to a dict of xarray DataArray.
-    to_dataset()
-        Converts the trajectory to a xarray Dataset.
+        Creates a [`pastax.trajectory.Trajectory`][] from arrays of (latitudes, longitudes) values and time points.
+    from_xarray(dataset, time_varname="time", lat_varname="lat", lon_varname="lon", unit=UNIT["°"], id=None)
+        Creates a [`pastax.trajectory.Trajectory`][] from a `xarray.Dataset`.
     """
 
     states: Location
@@ -285,6 +285,17 @@ class Trajectory(Timeseries):
         steps = jnp.pad(steps, (1, 0), constant_values=0.)  # adds a 1st 0 step
 
         return Timeseries.from_array(steps, self.times.value, UNIT["m"], name="Trajectory steps")
+
+    def to_xarray(self) -> xr.Dataset:
+        """
+        Converts the [`pastax.trajectory.Trajectory`][] to a `xarray.Dataset`.
+
+        Returns
+        -------
+        xr.Dataset
+            The corresponding `xarray.Dataset`.
+        """
+        return xr.Dataset(self._to_dataarray())
     
     @classmethod
     def from_array(
@@ -296,62 +307,81 @@ class Trajectory(Timeseries):
         **_: Dict
     ) -> Trajectory:
         """
-        Creates a trajectory from an array of values and time points.
+        Creates a [`pastax.trajectory.Trajectory`][] from arrays of (latitudes, longitudes) values and time points.
 
         Parameters
         ----------
         values : Float[Array, "... time 2"]
-            The array of values for the trajectory.
-        unit : Unit | Dict[Unit, int], optional
-            Unit of the trajectory locations, defaults to UNIT["°"].
+            The array of (latitudes, longitudes) values for the trajectory.
         times : Float[Array, "... time"]
             The time points for the trajectory.
+        unit : Unit | Dict[Unit, int], optional
+            Unit of the trajectory locations, defaults to UNIT["°"].
         id : Int[Array, ""], optional
             The ID of the trajectory, defaults to None.
 
         Returns
         -------
         Trajectory
-            The trajectory created from the array of values and time points.
+            The corresponding [`pastax.trajectory.Trajectory`][].
         """
         return super().from_array(values, times, unit=unit, name="Location in [latitude, longitude]", id=id)
-
-    def to_dataarray(self) -> Dict[str, xr.DataArray]:
+    
+    @classmethod
+    def from_xarray(
+        cls, 
+        dataset: xr.Dataset,
+        time_varname: str = "time",
+        lat_varname: str = "lat",  # follows clouddrift "convention"
+        lon_varname: str = "lon",  # follows clouddrift "convention"
+        unit: Unit | Dict[Unit, int] = UNIT["°"],
+        id: Int[Array, ""] = None,
+        **_: Dict
+    ) -> Trajectory:
         """
-        Converts the trajectory location to a dictionary of xarray DataArrays.
+        Creates a [`pastax.trajectory.Trajectory`][] from a `xarray.Dataset`.
+
+        Parameters
+        ----------
+        dataset : xr.Dataset
+            The `xarray.Dataset` containing the trajectory data.
+        time_varname : str, optional
+            A string indicating the name of the time variable in the dataset, defaults to `time`.
+        lat_varname : str, optional
+            A string indicating the name of the latitude variable in the dataset, defaults to `lat`.
+        lon_varname : str, optional
+            A string indicating the name of the longitude variable in the dataset, defaults to `lon`.
+        unit : Unit | Dict[Unit, int], optional
+            Unit of the trajectory locations, defaults to UNIT["°"].
+        id : Int[Array, ""], optional
+            The ID of the trajectory, defaults to None.
 
         Returns
         -------
-        Dict[str, xr.DataArray]
-            A dictionary where keys are the variable names and values are the corresponding xarray DataArrays.
+        Trajectory
+            The corresponding [`pastax.trajectory.Trajectory`][].
         """
+        values = jnp.stack([dataset[lat_varname].values, dataset[lon_varname].values], axis=-1)
+        times = time_in_seconds(dataset[time_varname].values)
+        return cls.from_array(values, times, unit=unit, id=id)
+
+    def _to_dataarray(self) -> Dict[str, xr.DataArray]:
         times = self.times.to_datetime()
         unit = units_to_str(self.unit)
 
         latitude_da = xr.DataArray(
             data=self.latitudes.value,
-            dims=["time"],
-            coords={"time": times},
-            name="latitude",
+            dims=["obs"],
+            coords={"time": ("obs", times)},
+            name="lat",
             attrs={"units": unit}
         )
         longitude_da = xr.DataArray(
             data=self.longitudes.value,
-            dims=["time"],
-            coords={"time": times},
-            name="longitude",
+            dims=["obs"],
+            coords={"time": ("obs", times)},
+            name="lon",
             attrs={"units": unit}
         )
 
-        return {"latitude": latitude_da, "longitude": longitude_da}
-
-    def to_dataset(self) -> xr.Dataset:
-        """
-        Converts the trajectory to an xarray Dataset.
-
-        Returns
-        -------
-        xr.Dataset
-            An xarray Dataset containing the time seriesstates.
-        """
-        return xr.Dataset(self.to_dataarray())
+        return {"lat": latitude_da, "lon": longitude_da}

@@ -1,7 +1,7 @@
 # API
 
 ::: pastax.simulator
-::: pastax.simulator.dynamics
+::: pastax.dynamics
 ::: pastax.trajectory
 ::: pastax.grid
 ::: pastax.evaluation
