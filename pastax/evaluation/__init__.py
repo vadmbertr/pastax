@@ -4,13 +4,11 @@ This module provides classes for evaluating simulated [`pastax.trajectory.Trajec
 
 
 from ._evaluation import Evaluation
-from ._evaluator import Evaluator
-from .evaluator import EnsembleEvaluator, PairEvaluator
+from ._evaluator import BaseEvaluator, EnsembleEvaluator, PairEvaluator
 from ._metric import Metric, LiuIndex, Mae, Rmse, SeparationDistance
 
 __all__ = [
     "Evaluation",
-    "Evaluator",
-    "EnsembleEvaluator", "PairEvaluator",
+    "BaseEvaluator", "EnsembleEvaluator", "PairEvaluator",
     "Metric", "LiuIndex", "Mae", "Rmse", "SeparationDistance",
 ]

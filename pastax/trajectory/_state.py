@@ -4,7 +4,7 @@ from typing import Dict
 import equinox as eqx
 from jaxtyping import ArrayLike
 
-from ..utils.unit import Unit
+from ..utils._unit import Unit
 from ._unitful import Unitful
 
 

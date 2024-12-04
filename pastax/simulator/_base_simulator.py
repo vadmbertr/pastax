@@ -6,10 +6,10 @@ import jax.random as jrd
 from jaxtyping import Array, Float, Int, PyTree, Scalar
 
 from ..trajectory import Displacement, Location, Trajectory, TrajectoryEnsemble
-from ..utils.unit import UNIT
+from ..utils._unit import UNIT
 
 
-class Simulator(eqx.Module):
+class BaseSimulator(eqx.Module):
     """
     Base class for defining differentiable [`pastax.trajectory.Trajectory`][] or 
     [`pastax.trajectory.TrajectoryEnsemble`][] simulators.
@@ -107,7 +107,7 @@ class Simulator(eqx.Module):
 
         args : PyTree
             The PyTree of argument(s) required to compute the `dynamics`.
-            Could be for example one or several [`pastax.grid.Dataset`][] of gridded physical fields 
+            Could be for example one or several [`pastax.grid.Grid`][] of gridded physical fields 
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].

@@ -5,7 +5,7 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import ArrayLike
 
-from ..utils.unit import compose_units, Unit
+from ..utils._unit import compose_units, Unit
 
 
 def unit_converter(x: Unit | Dict[Unit, int]) -> Dict[Unit, int]:

@@ -8,7 +8,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float    
 import numpy as np
 
-from .geo import EARTH_RADIUS
+from ._geo import EARTH_RADIUS
 
 
 ft.total_ordering

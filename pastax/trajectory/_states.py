@@ -5,8 +5,8 @@ import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 import numpy as np
 
-from ..utils.geo import distance_on_earth, longitude_in_180_180_degrees
-from ..utils.unit import Unit, UNIT
+from ..utils._geo import distance_on_earth, longitude_in_180_180_degrees
+from ..utils._unit import Unit, UNIT
 from ._state import State
 from ._unitful import unit_converter
 

@@ -6,9 +6,9 @@ import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 import xarray as xr
 
-from ..utils.unit import Unit, units_to_str
+from ..utils._unit import Unit, units_to_str
 from ._state import State
-from .state import Time
+from ._states import Time
 from ._unitful import Unitful
 
 
@@ -50,12 +50,10 @@ class Timeseries(Unitful):
         Computes the Euclidean distance between this [`pastax.trajectory.Timeseries`][] and another [`pastax.trajectory.Timeseries`].
     map(func)
         Applies a function to each [`pastax.trajectory.State`][] in the [`pastax.trajectory.Timeseries`].
+    to_xarray()
+        Converts the [`pastax.trajectory.Timeseries`][] to a `xarray.Dataset`.
     from_array(values, times, unit={}, name=None, **kwargs)
-        Creates a [`pastax.trajectory.Timeseries`][] from an array of values and time points.
-    to_dataarray()
-        Converts the [`pastax.trajectory.Timeseries`][] states to an xarray DataArray.
-    to_dataset()
-        Converts the [`pastax.trajectory.Timeseries`][] to a xarray Dataset.
+        Creates a [`pastax.trajectory.Timeseries`][] from arrays of values and time points.
     """
 
     states: State
@@ -177,6 +175,20 @@ class Timeseries(Unitful):
             res = res.value
 
         return Timeseries.from_array(res, self.times.value, unit)
+
+    def to_xarray(self) -> xr.Dataset:
+        """
+        Converts the [`pastax.trajectory.Timeseries`][] to a `xarray.Dataset`.
+
+        Returns
+        -------
+        xr.Dataset
+            The corresponding `xarray.Dataset`.
+        """
+        da = self._to_dataarray()
+        ds = da.to_dataset()
+
+        return ds
     
     @classmethod
     def from_array(
@@ -188,7 +200,7 @@ class Timeseries(Unitful):
         **kwargs: Dict
     ) -> Timeseries:
         """
-        Creates a [`pastax.trajectory.Timeseries`][] from an array of values and time points.
+        Creates a [`pastax.trajectory.Timeseries`][] from arrays of values and time points.
 
         Parameters
         ----------
@@ -206,7 +218,7 @@ class Timeseries(Unitful):
         Returns
         -------
         Timeseries
-            The [`pastax.trajectory.Timeseries`][] created from the array of values and time points.
+            The corresponding [`pastax.trajectory.Timeseries`][].
         """
         values = jnp.asarray(values, dtype=float)
         times = jnp.asarray(times, dtype=float)
@@ -223,15 +235,7 @@ class Timeseries(Unitful):
 
         return cls(values, times, **kwargs)
 
-    def to_dataarray(self) -> xr.DataArray:
-        """
-        Converts the [`pastax.trajectory.Timeseries`][] [`pastax.trajectory.State`][] to a `xarray.DataArray`.
-
-        Returns
-        -------
-        xr.DataArray
-            A `xarray.DataArray` containing the [`pastax.trajectory.Timeseries`][] [`pastax.trajectory.State`][].
-        """
+    def _to_dataarray(self) -> xr.DataArray:
         da = xr.DataArray(
             data=self.states.value,
             dims=["time"],
@@ -241,17 +245,3 @@ class Timeseries(Unitful):
         )
 
         return da
-
-    def to_dataset(self) -> xr.Dataset:
-        """
-        Converts the [`pastax.trajectory.Timeseries`][] [`pastax.trajectory.State`][] to a `xarray.Dataset`.
-
-        Returns
-        -------
-        xr.Dataset
-            A `xarray.Dataset` containing the [`pastax.trajectory.Timeseries`][] [`pastax.trajectory.State`][].
-        """
-        da = self.to_dataarray()
-        ds = da.to_dataset()
-
-        return ds
