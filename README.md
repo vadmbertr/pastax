@@ -26,7 +26,7 @@ This package in under active developement and should still be considered as work
 
 In particular, the following changes are considered:
 
-- `pastax.grid`
+- `pastax.gridded`
     - add support for C-grids,
     - maybe some refactoring of the structures,
 - `pastax.trajectory`
@@ -34,8 +34,7 @@ In particular, the following changes are considered:
     - remove `__add__` and like methods in favour of registered functions (see [quax](https://docs.kidger.site/quax/)),
 - `pastax.simulator`
     - improve how the product operation is performed between the vector field and the control (support for `Location`, `Time` or `State` objects) (see `diffrax` doc [here](https://docs.kidger.site/diffrax/api/terms/#diffrax.ControlTerm)),
-    - add support/examples for interrupting the solve when a trajectory reaches land (see `diffrax` doc [here](https://docs.kidger.site/diffrax/api/events/)),
-    - make `pastax.simulator.dynamics` a module of its own.
+    - add support/examples for interrupting the solve when a trajectory reaches land (see `diffrax` doc [here](https://docs.kidger.site/diffrax/api/events/)).
 
 And I should stress that the package lacks (unit-)tests for now.
 
