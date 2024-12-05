@@ -19,7 +19,7 @@ class Grid(eqx.Module):
 
     Attributes
     ----------
-    cell_area : Bool[Array, "lat lon"]
+    cell_area : Float[Array, "lat lon"]
         Array of cell areas in square meters.
     coordinates : Coordinates
         Coordinates object containing time, latitude, and longitude.
@@ -59,7 +59,7 @@ class Grid(eqx.Module):
     coordinates: Coordinates
     dx: Float[Array, "lat lon-1"]
     dy: Float[Array, "lat-1 lon"]
-    cell_area: Bool[Array, "lat lon"]
+    cell_area: Float[Array, "lat lon"]
     fields: Dict[str, SpatioTemporalField]
     is_land: Bool[Array, "lat lon"]
     is_spherical_mesh: bool
