@@ -175,7 +175,8 @@ class TimeseriesEnsemble(Unitful):
     def crps(
         self,
         other: Timeseries,
-        metric_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike]
+        metric_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike],
+        is_metric_symmetric: bool = True
     ) -> Unitful:
         """
         Computes the Continuous Ranked Probability Score (CRPS) for the [`pastax.trajectory.TimeseriesEnsemble`].
@@ -186,6 +187,10 @@ class TimeseriesEnsemble(Unitful):
             The other timeseries to compare against.
         metric_func : Callable[[Timeseries, Timeseries], Unitful | ArrayLike]
             The metric function to use.
+        is_metric_symmetric : bool, optional
+            Whether the metric function is symmetric, 
+            in which case half of the intra ensemble "distances" are evaluated when computing the ensemble dispersion, 
+            defaults to `True`.
 
         Returns
         -------
@@ -196,14 +201,15 @@ class TimeseriesEnsemble(Unitful):
         bias = biases.mean(axis=0)
 
         n_members = self.size
-        dispersion = self.ensemble_dispersion(metric_func)
-        dispersion /= n_members * (n_members - 1)
+        dispersion = self.ensemble_dispersion(metric_func, is_metric_symmetric=is_metric_symmetric)
+        dispersion /= 2 * n_members * (n_members - 1)
 
         return bias - dispersion
 
     def ensemble_dispersion(
         self,
-        metric_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike]
+        metric_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike],
+        is_metric_symmetric: bool = True
     ) -> Unitful:
         """
         Computes the [`pastax.trajectory.TimeseriesEnsemble`][] dispersion.
@@ -212,24 +218,34 @@ class TimeseriesEnsemble(Unitful):
         ----------
         metric_func : Callable[[Timeseries, Timeseries], Unitful | ArrayLike]
             The metric function to use.
+        is_metric_symmetric : bool, optional
+            Whether the metric function is symmetric, 
+            in which case half of the intra ensemble "distances" are evaluated, defaults to `True`.
 
         Returns
         -------
         Unitful
             The [`pastax.trajectory.TimeseriesEnsemble`][] dispersion.
         """
-        # apply the metric function to all pairs of members
-        ijs = jnp.column_stack(jnp.triu_indices(self.size, k=1))
+        ij = jnp.column_stack(jnp.triu_indices(self.size, k=1))
+
+        if not is_metric_symmetric:
+            ij = jnp.vstack([ij, ij[:, ::-1]])
+
         vmap_metric_fn = eqx.filter_vmap(
-            lambda ij: metric_func(
-                self._members_type.from_array(self.value[ij[0], ...], self.times.value), 
-                self._members_type.from_array(self.value[ij[1], ...], self.times.value)
+            lambda _ij: metric_func(
+                self._members_type.from_array(self.value[_ij[0], ...], self.times.value), 
+                self._members_type.from_array(self.value[_ij[1], ...], self.times.value)
             )
         )
 
-        intra_distances = vmap_metric_fn(ijs)
+        intra_distances = vmap_metric_fn(ij)
+        dispersion = intra_distances.sum(axis=0)
 
-        return intra_distances.sum(axis=0)
+        if is_metric_symmetric:
+            dispersion *= 2
+
+        return dispersion
 
     def map(self, func: Callable[[Timeseries], Unitful | ArrayLike]) -> Unitful:
         """
