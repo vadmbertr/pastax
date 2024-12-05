@@ -5,7 +5,7 @@ import interpax as ipx
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Scalar
 
-from ..grid import Grid, spatial_derivative
+from ..gridded import Gridded, spatial_derivative
 from ..utils import meters_to_degrees
 
 
@@ -45,11 +45,11 @@ class SmagorinskyDiffusion(eqx.Module):
 
     Methods
     -------
-    _neighborhood(*fields, t, y, grid)
-        Restricts the [`pastax.grid.Grid`][] to a neighborhood around the given location and time.
-    _smagorinsky_coefficients(t, y, grid)
+    _neighborhood(*fields, t, y, gridded)
+        Restricts the [`pastax.gridded.Gridded`][] to a neighborhood around the given location and time.
+    _smagorinsky_coefficients(t, y, gridded)
         Computes the Smagorinsky coefficients.
-    _drift_term(t, y, grid, smag_ds)
+    _drift_term(t, y, gridded, smag_ds)
         Computes the drift term of the Stochastic Differential Equation.
     _diffusion_term(y, smag_ds)
         Computes the diffusion term of the Stochastic Differential Equation.
@@ -73,9 +73,9 @@ class SmagorinskyDiffusion(eqx.Module):
         return _to_cs(self._cs)
 
     @staticmethod
-    def _neighborhood(*fields: list[str], t: Float[Scalar, ""], y: Float[Array, "2"], grid: Grid) -> Grid:
+    def _neighborhood(*fields: list[str], t: Float[Scalar, ""], y: Float[Array, "2"], gridded: Gridded) -> Gridded:
         """
-        Restricts the [`pastax.grid.Grid`][] to a neighborhood around the given location and time.
+        Restricts the [`pastax.gridded.Gridded`][] to a neighborhood around the given location and time.
 
         Parameters
         ----------
@@ -85,16 +85,16 @@ class SmagorinskyDiffusion(eqx.Module):
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        grid : Grid
-            The [`pastax.grid.Grid`][] containing the physical fields.
+        gridded : Gridded
+            The [`pastax.gridded.Gridded`][] containing the physical fields.
 
         Returns
         -------
-        Grid
-            The neighborhood [`pastax.grid.Grid`][].
+        Gridded
+            The neighborhood [`pastax.gridded.Gridded`][].
         """
-        # restrict grid to the neighborhood around X(t)
-        neighborhood = grid.neighborhood(
+        # restrict gridded to the neighborhood around X(t)
+        neighborhood = gridded.neighborhood(
             *fields,
             time=t, latitude=y[0], longitude=y[1],
             t_width=3, x_width=7
@@ -102,7 +102,7 @@ class SmagorinskyDiffusion(eqx.Module):
 
         return neighborhood
 
-    def _smagorinsky_diffusion(self, t: Float[Scalar, ""], y: Float[Array, "2"], grid: Grid) -> Grid:
+    def _smagorinsky_diffusion(self, t: Float[Scalar, ""], y: Float[Array, "2"], gridded: Gridded) -> Gridded:
         r"""
         Computes the Smagorinsky diffusion:
 
@@ -119,20 +119,20 @@ class SmagorinskyDiffusion(eqx.Module):
             The simulation time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        grid : Grid
-            The [`pastax.grid.Grid`][] containing the physical fields.
+        gridded : Gridded
+            The [`pastax.gridded.Gridded`][] containing the physical fields.
 
         Returns
         -------
-        Grid
-            The [`pastax.grid.Grid`][] containing the Smagorinsky coefficients.
+        Gridded
+            The [`pastax.gridded.Gridded`][] containing the Smagorinsky coefficients.
 
         Notes
         -----
         The physical fields are first restricted to a small neighborhood, then interpolated in time and 
         finally spatial derivatives are computed using finite central difference.
         """
-        neighborhood = self._neighborhood("u", "v", t=t, y=y, grid=grid)
+        neighborhood = self._neighborhood("u", "v", t=t, y=y, gridded=gridded)
 
         u, v = neighborhood.interp_temporal("u", "v", time=t)  # "x_width x_width"
         dudx, dudy, dvdx, dvdy = spatial_derivative(
@@ -143,7 +143,7 @@ class SmagorinskyDiffusion(eqx.Module):
         cell_area = neighborhood.cell_area[1:-1, 1:-1]  # "x_width-2 x_width-2"
         smag_k = self.cs * cell_area * ((dudx ** 2 + dvdy ** 2 + 0.5 * (dudy + dvdx) ** 2) ** (1 / 2))
 
-        smag_ds = Grid.from_array(
+        smag_ds = Gridded.from_array(
             {"smag_k": smag_k[None, ...]},
             time=t[None],
             latitude=neighborhood.coordinates.latitude.values[1:-1],
@@ -160,8 +160,8 @@ class SmagorinskyDiffusion(eqx.Module):
     def _deterministic_dynamics(
         t: Float[Scalar, ""],
         y: Float[Array, "2"],
-        grid: Grid,
-        smag_ds: Grid
+        gridded: Gridded,
+        smag_ds: Gridded
     ) -> Float[Array, "2"]:
         r"""
         Computes the deterministic part of the dynamics (i.e. the Lagrangian velocity): 
@@ -173,10 +173,10 @@ class SmagorinskyDiffusion(eqx.Module):
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        grid : Grid
-            The [`pastax.grid.Grid`][] containing the physical fields.
-        smag_ds : Grid
-            The [`pastax.grid.Grid`][] containing the Smagorinsky coefficients for the given fields.
+        gridded : Gridded
+            The [`pastax.gridded.Gridded`][] containing the physical fields.
+        smag_ds : Gridded
+            The [`pastax.gridded.Gridded`][] containing the Smagorinsky coefficients for the given fields.
 
         Returns
         -------
@@ -188,7 +188,7 @@ class SmagorinskyDiffusion(eqx.Module):
         smag_k = jnp.squeeze(smag_ds.fields["smag_k"].values)  # "x_width-2 x_width-2"
 
         # $\mathbf{u}(t, \mathbf{X}(t))$ term
-        u, v = grid.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
+        u, v = gridded.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
         vu = jnp.asarray([v, u], dtype=float)  # "2"
 
         # $(\nabla \cdot \mathbf{K})(t, \mathbf{X}(t))$ term
@@ -214,7 +214,7 @@ class SmagorinskyDiffusion(eqx.Module):
         return vu + gradk
 
     @staticmethod
-    def _stochastic_dynamics(y: Float[Array, "2"], smag_ds: Grid) -> Float[Array, "2 2"]:
+    def _stochastic_dynamics(y: Float[Array, "2"], smag_ds: Gridded) -> Float[Array, "2 2"]:
         r"""
         Computes the stochastic part of the dynamics (i.e. the diffusion): 
         $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$.
@@ -223,8 +223,8 @@ class SmagorinskyDiffusion(eqx.Module):
         ----------
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        smag_ds : Grid
-            The [`pastax.grid.Grid`][] containing the Smagorinsky coefficients.
+        smag_ds : Gridded
+            The [`pastax.gridded.Gridded`][] containing the Smagorinsky coefficients.
 
         Returns
         -------
@@ -239,7 +239,7 @@ class SmagorinskyDiffusion(eqx.Module):
 
         return jnp.eye(2) * smag_k
 
-    def __call__(self, t: float, y: Float[Array, "2"], args: Grid) -> Float[Array, "2 3"]:
+    def __call__(self, t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2 3"]:
         r"""
         Computes the determinist (i.e. Lagrangian velocity): $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$ 
         and stochastic (i.e. diffusion): $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$ parts of the dynamics.
@@ -250,8 +250,8 @@ class SmagorinskyDiffusion(eqx.Module):
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
-        args : Grid
-            The [`pastax.grid.Grid`][] containing the velocity fields.
+        args : Gridded
+            The [`pastax.gridded.Gridded`][] containing the velocity fields.
 
         Returns
         -------
@@ -259,16 +259,16 @@ class SmagorinskyDiffusion(eqx.Module):
             The stacked determinist and stochastic parts of the dynamics.
         """
         t = jnp.asarray(t)
-        grid = args
+        gridded = args
 
-        smag_ds = self._smagorinsky_diffusion(t, y, grid)  # "1 x_width-2 x_width-2"
+        smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width-2 x_width-2"
 
-        dlatlon_drift = self._deterministic_dynamics(t, y, grid, smag_ds)
+        dlatlon_drift = self._deterministic_dynamics(t, y, gridded, smag_ds)
         dlatlon_diffusion = self._stochastic_dynamics(y, smag_ds)
 
         dlatlon = jnp.column_stack([dlatlon_drift, dlatlon_diffusion])
 
-        if grid.is_spherical_mesh and not grid.use_degrees:
+        if gridded.is_spherical_mesh and not gridded.use_degrees:
             dlatlon = meters_to_degrees(dlatlon.T, latitude=y[0]).T
 
         return dlatlon

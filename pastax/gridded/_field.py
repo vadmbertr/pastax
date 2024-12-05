@@ -26,12 +26,12 @@ class Field(eqx.Module):
     @property
     def values(self) -> Float[Array, "dim"]:
         """
-        Returns the grid values.
+        Returns the gridded values.
 
         Returns
         -------
         Float[Array, "dim"]
-            The grid values.
+            The gridded values.
         """
         return self._values
 
@@ -69,7 +69,7 @@ class SpatialField(Field):
         Interpolates the spatial data at the given latitude and longitude.
         
     from_array(values, latitude, longitude, interpolation_method)
-        Creates a [`pastax.grid.SpatialField`][] instance from the given array of values, latitude, and longitude 
+        Creates a [`pastax.gridded.SpatialField`][] instance from the given array of values, latitude, and longitude 
         using the specified interpolation method.
     """
     _values: Float[Array, "lat lon"]
@@ -108,7 +108,7 @@ class SpatialField(Field):
         interpolation_method: str
     ) -> SpatialField:
         """
-        Create a [`pastax.grid.SpatialField`][] object from given arrays of values, latitude, and longitude.
+        Create a [`pastax.gridded.SpatialField`][] object from given arrays of values, latitude, and longitude.
 
         Parameters
         ----------
@@ -124,7 +124,7 @@ class SpatialField(Field):
         Returns
         -------
         SpatialField
-            A [`pastax.grid.SpatialField`][] object containing the values and the interpolated spatial field.
+            A [`pastax.gridded.SpatialField`][] object containing the values and the interpolated spatial field.
         """
         _fx = ipx.Interpolator2D(
             latitude, longitude + 180,  # circular domain
@@ -159,7 +159,7 @@ class SpatioTemporalField(Field):
     interp_spatiotemporal(time, latitude, longitude)
         Interpolates the spatiotemporal field at the given times, latitudes, and longitudes.
     from_array(values, time, latitude, longitude, interpolation_method)
-        Creates a [`pastax.grid.SpatioTemporalField`][] instance from the given array of values and coordinates.
+        Creates a [`pastax.gridded.SpatioTemporalField`][] instance from the given array of values and coordinates.
     """
     _values: Float[Array, "time lat lon"]
     _ft: ipx.Interpolator1D
@@ -243,7 +243,7 @@ class SpatioTemporalField(Field):
         interpolation_method: str
     ) -> SpatioTemporalField:
         """
-        Create a [`pastax.grid.SpatioTemporalField`][] object from given arrays of values, time, latitude, and longitude.
+        Create a [`pastax.gridded.SpatioTemporalField`][] object from given arrays of values, time, latitude, and longitude.
 
         Parameters
         ----------
@@ -261,7 +261,7 @@ class SpatioTemporalField(Field):
         Returns
         -------
         SpatioTemporalField
-            A [`pastax.grid.SpatioTemporalField`][] object containing the original values and temporal, spatial, 
+            A [`pastax.gridded.SpatioTemporalField`][] object containing the original values and temporal, spatial, 
             and spatiotemporal interpolators.
         """
         _ft = ipx.Interpolator1D(

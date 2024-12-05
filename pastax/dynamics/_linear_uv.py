@@ -5,10 +5,10 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 from ..utils import meters_to_degrees
-from ..grid import Grid
+from ..gridded import Gridded
 
 
-def _linear_uv(t: float, y: Float[Array, "2"], args: Grid) -> Float[Array, "2"]:
+def _linear_uv(t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
     t = jnp.asarray(t, dtype=float)
     dataset = args
     latitude, longitude = y[0], y[1]
@@ -19,7 +19,7 @@ def _linear_uv(t: float, y: Float[Array, "2"], args: Grid) -> Float[Array, "2"]:
     return dlatlon
 
 
-def linear_uv(t: float, y: Float[Array, "2"], args: Grid) -> Float[Array, "2"]:
+def linear_uv(t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
     """
     Computes the Lagrangian drift velocity by interpolating in space and time the velocity fields.
 
@@ -30,7 +30,7 @@ def linear_uv(t: float, y: Float[Array, "2"], args: Grid) -> Float[Array, "2"]:
     y : Float[Array, "2"]
         The current state (latitude and longitude in degrees).
     args : Dataset
-        The [`pastax.grid.Grid`][] containing the physical fields (only u and v here).
+        The [`pastax.gridded.Gridded`][] containing the physical fields (only u and v here).
 
     Returns
     -------
@@ -76,7 +76,7 @@ class LinearUV(eqx.Module):
         converter=lambda x: jnp.asarray(x, dtype=float), default_factory=lambda: [1, 1]
     )
 
-    def __call__(self, t: float, y: Float[Array, "2"], args: Grid) -> Float[Array, "2"]:
+    def __call__(self, t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
         """
         Computes the Lagrangian drift velocity as the linear relation `intercept + slope * [v, u]`.
 
@@ -87,7 +87,7 @@ class LinearUV(eqx.Module):
         y : Float[Array, "2"]
             The current state (latitude and longitude in degrees).
         args : Dataset
-            The [`pastax.grid.Grid`][] containing the physical fields (only u and v here).
+            The [`pastax.gridded.Gridded`][] containing the physical fields (only u and v here).
 
         Returns
         -------

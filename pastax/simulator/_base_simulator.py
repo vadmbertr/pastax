@@ -107,7 +107,7 @@ class BaseSimulator(eqx.Module):
 
         args : PyTree
             The PyTree of argument(s) required to compute the `dynamics`.
-            Could be for example one or several [`pastax.grid.Grid`][] of gridded physical fields 
+            Could be for example one or several [`pastax.gridded.Gridded`][] of gridded physical fields 
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].

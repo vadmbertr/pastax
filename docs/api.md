@@ -3,6 +3,6 @@
 ::: pastax.simulator
 ::: pastax.dynamics
 ::: pastax.trajectory
-::: pastax.grid
+::: pastax.gridded
 ::: pastax.evaluation
 ::: pastax.utils
