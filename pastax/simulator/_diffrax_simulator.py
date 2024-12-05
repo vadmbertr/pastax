@@ -68,7 +68,7 @@ class DiffraxSimulator(BaseSimulator):
                 The current state (latitude and longitude in degrees).
             args : PyTree
                 Any PyTree of argument(s) used by the simulator.
-                Could be for example one or several [`pastax.grid.Grid`][] of gridded physical fields 
+                Could be for example one or several [`pastax.gridded.Gridded`][] of gridded physical fields 
                 (SSC, SSH, SST, etc...).
 
             Returns
@@ -78,7 +78,7 @@ class DiffraxSimulator(BaseSimulator):
 
         args : PyTree
             The PyTree of argument(s) required to compute the `dynamics`.
-            Could be for example one or several [`pastax.grid.Grid`][] of gridded physical fields 
+            Could be for example one or several [`pastax.gridded.Gridded`][] of gridded physical fields 
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].
@@ -161,7 +161,7 @@ class DeterministicSimulator(DiffraxSimulator):
                 The current state (latitude and longitude in degrees).
             args : PyTree
                 The PyTree of argument(s) required to compute the `dynamics`.
-                Could be for example one or several [`pastax.grid.Grid`][] of gridded physical fields 
+                Could be for example one or several [`pastax.gridded.Gridded`][] of gridded physical fields 
                 (SSC, SSH, SST, etc...).
 
             Returns
@@ -171,7 +171,7 @@ class DeterministicSimulator(DiffraxSimulator):
         
         args : PyTree
             The PyTree of argument(s) required to compute the `dynamics`.
-            Could be for example one or several [`pastax.grid.Grid`][] of gridded physical fields 
+            Could be for example one or several [`pastax.gridded.Gridded`][] of gridded physical fields 
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].
@@ -317,7 +317,7 @@ class StochasticSimulator(DiffraxSimulator):
                 The current state (latitude and longitude in degrees).
             args : PyTree
                 The PyTree of argument(s) required to compute the `dynamics`.
-                Could be for example one or several [`pastax.grid.Grid`][] of gridded physical fields 
+                Could be for example one or several [`pastax.gridded.Gridded`][] of gridded physical fields 
                 (SSC, SSH, SST, etc...).
 
             Returns
@@ -327,7 +327,7 @@ class StochasticSimulator(DiffraxSimulator):
         
         args : PyTree
             The PyTree of argument(s) required to compute the `dynamics`.
-            Could be for example one or several [`pastax.grid.Grid`][] of gridded physical fields 
+            Could be for example one or several [`pastax.gridded.Gridded`][] of gridded physical fields 
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].

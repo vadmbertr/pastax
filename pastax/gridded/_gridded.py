@@ -13,7 +13,7 @@ from ._coordinate import Coordinates
 from ._field import SpatioTemporalField
 
 
-class Grid(eqx.Module):
+class Gridded(eqx.Module):
     """
     Class providing some routines for handling gridded spatiotemporal data in JAX.
 
@@ -50,11 +50,11 @@ class Grid(eqx.Module):
         Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`, 
         `longitude`.
     to_xarray()
-        Returns the [`pastax.grid.Grid`][] object as a `xarray.Dataset`.
+        Returns the [`pastax.gridded.Gridded`][] object as a `xarray.Dataset`.
     from_array(fields, time, latitude, longitude, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
-        Constructs a [`pastax.grid.Grid`][] object from arrays of fields and coordinates `time`, `latitude`, `longitude`.
+        Constructs a [`pastax.gridded.Gridded`][] object from arrays of fields and coordinates `time`, `latitude`, `longitude`.
     from_xarray(dataset, fields, coordinates, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
-        Constructs a [`pastax.grid.Grid`][] object from a `xarray.Dataset`.
+        Constructs a [`pastax.gridded.Gridded`][] object from a `xarray.Dataset`.
     """
     coordinates: Coordinates
     dx: Float[Array, "lat lon-1"]
@@ -179,7 +179,7 @@ class Grid(eqx.Module):
         longitude: Float[Scalar, ""],
         t_width: int,
         x_width: int
-    ) -> Grid:
+    ) -> Gridded:
         """
         Extracts a neighborhood of data around a specified point in time and space.
 
@@ -201,7 +201,7 @@ class Grid(eqx.Module):
         Returns
         -------
         Dataset
-            A [`pastax.grid.Grid`][] object restricted to the neighborhing data.
+            A [`pastax.gridded.Gridded`][] object restricted to the neighborhing data.
         """
         t_i, lat_i, lon_i = self.indices(time, latitude, longitude)
 
@@ -225,7 +225,7 @@ class Grid(eqx.Module):
         lat = jax.lax.dynamic_slice_in_dim(self.coordinates.latitude.values, from_lat_i, x_width)
         lon = jax.lax.dynamic_slice_in_dim(self.coordinates.longitude.values, from_lon_i, x_width)
 
-        return Grid.from_array(
+        return Gridded.from_array(
             fields, 
             t, lat, lon, 
             interpolation_method="linear", 
@@ -235,7 +235,7 @@ class Grid(eqx.Module):
 
     def to_xarray(self) -> xr.Dataset:
         """
-        Converts the [`pastax.grid.Grid`][] to a `xarray.Dataset`.
+        Converts the [`pastax.gridded.Gridded`][] to a `xarray.Dataset`.
 
         This method constructs an xarray Dataset from the object's fields and coordinates.
         The fields are added as data variables with dimensions ["time", "latitude", "longitude"].
@@ -270,9 +270,9 @@ class Grid(eqx.Module):
         is_spherical_mesh: bool = True,
         use_degrees: bool = False,
         is_uv_mps: bool = True
-    ) -> Grid:
+    ) -> Gridded:
         """
-        Create a [`pastax.grid.Grid`][] object from arrays of fields, time, latitude, and longitude.
+        Create a [`pastax.gridded.Gridded`][] object from arrays of fields, time, latitude, and longitude.
 
         Parameters
         ----------
@@ -297,7 +297,7 @@ class Grid(eqx.Module):
         Returns
         -------
         Dataset
-            The corresponding [`pastax.grid.Grid`][].
+            The corresponding [`pastax.gridded.Gridded`][].
         """
         def compute_cell_dlatlon(dright: Float[Array, "latlon-1"], axis: int) -> Float[Array, "latlon"]:
             if axis == 0:
@@ -400,9 +400,9 @@ class Grid(eqx.Module):
         is_spherical_mesh: bool = True,
         is_uv_mps: bool = True,
         use_degrees: bool = False
-    ) -> Grid:
+    ) -> Gridded:
         """
-        Create a [`pastax.grid.Grid`][] object from a `xarray.Dataset`.
+        Create a [`pastax.gridded.Gridded`][] object from a `xarray.Dataset`.
 
         Parameters
         ----------
@@ -425,7 +425,7 @@ class Grid(eqx.Module):
         Returns
         -------
         Dataset
-            The corresponding [`pastax.grid.Grid`][].
+            The corresponding [`pastax.gridded.Gridded`][].
         """
         fields, t, lat, lon = cls._to_array(dataset, fields, coordinates, to_jax=True)
 

@@ -26,7 +26,7 @@ class Coordinate(eqx.Module):
         Returns the nearest index for the given query coordinates.
         
     from_array(values, **interpolator_kwargs)
-        Creates a [`pastax.grid.Coordinate`][] instance from an array of values.
+        Creates a [`pastax.gridded.Coordinate`][] instance from an array of values.
     """
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
@@ -66,9 +66,9 @@ class Coordinate(eqx.Module):
         **interpolator_kwargs: Any
     ) -> Coordinate:
         """
-        Create a [`pastax.grid.Coordinate`][] object from an array of values.
+        Create a [`pastax.gridded.Coordinate`][] object from an array of values.
 
-        This method initializes a [`pastax.grid.Coordinate`][] object using the provided array of values.
+        This method initializes a [`pastax.gridded.Coordinate`][] object using the provided array of values.
         It uses a 1D interpolator to generate indices from values, with the interpolation method set to `"nearest"`.
 
         Parameters
@@ -81,7 +81,7 @@ class Coordinate(eqx.Module):
         Returns
         -------
         Coordinate
-            A  [`pastax.grid.Coordinate`][] object containing the provided values and corresponding indices interpolator.
+            A  [`pastax.gridded.Coordinate`][] object containing the provided values and corresponding indices interpolator.
         """
         interpolator_kwargs["method"] = "nearest"
         indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
@@ -123,7 +123,7 @@ class LongitudeCoordinate(Coordinate):
         Returns the nearest index for the given query coordinates.
         
     from_array(values, **interpolator_kwargs)
-        Creates a [`pastax.grid.LongitudeCoordinate`][] instance from an array of values.
+        Creates a [`pastax.gridded.LongitudeCoordinate`][] instance from an array of values.
     """
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
@@ -178,7 +178,7 @@ class LongitudeCoordinate(Coordinate):
         Returns
         -------
         LongitudeCoordinate
-            A [`pastax.grid.LongitudeCoordinate`][] object containing the provided values and corresponding indices interpolator.
+            A [`pastax.gridded.LongitudeCoordinate`][] object containing the provided values and corresponding indices interpolator.
         """
         values += 180
 
@@ -195,11 +195,11 @@ class Coordinates(eqx.Module):
     Attributes
     ----------
     time : Coordinate
-        The time [`pastax.grid.Coordinate`][].
+        The time [`pastax.gridded.Coordinate`][].
     latitude : Coordinate
-        The latitude [`pastax.grid.Coordinate`][].
+        The latitude [`pastax.gridded.Coordinate`][].
     longitude : Coordinate
-        The longitude [`pastax.grid.Coordinate`][].
+        The longitude [`pastax.gridded.Coordinate`][].
 
     Methods
     -------        
@@ -207,7 +207,7 @@ class Coordinates(eqx.Module):
         Returns the indices of the given time, latitude, and longitude arrays.
         
     from_array(time, latitude, longitude, is_spherical_mesh)
-        Creates a [`pastax.grid.Coordinates`][] object from arrays of time, latitude, and longitude.
+        Creates a [`pastax.gridded.Coordinates`][] object from arrays of time, latitude, and longitude.
     """
     time: Coordinate
     latitude: Coordinate
@@ -247,7 +247,7 @@ class Coordinates(eqx.Module):
         is_spherical_mesh: bool
     ) -> Coordinates:
         """
-        Create a [`pastax.grid.Coordinates`][] object from arrays of time, latitude, and longitude.
+        Create a [`pastax.gridded.Coordinates`][] object from arrays of time, latitude, and longitude.
 
         Parameters
         ----------
@@ -263,7 +263,7 @@ class Coordinates(eqx.Module):
         Returns
         -------
         Coordinates
-            A [`pastax.grid.Coordinates`][] object with time, latitude, and longitude.
+            A [`pastax.gridded.Coordinates`][] object with time, latitude, and longitude.
         """
         t = Coordinate.from_array(time, extrap=True)
         lat = Coordinate.from_array(latitude, extrap=True)
