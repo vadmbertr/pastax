@@ -48,13 +48,18 @@ class SmagorinskyDiffusion(eqx.Module):
     _neighborhood(*fields, t, y, gridded)
         Restricts the [`pastax.gridded.Gridded`][] to a neighborhood around the given location and time.
     _smagorinsky_coefficients(t, y, gridded)
-        Computes the Smagorinsky coefficients.
-    _drift_term(t, y, gridded, smag_ds)
-        Computes the drift term of the Stochastic Differential Equation.
-    _diffusion_term(y, smag_ds)
-        Computes the diffusion term of the Stochastic Differential Equation.
-    __call__(t, y, args)
-        Computes the drift and diffusion terms of the Stochastic Differential Equation.
+        Computes the Smagorinsky diffusion:
+
+        $$
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        $$
+
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, 
+        and the rest of the expression represents the horizontal diffusion.
+    _deterministic_dynamics(t, y, gridded, smag_ds)
+        Computes the deterministic part of the dynamics: $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$.
+    _stochastic_dynamics(y, smag_ds)
+        Computes the stochastic part of the dynamics: $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$.
 
     Notes
     -----
@@ -164,8 +169,7 @@ class SmagorinskyDiffusion(eqx.Module):
         smag_ds: Gridded
     ) -> Float[Array, "2"]:
         r"""
-        Computes the deterministic part of the dynamics (i.e. the Lagrangian velocity): 
-        $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$.
+        Computes the deterministic part of the dynamics: $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$.
 
         Parameters
         ----------
@@ -181,7 +185,7 @@ class SmagorinskyDiffusion(eqx.Module):
         Returns
         -------
         Float[Array, "2"]
-            The deterministic part of the dynamics (i.e. the Lagrangian velocity).
+            The deterministic part of the dynamics.
         """
         latitude, longitude = y[0], y[1]
 
@@ -216,8 +220,7 @@ class SmagorinskyDiffusion(eqx.Module):
     @staticmethod
     def _stochastic_dynamics(y: Float[Array, "2"], smag_ds: Gridded) -> Float[Array, "2 2"]:
         r"""
-        Computes the stochastic part of the dynamics (i.e. the diffusion): 
-        $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$.
+        Computes the stochastic part of the dynamics: $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$.
 
         Parameters
         ----------
@@ -229,7 +232,7 @@ class SmagorinskyDiffusion(eqx.Module):
         Returns
         -------
         Float[Array, "2 2"]
-            The stochastic part of the dynamics (i.e. the diffusion).
+            The stochastic part of the dynamics.
         """
         latitude, longitude = y[0], y[1]
 
@@ -239,10 +242,36 @@ class SmagorinskyDiffusion(eqx.Module):
 
         return jnp.eye(2) * smag_k
 
+
+class StochasticSmagorinskyDiffusion(SmagorinskyDiffusion):
+    r"""
+    Trainable stochastic Smagorinsky diffusion dynamics.
+
+    !!! example "Formulation"
+
+        This dynamics allows to formulate a displacement at time $t$ from the position $\mathbf{X}(t)$ as:
+
+        $$
+        d\mathbf{X}(t) = (\mathbf{u} + \nabla K)(t, \mathbf{X}(t)) dt + V(t, \mathbf{X}(t)) d\mathbf{W}(t)
+        $$
+
+        where $V = \sqrt{2 K}$ and $K$ is the Smagorinsky diffusion:
+        
+        $$
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        $$
+
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the rest of the expression represents the horizontal diffusion.
+
+    Methods
+    -------
+    __call__(t, y, args)
+        Computes and stacks the deterministic and stochastic terms of the dynamics.
+    """
+
     def __call__(self, t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2 3"]:
         r"""
-        Computes the determinist (i.e. Lagrangian velocity): $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$ 
-        and stochastic (i.e. diffusion): $V(t, \mathbf{X}(t)) = \sqrt{2 K(t, \mathbf{X}(t))}$ parts of the dynamics.
+        Computes and stacks the deterministic and stochastic terms of the dynamics.
 
         Parameters
         ----------
@@ -256,17 +285,17 @@ class SmagorinskyDiffusion(eqx.Module):
         Returns
         -------
         Float[Array, "2 3"]
-            The stacked determinist and stochastic parts of the dynamics.
+            The stacked deterministic and stochastic parts of the dynamics.
         """
         t = jnp.asarray(t)
         gridded = args
 
         smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width-2 x_width-2"
 
-        dlatlon_drift = self._deterministic_dynamics(t, y, gridded, smag_ds)
-        dlatlon_diffusion = self._stochastic_dynamics(y, smag_ds)
+        dlatlon_deter = self._deterministic_dynamics(t, y, gridded, smag_ds)
+        dlatlon_stoch = self._stochastic_dynamics(y, smag_ds)
 
-        dlatlon = jnp.column_stack([dlatlon_drift, dlatlon_diffusion])
+        dlatlon = jnp.column_stack([dlatlon_deter, dlatlon_stoch])
 
         if gridded.is_spherical_mesh and not gridded.use_degrees:
             dlatlon = meters_to_degrees(dlatlon.T, latitude=y[0]).T
@@ -276,7 +305,7 @@ class SmagorinskyDiffusion(eqx.Module):
     @classmethod
     def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1)):
         """
-        Initializes the Smagorinsky diffusion with the given Smagorinsky constant.
+        Initializes the stochastic Smagorinsky diffusion with the given Smagorinsky constant.
 
         Parameters
         ----------
@@ -285,7 +314,80 @@ class SmagorinskyDiffusion(eqx.Module):
 
         Returns
         -------
-        SmagorinskyDiffusion
-            The [`pastax.dynamics.SmagorinskyDiffusion`][] initialized with the given Smagorinsky constant.
+        StochasticSmagorinskyDiffusion
+            The [`pastax.dynamics.StochasticSmagorinskyDiffusion`][] initialized with the given Smagorinsky constant.
         """
-        return SmagorinskyDiffusion(_cs=_from_cs(cs))
+        return cls(_cs=_from_cs(cs))
+
+
+class DeterministicSmagorinskyDiffusion(SmagorinskyDiffusion):
+    r"""
+    Trainable deterministic Smagorinsky diffusion dynamics.
+
+    !!! example "Formulation"
+
+        This dynamics allows to formulate a displacement at time $t$ from the position $\mathbf{X}(t)$ as:
+
+        $$
+        d\mathbf{X}(t) = (\mathbf{u} + \nabla K)(t, \mathbf{X}(t)) dt + V(t, \mathbf{X}(t)) d\mathbf{W}(t)
+        $$
+
+        where $V = \sqrt{2 K}$ and $K$ is the Smagorinsky diffusion:
+        
+        $$
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        $$
+
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the rest of the expression represents the horizontal diffusion.
+
+    Methods
+    -------
+    __call__(t, y, args)
+        Computes the deterministic term of the dynamics.
+    """
+
+    def __call__(self, t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
+        r"""
+        Computes the deterministic term of the dynamics.
+
+        Parameters
+        ----------
+        t : float
+            The current time.
+        y : Float[Array, "2"]
+            The current state (latitude and longitude).
+        args : Gridded
+            The [`pastax.gridded.Gridded`][] containing the velocity fields.
+
+        Returns
+        -------
+        Float[Array, "2 3"]
+            The deterministic part of the dynamics.
+        """
+        t = jnp.asarray(t)
+        gridded = args
+
+        smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width-2 x_width-2"
+        dlatlon = self._deterministic_dynamics(t, y, gridded, smag_ds)
+
+        if gridded.is_spherical_mesh and not gridded.use_degrees:
+            dlatlon = meters_to_degrees(dlatlon, latitude=y[0])
+
+        return dlatlon
+
+    @classmethod
+    def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1)):
+        """
+        Initializes the deterministic Smagorinsky diffusion with the given Smagorinsky constant.
+
+        Parameters
+        ----------
+        cs : Float[Scalar, ""], optional
+            The Smagorinsky constant, defaults to `jnp.asarray(0.1)`.
+
+        Returns
+        -------
+        DeterministicSmagorinskyDiffusion
+            The [`pastax.dynamics.DeterministicSmagorinskyDiffusion`][] initialized with the given Smagorinsky constant.
+        """
+        return cls(_cs=_from_cs(cs))

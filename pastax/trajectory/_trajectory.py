@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import ClassVar, Dict
 
+import cartopy.crs as ccrs
 import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int
@@ -46,8 +47,8 @@ class Trajectory(Timeseries):
         Computes the Liu Index between this trajectory and another trajectory.
     mae(other)
         Computes the Mean Absolute Error (MAE) between this trajectory and another trajectory.
-    plot(ax, label, color, ti=None)
-        Plots the trajectory on a given matplotlib axis.
+    plot(ax=None, label=None, color=None, alpha_factor=1, ti=None)
+        Plots the trajectory.
     rmse(other)
         Computes the Root Mean Square Error (RMSE) between this trajectory and another trajectory.
     separation_distance(other)
@@ -188,20 +189,31 @@ class Trajectory(Timeseries):
 
         return Timeseries.from_array(mae.value, self.times.value, mae.unit, name="MAE")
 
-    def plot(self, ax: plt.Axes, label: str, color: str, ti: int = None, **kwargs) -> plt.Axes:
+    def plot(
+        self, 
+        ax: plt.Axes = None, 
+        label: str = None, 
+        color: str = None, 
+        alpha_factor: float = 1, 
+        ti: int = None,
+        **kwargs
+    ) -> plt.Axes:
         """
-        Plots the trajectory on a given matplotlib axis.
+        Plots the trajectory.
 
         Parameters
         ----------
-        ax : plt.Axes
-            The matplotlib axis to plot on.
-        label : str
-            The label for the plot.
-        color : str
-            The color for the plot.
+        ax : plt.Axes, optional
+            The matplotlib axis to plot on, defaults to `None`.
+            If `None`, a new figure and axis are created.
+        label : str, optional
+            The label for the plot, defaults to `None`.
+        color : str, optional
+            The color for the plot, defaults to `None`.
+        alpha_factor : float, optional
+            A factor controlling the overall transparency of the plotted trajectory, defaults to `1`.
         ti : int, optional
-            The time index to plot up to, defaults to None.
+            The time index to plot up to, defaults to `None`.
         kwargs: dict, optional
             Additional arguments passed to `LineCollection`.
 
@@ -210,10 +222,14 @@ class Trajectory(Timeseries):
         plt.Axes
             The matplotlib axis with the plot.
         """
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(projection=ccrs.PlateCarree())
+
         if ti is None:
             ti = self.length
 
-        alpha = jnp.geomspace(.25, 1, ti-1)
+        alpha = jnp.geomspace(.25, 1, ti-1) * alpha_factor
         
         locations = self.locations.value[:ti, None, ::-1]
         segments = jnp.concat([locations[:-1], locations[1:]], axis=1)

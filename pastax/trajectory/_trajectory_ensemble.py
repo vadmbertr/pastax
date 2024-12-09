@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import ClassVar, Dict
 
+import cartopy.crs as ccrs
 from jaxtyping import Array, Float, Int
 from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
@@ -45,8 +46,8 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         Returns the lengths of the trajectories.
     mae(other)
         Computes the Mean Absolute Error (MAE) for each ensemble trajectory.
-    plot(ax, label, color, ti=None)
-        Plots the trajectories on a given matplotlib axis.
+    plot(ax=None, label=None, color=None, alpha_factor=1, ti=None)
+        Plots the trajectories.
     rmse(other)
         Computes the Root Mean Square Error (RMSE) for each ensemble trajectory.
     separation_distance(other)
@@ -167,23 +168,26 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
 
     def plot(
         self,
-        ax: plt.Axes,
-        label: str | list[str],
-        color: str | list[str | float | int],
+        ax: plt.Axes = None, 
+        label: str | list[str] = None,
+        color: str | list[str | float | int] = None,
+        alpha_factor: float = 1, 
         ti: int = None,
         **kwargs
     ) -> plt.Axes:
         """
-        Plots the trajectories on a given matplotlib axis.
+        Plots the trajectories.
 
         Parameters
         ----------
-        ax : plt.Axes
-            The matplotlib axis to plot on.
-        label : str | list[str]
-            The label(s) for the plot.
-        color : str | list[str | float | int]
-            The color(s) for the plot.
+        ax : plt.Axes, optional
+            The matplotlib axis to plot on, defaults to `None`.
+        label : str | list[str], optional
+            The label(s) for the plot, defaults to `None`.
+        color : str | list[str | float | int], optional
+            The color(s) for the plot, defaults to `None`.
+        alpha_factor : float, optional
+            A factor controlling the overall transparency of the plotted ensemble, defaults to `1`.
         ti : int, optional
             The time index to plot up to, defaults to None.
         kwargs: dict, optional
@@ -194,10 +198,14 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         plt.Axes
             The matplotlib axis with the plot.
         """
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(projection=ccrs.PlateCarree())
+
         if ti is None:
             ti = self.length
 
-        alpha_factor = np.clip(1 / ((self.size / 10) ** 0.5), .05, 1).item()
+        alpha_factor *= np.clip(1 / ((self.size / 10) ** 0.5), .05, 1).item()
         alpha = np.geomspace(.25, 1, ti-1) * alpha_factor
 
         locations = self.locations.value.swapaxes(0, 1)[:ti, :, None, ::-1]
