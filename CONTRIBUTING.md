@@ -30,8 +30,6 @@ Signal your contribution in the relevant GitHub issue, and do not hesitate to cr
 6. Commit your changes and push your branch to GitHub,
 7. Submit a pull request through the GitHub website.
 
-Thanks!
-
 ## Coding conventions
 
 Here are a few coding conventions:
