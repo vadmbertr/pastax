@@ -43,7 +43,7 @@ And I should stress that the package lacks (unit-)tests for now.
 Several other open-source projects already exist with similar objectives.
 The closest ones are probably [(Ocean)Parcels](https://github.com/OceanParcels/parcels), [OpenDrift](https://github.com/OpenDrift/opendrift) and [Drifters.jl](https://github.com/JuliaClimate/Drifters.jl).
 
-Here is a (probably) non-comprehensive (and hopefuly correct, please reach-out if not) use-cases comparison between those:
+Here is a (probably) non-comprehensive (and hopefuly correct, please reach-out if not) use-cases comparison between them:
 
 - you use Python: go with `pastax`, `OpenDrift` or `Parcels`,
 - you use Julia: go with `Drifters.jl`,
