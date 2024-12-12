@@ -63,4 +63,4 @@ I could also cite [py-eddy-tracker](https://github.com/AntSimi/py-eddy-tracker),
 ## Contributing
 
 Contributions are welcomed!
-See [CONTRIBUTING.md](https://github.com/vadmbertr/pastax/blob/main/CONDUCT.md) and [CONDUCT.md](https://github.com/vadmbertr/pastax/blob/main/CONDUCT.md) to get started.
+See [CONTRIBUTING.md](https://github.com/vadmbertr/pastax/blob/main/CONTRIBUTING.md) and [CONDUCT.md](https://github.com/vadmbertr/pastax/blob/main/CONDUCT.md) to get started.
