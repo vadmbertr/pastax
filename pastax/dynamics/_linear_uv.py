@@ -4,16 +4,16 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from ..utils import meters_to_degrees
 from ..gridded import Gridded
+from ..utils import meters_to_degrees
 
 
 def _linear_uv(t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
-    t = jnp.asarray(t, dtype=float)
+    t_ = jnp.asarray(t, dtype=float)
     dataset = args
     latitude, longitude = y[0], y[1]
 
-    u, v = dataset.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
+    u, v = dataset.interp_spatiotemporal("u", "v", time=t_, latitude=latitude, longitude=longitude)
     dlatlon = jnp.asarray([v, u], dtype=float)
 
     return dlatlon
@@ -48,7 +48,7 @@ def linear_uv(t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"
 
 class LinearUV(eqx.Module):
     """
-    Trainable linear transformation of the Lagrangian drift velocity 
+    Trainable linear transformation of the Lagrangian drift velocity
     computed by interpolating in space and time the velocity fields.
 
     Attributes
@@ -65,7 +65,7 @@ class LinearUV(eqx.Module):
 
     Notes
     -----
-    As the class inherits from [`equinox.Module`][], its `intercept` and `slope` attributes can be treated as 
+    As the class inherits from [`equinox.Module`][], its `intercept` and `slope` attributes can be treated as
     trainable parameters.
     """
 

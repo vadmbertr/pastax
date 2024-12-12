@@ -30,12 +30,15 @@ class SmagorinskyDiffusion(eqx.Module):
         $$
 
         where $V = \sqrt{2 K}$ and $K$ is the Smagorinsky diffusion:
-        
+
         $$
-        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 +
+        \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} +
+        \frac{\partial v}{\partial x} \right)^2}
         $$
 
-        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the rest of the expression represents the horizontal diffusion.
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the
+        rest of the expression represents the horizontal diffusion.
 
     Attributes
     ----------
@@ -51,10 +54,12 @@ class SmagorinskyDiffusion(eqx.Module):
         Computes the Smagorinsky diffusion:
 
         $$
-        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 +
+        \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} +
+        \frac{\partial v}{\partial x} \right)^2}
         $$
 
-        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, 
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor,
         and the rest of the expression represents the horizontal diffusion.
     _deterministic_dynamics(t, y, gridded, smag_ds)
         Computes the deterministic part of the dynamics: $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$.
@@ -67,7 +72,8 @@ class SmagorinskyDiffusion(eqx.Module):
     """
 
     _cs: Float[Scalar, ""] = eqx.field(
-        converter=lambda x: jnp.asarray(x, dtype=float), default_factory=lambda: _from_cs(jnp.asarray(0.1))
+        converter=lambda x: jnp.asarray(x, dtype=float),
+        default_factory=lambda: _from_cs(jnp.asarray(0.1)),
     )
 
     @property
@@ -78,7 +84,7 @@ class SmagorinskyDiffusion(eqx.Module):
         return _to_cs(self._cs)
 
     @staticmethod
-    def _neighborhood(*fields: list[str], t: Float[Scalar, ""], y: Float[Array, "2"], gridded: Gridded) -> Gridded:
+    def _neighborhood(*fields: str, t: Float[Scalar, ""], y: Float[Array, "2"], gridded: Gridded) -> Gridded:
         """
         Restricts the [`pastax.gridded.Gridded`][] to a neighborhood around the given location and time.
 
@@ -100,9 +106,7 @@ class SmagorinskyDiffusion(eqx.Module):
         """
         # restrict gridded to the neighborhood around X(t)
         neighborhood = gridded.neighborhood(
-            *fields,
-            time=t, latitude=y[0], longitude=y[1],
-            t_width=3, x_width=7
+            *fields, time=t, latitude=y[0], longitude=y[1], t_width=3, x_width=7
         )  # "x_width x_width"
 
         return neighborhood
@@ -112,10 +116,12 @@ class SmagorinskyDiffusion(eqx.Module):
         Computes the Smagorinsky diffusion:
 
         $$
-        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 +
+        \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} +
+        \frac{\partial v}{\partial x} \right)^2}
         $$
 
-        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, 
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor,
         and the rest of the expression represents the horizontal diffusion.
 
         Parameters
@@ -134,7 +140,7 @@ class SmagorinskyDiffusion(eqx.Module):
 
         Notes
         -----
-        The physical fields are first restricted to a small neighborhood, then interpolated in time and 
+        The physical fields are first restricted to a small neighborhood, then interpolated in time and
         finally spatial derivatives are computed using finite central difference.
         """
         neighborhood = self._neighborhood("u", "v", t=t, y=y, gridded=gridded)
@@ -146,7 +152,7 @@ class SmagorinskyDiffusion(eqx.Module):
 
         # computes Smagorinsky coefficients
         cell_area = neighborhood.cell_area[1:-1, 1:-1]  # "x_width-2 x_width-2"
-        smag_k = self.cs * cell_area * ((dudx ** 2 + dvdy ** 2 + 0.5 * (dudy + dvdx) ** 2) ** (1 / 2))
+        smag_k = self.cs * cell_area * ((dudx**2 + dvdy**2 + 0.5 * (dudy + dvdx) ** 2) ** (1 / 2))
 
         smag_ds = Gridded.from_array(
             {"smag_k": smag_k[None, ...]},
@@ -156,17 +162,14 @@ class SmagorinskyDiffusion(eqx.Module):
             interpolation_method="linear",
             is_spherical_mesh=neighborhood.is_spherical_mesh,
             use_degrees=neighborhood.use_degrees,
-            is_uv_mps=False  # no uv anyway...
+            is_uv_mps=False,  # no uv anyway...
         )
 
         return smag_ds
 
     @staticmethod
     def _deterministic_dynamics(
-        t: Float[Scalar, ""],
-        y: Float[Array, "2"],
-        gridded: Gridded,
-        smag_ds: Gridded
+        t: Float[Scalar, ""], y: Float[Array, "2"], gridded: Gridded, smag_ds: Gridded
     ) -> Float[Array, "2"]:
         r"""
         Computes the deterministic part of the dynamics: $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$.
@@ -200,18 +203,22 @@ class SmagorinskyDiffusion(eqx.Module):
             smag_k, dx=smag_ds.dx, dy=smag_ds.dy, is_land=smag_ds.is_land
         )  # "x_width-4 x_width-4"
         dkdx = ipx.interp2d(
-            latitude, longitude,
-            smag_ds.coordinates.latitude[1:-1], smag_ds.coordinates.longitude.values[1:-1],
+            latitude,
+            longitude,
+            smag_ds.coordinates.latitude[1:-1],
+            smag_ds.coordinates.longitude.values[1:-1],
             dkdx,
             method="linear",
-            extrap=True
+            extrap=True,
         )
         dkdy = ipx.interp2d(
-            latitude, longitude,
-            smag_ds.coordinates.latitude[1:-1], smag_ds.coordinates.longitude[1:-1],
+            latitude,
+            longitude,
+            smag_ds.coordinates.latitude[1:-1],
+            smag_ds.coordinates.longitude[1:-1],
             dkdy,
             method="linear",
-            extrap=True
+            extrap=True,
         )
         gradk = jnp.asarray([dkdy, dkdx], dtype=float)  # "2"
 
@@ -256,12 +263,15 @@ class StochasticSmagorinskyDiffusion(SmagorinskyDiffusion):
         $$
 
         where $V = \sqrt{2 K}$ and $K$ is the Smagorinsky diffusion:
-        
+
         $$
-        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 +
+        \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} +
+        \frac{\partial v}{\partial x} \right)^2}
         $$
 
-        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the rest of the expression represents the horizontal diffusion.
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the
+        rest of the expression represents the horizontal diffusion.
 
     Methods
     -------
@@ -287,12 +297,12 @@ class StochasticSmagorinskyDiffusion(SmagorinskyDiffusion):
         Float[Array, "2 3"]
             The stacked deterministic and stochastic parts of the dynamics.
         """
-        t = jnp.asarray(t)
+        t_ = jnp.asarray(t)
         gridded = args
 
-        smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width-2 x_width-2"
+        smag_ds = self._smagorinsky_diffusion(t_, y, gridded)  # "1 x_width-2 x_width-2"
 
-        dlatlon_deter = self._deterministic_dynamics(t, y, gridded, smag_ds)
+        dlatlon_deter = self._deterministic_dynamics(t_, y, gridded, smag_ds)
         dlatlon_stoch = self._stochastic_dynamics(y, smag_ds)
 
         dlatlon = jnp.column_stack([dlatlon_deter, dlatlon_stoch])
@@ -333,12 +343,15 @@ class DeterministicSmagorinskyDiffusion(SmagorinskyDiffusion):
         $$
 
         where $V = \sqrt{2 K}$ and $K$ is the Smagorinsky diffusion:
-        
+
         $$
-        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 + \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right)^2}
+        K = C_s \Delta x \Delta y \sqrt{\left(\frac{\partial u}{\partial x} \right)^2 +
+        \left(\frac{\partial v}{\partial y} \right)^2 + \frac{1}{2} \left(\frac{\partial u}{\partial y} +
+        \frac{\partial v}{\partial x} \right)^2}
         $$
 
-        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the rest of the expression represents the horizontal diffusion.
+        where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the
+        rest of the expression represents the horizontal diffusion.
 
     Methods
     -------
@@ -364,11 +377,11 @@ class DeterministicSmagorinskyDiffusion(SmagorinskyDiffusion):
         Float[Array, "2 3"]
             The deterministic part of the dynamics.
         """
-        t = jnp.asarray(t)
+        t_ = jnp.asarray(t)
         gridded = args
 
-        smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width-2 x_width-2"
-        dlatlon = self._deterministic_dynamics(t, y, gridded, smag_ds)
+        smag_ds = self._smagorinsky_diffusion(t_, y, gridded)  # "1 x_width-2 x_width-2"
+        dlatlon = self._deterministic_dynamics(t_, y, gridded, smag_ds)
 
         if gridded.is_spherical_mesh and not gridded.use_degrees:
             dlatlon = meters_to_degrees(dlatlon, latitude=y[0])

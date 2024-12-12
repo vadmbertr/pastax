@@ -1,16 +1,18 @@
 from __future__ import annotations
-from typing import Dict, Type
+
+from typing import Dict
 
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import ArrayLike
+from jaxtyping import Array, ArrayLike
 
 from ..utils._unit import compose_units, Unit
 
 
 def unit_converter(x: Unit | Dict[Unit, int]) -> Dict[Unit, int]:
     """
-    Converts a [`pastax.utils.Unit`][] to a dictionary with [`pastax.utils.Unit`][] as keys and their exponents as values.
+    Converts a [`pastax.utils.Unit`][] to a dictionary with [`pastax.utils.Unit`][] as keys and their exponents as
+    values.
 
     Parameters
     ----------
@@ -66,32 +68,32 @@ class Unitful(eqx.Module):
     __sub__(other)
         Subtracts another quantity or array like from this quantity.
     """
-    
-    _value: ArrayLike = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float))
+
+    _value: Array = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float))
     _unit: Dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter)
 
-    def __init__ (self, value: ArrayLike = jnp.nan, unit: Unit | Dict[Unit, int | float] = {}):
+    def __init__(self, value: Array = jnp.asarray(jnp.nan), unit: Dict[Unit, int | float] = {}):
         """
         Initializes the [`pastax.utils.Unitful`][] with given value and unit.
 
         Parameters
         ----------
-        value : ArrayLike
+        value : Array
             The value of the quantity.
-        unit : Unit | Dict[Unit, int | float], optional
+        unit : Dict[Unit, int | float], optional
             The unit of the quantity, defaults to an empty Dict.
         """
         self._value = value
         self._unit = unit
 
     @property
-    def value(self) -> ArrayLike:
+    def value(self) -> Array:
         """
         Returns the value of the quantity.
 
         Returns
         -------
-        ArrayLike
+        Array
             The value of the quantity.
         """
         return self._value
@@ -107,30 +109,31 @@ class Unitful(eqx.Module):
             The unit of the quantity.
         """
         return self._unit
-    
-    def cumsum(self, axis: ArrayLike = None) -> Unitful:
+
+    def cumsum(self, axis: ArrayLike | None = None) -> Unitful:
         """
         Computes the cumulative sum of the quantity.
 
         Parameters
         ----------
-        axis : ArrayLike, optional
-            Axis along which the cumulative sum to be computed. If None (default), the cumulative sum is computed over the flattened array.
+        axis : ArrayLike | None, optional
+            Axis along which the cumulative sum to be computed. If None (default), the cumulative sum is computed over
+            the flattened array.
 
         Returns
         -------
         Unitful
             The cumulative sum of the quantity.
         """
-        return Unitful(self.value.cumsum(axis), self.unit)
+        return Unitful(self.value.cumsum(axis), self.unit)  # type: ignore
 
-    def euclidean_distance(self, other: Unitful | ArrayLike) -> Unitful:
+    def euclidean_distance(self, other: Unitful | Array) -> Unitful:
         """
         Computes the Euclidean distance between this quantity and another quantity.
 
         Parameters
         ----------
-        other : Unitful | ArrayLike
+        other : Unitful | Array
             The other quantity to compute the distance to.
 
         Returns
@@ -139,14 +142,14 @@ class Unitful(eqx.Module):
             The Euclidean distance between the two quantities.
         """
         return ((self - other) ** 2).sum().sqrt()
-    
-    def mean(self, axis: ArrayLike = None) -> Unitful:
+
+    def mean(self, axis: ArrayLike | None = None) -> Unitful:
         """
         Computes the mean of the quantity along the specified axis.
 
         Parameters
         ----------
-        axis : ArrayLike, optional
+        axis : ArrayLike | None, optional
             The axis along which to compute the mean, defaults to None, meaning along all axes.
 
         Returns
@@ -154,7 +157,7 @@ class Unitful(eqx.Module):
         Unitful
             The mean of the quantity along the specified axis.
         """
-        return Unitful(self.value.mean(axis=axis), self.unit)
+        return Unitful(self.value.mean(axis=axis), self.unit)  # type: ignore
 
     def sqrt(self) -> Unitful:
         """
@@ -165,15 +168,15 @@ class Unitful(eqx.Module):
         Unitful
             The square root of the quantity.
         """
-        return self**(1/2)
-    
-    def sum(self, axis: ArrayLike = None) -> Unitful:
+        return self ** (1 / 2)
+
+    def sum(self, axis: ArrayLike | None = None) -> Unitful:
         """
         Computes the sum of the quantity.
 
         Parameters
         ----------
-        axis : ArrayLike, optional
+        axis : ArrayLike | None, optional
             Axis along which the sum to be computed. If None (default), the sum is computed along all the axes.
 
         Returns
@@ -181,27 +184,25 @@ class Unitful(eqx.Module):
         Unitful
             The sum of the quantity.
         """
-        return Unitful(self.value.sum(axis), self.unit)
+        return Unitful(self.value.sum(axis), self.unit)  # type: ignore
 
     def __extract_from_other(
-        self, 
-        other: Unitful | ArrayLike, 
-        additive_op: bool
-    ) -> tuple[ArrayLike, str | None, Type]:
+        self, other: Unitful | ArrayLike, additive_op: bool
+    ) -> tuple[ArrayLike, Dict[Unit, int | float] | None]:
         """
         Extract value and unit from other operand if it is a [`pastax.utils.Unitful`][] instance.
 
         Parameters
         ----------
         other : Unitful or ArrayLike
-            The other operand to extract value and unit from if it is a Unitful.
+            The other operand to extract value and unit from if it is a [`pastax.utils.Unitful`][].
         additive : bool
             Type of operation performed with self and other.
 
         Returns
         -------
-        tuple[ArrayLike, str | None, Type]
-            The value and unit of the other operand, and the class of the result of the operation type.
+        tuple[ArrayLike, Dict[Unit, int | float] | None]
+            The value and unit of the other operand.
 
         Raises
         ------
@@ -221,7 +222,7 @@ class Unitful(eqx.Module):
             other_value = other.value
             other_unit = other.unit
 
-        return other_value, other_unit
+        return other_value, other_unit  # type: ignore
 
     def __add__(self, other: Unitful | ArrayLike) -> Unitful:
         """
@@ -250,7 +251,7 @@ class Unitful(eqx.Module):
 
         Parameters
         ----------
-        other : Unitful | ArrayLike
+        other : Unitful | Array
             The other operand to multiply.
 
         Returns
@@ -276,7 +277,7 @@ class Unitful(eqx.Module):
             The power pow of the quantity.
         """
         unit = {k: v * pow for k, v in self.unit.items()}
-        return Unitful(self.value ** pow, unit)
+        return Unitful(self.value**pow, unit)
 
     def __truediv__(self, other: Unitful | ArrayLike) -> Unitful:
         """

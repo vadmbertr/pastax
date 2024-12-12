@@ -1,10 +1,11 @@
 from __future__ import annotations
-from typing import Callable, ClassVar, Dict
+
+from typing import Any, Callable, ClassVar, Dict
 
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Float
 import xarray as xr
+from jaxtyping import Array, Float
 
 from ..utils._unit import Unit, units_to_str
 from ._state import State
@@ -37,7 +38,8 @@ class Timeseries(Unitful):
     Methods
     -------
     __init__(states, times, **__)
-        Initializes the [`pastax.trajectory.Timeseries`][] with given [`pastax.trajectory.State`][], [`pastax.trajectory.Time`][], and optional parameters.
+        Initializes the [`pastax.trajectory.Timeseries`][] with given [`pastax.trajectory.State`][],
+        [`pastax.trajectory.Time`][], and optional parameters.
     value
         Returns the value of the [`pastax.trajectory.Timeseries`].
     unit
@@ -47,7 +49,8 @@ class Timeseries(Unitful):
     attach_name(name)
         Attaches a name to the [`pastax.trajectory.Timeseries`].
     euclidean_distance(other)
-        Computes the Euclidean distance between this [`pastax.trajectory.Timeseries`][] and another [`pastax.trajectory.Timeseries`].
+        Computes the Euclidean distance between this [`pastax.trajectory.Timeseries`][] and another
+        [`pastax.trajectory.Timeseries`].
     map(func)
         Applies a function to each [`pastax.trajectory.State`][] in the [`pastax.trajectory.Timeseries`].
     to_xarray()
@@ -58,15 +61,16 @@ class Timeseries(Unitful):
 
     states: State
     _states_type: ClassVar = State
-    times: Time #= eqx.field(static=True)  # TODO: not sure if this is correct
+    times: Time  # = eqx.field(static=True)  # TODO: not sure if this is correct
     length: int = eqx.field(static=True)
 
     _value: None = eqx.field(repr=False)
     _unit: None = eqx.field(repr=False)
 
-    def __init__(self, states: State, times: Time, **_: Dict):
+    def __init__(self, states: State, times: Time, **_: Any):
         """
-        Initializes the [`pastax.trajectory.Timeseries`][] with given [`pastax.trajectory.State`][], [`pastax.trajectory.Time`][], and optional parameters.
+        Initializes the [`pastax.trajectory.Timeseries`][] with given [`pastax.trajectory.State`][],
+        [`pastax.trajectory.Time`][], and optional parameters.
 
         Parameters
         ----------
@@ -105,17 +109,17 @@ class Timeseries(Unitful):
         return self.states.unit
 
     @property
-    def name(self) -> str:
+    def name(self) -> str | None:
         """
         Returns the name of the [`pastax.trajectory.Timeseries`].
 
         Returns
         -------
-        name
+        str | None
             The name of the [`pastax.trajectory.Timeseries`].
         """
         return self.states.name
-    
+
     def attach_name(self, name: str) -> Timeseries:
         """
         Attaches a name to the [`pastax.trajectory.Timeseries`].
@@ -130,15 +134,15 @@ class Timeseries(Unitful):
         Timeseries
             A new [`pastax.trajectory.Timeseries`][] with the attached name.
         """
-        return self.__class__(self.states.value, self.times.value, unit=self.unit, name=name)
-    
-    def euclidean_distance(self, other: Timeseries | ArrayLike) -> Timeseries:
+        return Timeseries.from_array(self.states.value, self.times.value, unit=self.unit, name=name)
+
+    def euclidean_distance(self, other: Timeseries | Array) -> Timeseries:
         """
         Computes the Euclidean distance between this timeseries and another timeseries.
 
         Parameters
         ----------
-        other : Timeseries | ArrayLike
+        other : Timeseries | Array
             The other [`pastax.trajectory.Timeseries`][] to compute the distance to.
 
         Returns
@@ -148,18 +152,18 @@ class Timeseries(Unitful):
         """
         if isinstance(other, Timeseries):
             other = other.states
-        
+
         res = eqx.filter_vmap(lambda p1, p2: p1.euclidean_distance(p2))(self.states, other)
 
         return Timeseries.from_array(res.value, self.times.value, self.unit, name="Euclidean distance")
 
-    def map(self, func: Callable[[State], Unitful | ArrayLike]) -> Timeseries:
+    def map(self, func: Callable[[State], Unitful | Array]) -> Timeseries:
         """
         Applies a function to each [`pastax.trajectory.State`][] in the [`pastax.trajectory.Timeseries`].
 
         Parameters
         ----------
-        func : Callable[[State], Unitful | ArrayLike]
+        func : Callable[[State], Unitful | Array]
             The function to apply to each [`pastax.trajectory.State`][].
 
         Returns
@@ -185,19 +189,19 @@ class Timeseries(Unitful):
         xr.Dataset
             The corresponding `xarray.Dataset`.
         """
-        da = self._to_dataarray()
+        da = self.to_dataarray()
         ds = da.to_dataset()
 
         return ds
-    
+
     @classmethod
     def from_array(
-        cls, 
-        values: Float[Array, "time state"], 
+        cls,
+        values: Float[Array, "time state"],
         times: Float[Array, "time"],
-        unit: Unit | Dict[Unit, int | float] = {},
-        name: str = None,
-        **kwargs: Dict
+        unit: Dict[Unit, int | float] = {},
+        name: str | None = None,
+        **kwargs: Any,
     ) -> Timeseries:
         """
         Creates a [`pastax.trajectory.Timeseries`][] from arrays of values and time points.
@@ -208,11 +212,11 @@ class Timeseries(Unitful):
             The array of values for the timeseries.
         times : Float[Array, "time"]
             The time points for the timeseries.
-        unit : Unit | Dict[Unit, int | float], optional
+        unit : Dict[Unit, int | float], optional
             The unit of the timeseries, defaults to an empty Dict.
-        name : str, optional
+        name : str | None, optional
             The name of the timeseries, defaults to None.
-        **kwargs : Dict
+        **kwargs : Any
             Additional keyword arguments.
 
         Returns
@@ -222,26 +226,23 @@ class Timeseries(Unitful):
         """
         values = jnp.asarray(values, dtype=float)
         times = jnp.asarray(times, dtype=float)
-        
-        values = eqx.filter_vmap(
+
+        values: State = eqx.filter_vmap(
             lambda value: cls._states_type(value, unit=unit, name=name),
-            out_axes=eqx._vmap_pmap.if_mapped(0)
+            out_axes=eqx._vmap_pmap.if_mapped(0),
         )(values)
 
-        times = eqx.filter_vmap(
-            lambda time: Time(time),
-            out_axes=eqx._vmap_pmap.if_mapped(0)
-        )(times)
+        times: Time = eqx.filter_vmap(lambda time: Time(time), out_axes=eqx._vmap_pmap.if_mapped(0))(times)
 
         return cls(values, times, **kwargs)
 
-    def _to_dataarray(self) -> xr.DataArray:
+    def to_dataarray(self) -> xr.DataArray:
         da = xr.DataArray(
             data=self.states.value,
             dims=["time"],
             coords={"time": self.times.to_datetime()},
             name=self.name,
-            attrs={"units": units_to_str(self.unit)}
+            attrs={"units": units_to_str(self.unit)},
         )
 
         return da

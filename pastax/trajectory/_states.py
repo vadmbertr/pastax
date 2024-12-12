@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from typing import Dict
+
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Float
 import numpy as np
+from jaxtyping import Array, Float
 
 from ..utils._geo import distance_on_earth, longitude_in_180_180_degrees
-from ..utils._unit import Unit, UNIT
+from ..utils._unit import UNIT, Unit
 from ._state import State
 from ._unitful import unit_converter
 
@@ -20,7 +22,8 @@ class Location(State):
     _value : Float[Array, "... 2"]
         The latitude and longitude of the [`pastax.trajectory.Location`][].
     _unit : Dict[Unit, int | float]
-        The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Location`][], defaults to [`pastax.utils.LatLonDegrees`][].
+        The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Location`][], defaults to
+        [`pastax.utils.LatLonDegrees`][].
     name : str
         The name of the [`pastax.trajectory.Location`][], set to `"Location in [latitude, longitude]"`.
 
@@ -33,12 +36,18 @@ class Location(State):
     longitude
         Returns the longitude of the [`pastax.trajectory.Location`][].
     distance_on_earth(other)
-        Computes the Earth distance between this [`pastax.trajectory.Location`][] and another [`pastax.trajectory.Location`][].
+        Computes the Earth distance between this [`pastax.trajectory.Location`][] and another
+        [`pastax.trajectory.Location`][].
     """
 
     _value: Float[Array, "... 2"] = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float))
 
-    def __init__(self, value: Float[Array, "... 2"], unit: Unit = UNIT["°"], **_):
+    def __init__(
+        self,
+        value: Float[Array, "... 2"],
+        unit: Dict[Unit, int | float] = UNIT["°"],
+        **_,
+    ):
         """
         Initializes the [`pastax.trajectory.Location`][] with given latitude and longitude.
 
@@ -46,12 +55,12 @@ class Location(State):
         ----------
         value : Float[Array, "2"]
             The latitude and longitude of the location.
-        unit : Unit | Dict[str, Unit], optional
+        unit : Dict[str, Unit], optional
             The [`pastax.utils.Unit`][] of the location, defaults to [`pastax.utils.LatLonDegrees`][].
         """
         if unit == unit_converter(UNIT["°"]):
             value = value.at[..., 1].set(longitude_in_180_180_degrees(value[..., 1]))
-        
+
         super().__init__(value, unit=unit, name="Location in [latitude, longitude]")
 
     @property
@@ -80,7 +89,7 @@ class Location(State):
 
     def distance_on_earth(self, other: Location) -> State:
         """
-        Computes the distance in meters between this [`pastax.trajectory.Location`][] 
+        Computes the distance in meters between this [`pastax.trajectory.Location`][]
         and another [`pastax.trajectory.Location`][].
 
         Parameters
@@ -100,7 +109,11 @@ class Location(State):
         if not self.unit == unit_converter(UNIT["°"]) or not other.unit == unit_converter(UNIT["°"]):
             raise ValueError("Both locations must be in degrees.")
 
-        return State(distance_on_earth(self.value, other.value), unit=UNIT["m"], name="Distance on Earth")
+        return State(
+            distance_on_earth(self.value, other.value),
+            unit=UNIT["m"],
+            name="Distance on Earth",
+        )
 
 
 class Displacement(State):
@@ -112,7 +125,8 @@ class Displacement(State):
     _value : Float[Array, "... 2"]
         The latitude and longitude components of the [`pastax.trajectory.Displacement`].
     _unit : Dict[Unit, int | float]
-        The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Displacement`], defaults to [`pastax.utils.LatLonDegrees`][].
+        The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Displacement`], defaults to
+        [`pastax.utils.LatLonDegrees`][].
     name : str
         The name of the [`pastax.trajectory.Displacement`], set to `"Displacement in [latitude, longitude]"`.
 
@@ -126,16 +140,23 @@ class Displacement(State):
         Returns the longitude component of the [`pastax.trajectory.Displacement`].
     """
 
-    def __init__(self, value: Float[Array, "... 2"], unit: Unit = UNIT["°"], **_):
+    def __init__(
+        self,
+        value: Float[Array, "... 2"],
+        unit: Dict[Unit, int | float] = UNIT["°"],
+        **_,
+    ):
         """
-        Initializes the [`pastax.trajectory.Displacement`][] with given latitude and longitude components and [`pastax.utils.Unit`][].
+        Initializes the [`pastax.trajectory.Displacement`][] with given latitude and longitude components and
+        [`pastax.utils.Unit`][].
 
         Parameters
         ----------
         value : Float[Array, "2"]
             The latitude and longitude components of the [`pastax.trajectory.Displacement`].
-        unit : Unit | Dict[str, Unit], optional
-            The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Displacement`], defaults to [`pastax.utils.LatLonDegrees`].
+        unit : Dict[str, Unit], optional
+            The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Displacement`], defaults to
+            [`pastax.utils.LatLonDegrees`].
         """
         super().__init__(value, unit=unit, name="Displacement in [latitude, longitude]")
 
@@ -150,7 +171,7 @@ class Displacement(State):
             The latitude component of the [`pastax.trajectory.Displacement`].
         """
         return State(self.value[..., 0], unit=self.unit, name="Displacement in latitude")
-    
+
     @property
     def longitude(self) -> State:
         """
@@ -170,7 +191,7 @@ class Time(State):
 
     Attributes
     ----------
-    _value : ArrayLike
+    _value : Array
         The [`pastax.trajectory.Time`][] value.
     _unit : Dict[Unit, int | float]
         The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Time`], defaults to [`pastax.utils.Seconds`][].
@@ -185,15 +206,15 @@ class Time(State):
         Converts the [`pastax.trajectory.Time`][] to a `numpy.ndarray` of `datetime64[s]`.
     """
 
-    def __init__(self, value: ArrayLike, unit: Unit = UNIT["s"], **_):
+    def __init__(self, value: Array, unit: Dict[Unit, int | float] = UNIT["s"], **_):
         """
         Initializes the [`pastax.trajectory.Time`][] with given time value.
 
         Parameters
         ----------
-        value : ArrayLike
+        value : Array
             The time value.
-        unit : Unit | Dict[Unit, int | float], optional
+        unit : Dict[Unit, int | float], optional
             The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Time`], defaults to [`pastax.utils.Seconds`][].
         """
         super().__init__(value, unit=unit, name="Time since epoch")

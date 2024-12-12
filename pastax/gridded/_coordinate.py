@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import Any
 
 import equinox as eqx
@@ -24,22 +25,23 @@ class Coordinate(eqx.Module):
     -------
     index(query)
         Returns the nearest index for the given query coordinates.
-        
+
     from_array(values, **interpolator_kwargs)
         Creates a [`pastax.gridded.Coordinate`][] instance from an array of values.
     """
+
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
 
     @property
     def values(self) -> Float[Array, "dim"]:
         """
-        Returns the coordinate values.
-# 
-        Returns
-        -------
-        Float[Array, "dim"]
-            The coordinate values.
+                Returns the coordinate values.
+        #
+                Returns
+                -------
+                Float[Array, "dim"]
+                    The coordinate values.
         """
         return self._values
 
@@ -60,11 +62,7 @@ class Coordinate(eqx.Module):
         return self.indices(query).astype(int)
 
     @classmethod
-    def from_array(
-        cls,
-        values: Float[Array, "dim"],
-        **interpolator_kwargs: Any
-    ) -> Coordinate:
+    def from_array(cls, values: Float[Array, "dim"], **interpolator_kwargs: Any) -> Coordinate:
         """
         Create a [`pastax.gridded.Coordinate`][] object from an array of values.
 
@@ -81,7 +79,8 @@ class Coordinate(eqx.Module):
         Returns
         -------
         Coordinate
-            A  [`pastax.gridded.Coordinate`][] object containing the provided values and corresponding indices interpolator.
+            A  [`pastax.gridded.Coordinate`][] object containing the provided values and corresponding indices
+            interpolator.
         """
         interpolator_kwargs["method"] = "nearest"
         indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
@@ -107,7 +106,7 @@ class Coordinate(eqx.Module):
 
 class LongitudeCoordinate(Coordinate):
     """
-    Class for handling 1D longitude coordinates (i.e. of rectilinear grids). 
+    Class for handling 1D longitude coordinates (i.e. of rectilinear grids).
     This class handles the circular nature of longitudes coordinates.
 
     Attributes
@@ -121,22 +120,23 @@ class LongitudeCoordinate(Coordinate):
     -------
     index(query)
         Returns the nearest index for the given query coordinates.
-        
+
     from_array(values, **interpolator_kwargs)
         Creates a [`pastax.gridded.LongitudeCoordinate`][] instance from an array of values.
     """
+
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
 
     @property
     def values(self) -> Float[Array, "dim"]:
         """
-        Returns the coordinate values.
-# 
-        Returns
-        -------
-        Float[Array, "dim"]
-            The coordinate values.
+                Returns the coordinate values.
+        #
+                Returns
+                -------
+                Float[Array, "dim"]
+                    The coordinate values.
         """
         return self._values - 180
 
@@ -157,11 +157,7 @@ class LongitudeCoordinate(Coordinate):
         return self.indices(query + 180).astype(int)
 
     @classmethod
-    def from_array(
-        cls,
-        values: Float[Array, "dim"],
-        **interpolator_kwargs: Any
-    ) -> LongitudeCoordinate:
+    def from_array(cls, values: Float[Array, "dim"], **interpolator_kwargs: Any) -> LongitudeCoordinate:
         """
         Create a LongitudeCoordinate object from an array of values.
 
@@ -178,7 +174,8 @@ class LongitudeCoordinate(Coordinate):
         Returns
         -------
         LongitudeCoordinate
-            A [`pastax.gridded.LongitudeCoordinate`][] object containing the provided values and corresponding indices interpolator.
+            A [`pastax.gridded.LongitudeCoordinate`][] object containing the provided values and corresponding indices
+            interpolator.
         """
         values += 180
 
@@ -202,22 +199,23 @@ class Coordinates(eqx.Module):
         The longitude [`pastax.gridded.Coordinate`][].
 
     Methods
-    -------        
+    -------
     indices(time, latitude, longitude)
         Returns the indices of the given time, latitude, and longitude arrays.
-        
+
     from_array(time, latitude, longitude, is_spherical_mesh)
         Creates a [`pastax.gridded.Coordinates`][] object from arrays of time, latitude, and longitude.
     """
+
     time: Coordinate
     latitude: Coordinate
-    longitude: LongitudeCoordinate
+    longitude: Coordinate | LongitudeCoordinate
 
     def indices(
         self,
         time: Int[Array, "..."],
         latitude: Float[Array, "..."],
-        longitude: Float[Array, "..."]
+        longitude: Float[Array, "..."],
     ) -> tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]:
         """
         Returns the nearest indices for the given time, latitude, and longitude.
@@ -236,7 +234,11 @@ class Coordinates(eqx.Module):
         tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]
             A tuple containing the indices for time, latitude, and longitude respectively.
         """
-        return self.time.index(time), self.latitude.index(latitude), self.longitude.index(longitude)
+        return (
+            self.time.index(time),
+            self.latitude.index(latitude),
+            self.longitude.index(longitude),
+        )
 
     @classmethod
     def from_array(
@@ -244,7 +246,7 @@ class Coordinates(eqx.Module):
         time: Int[Array, "time"],
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"],
-        is_spherical_mesh: bool
+        is_spherical_mesh: bool,
     ) -> Coordinates:
         """
         Create a [`pastax.gridded.Coordinates`][] object from arrays of time, latitude, and longitude.
