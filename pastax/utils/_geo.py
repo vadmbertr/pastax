@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Float
+from jaxtyping import Array, Float
 
 
 EARTH_RADIUS = 6371008.8
@@ -8,7 +8,7 @@ float: The radius of the Earth in meters.
 """
 
 
-def distance_on_earth(latlon1: Float[Array, "... 2"], latlon2: Float[Array, "... 2"]) -> ArrayLike:
+def distance_on_earth(latlon1: Float[Array, "... 2"], latlon2: Float[Array, "... 2"]) -> Array:
     """
     Calculates the distance in meters between two points on the Earth's surface.
 
@@ -24,7 +24,7 @@ def distance_on_earth(latlon1: Float[Array, "... 2"], latlon2: Float[Array, "...
 
     Returns
     -------
-    ArrayLike
+    Array
         The distance between the two (array of) points in meters.
     """
     lat1_rad = jnp.radians(latlon1[..., 0])
@@ -38,18 +38,18 @@ def distance_on_earth(latlon1: Float[Array, "... 2"], latlon2: Float[Array, "...
     return d
 
 
-def longitude_in_180_180_degrees(longitude: ArrayLike) -> ArrayLike:
+def longitude_in_180_180_degrees(longitude: Array) -> Array:
     """
     Adjusts an array of longitudes to be within the range of -180 to 180 degrees.
 
     Parameters
     ----------
-    longitude : ArrayLike
+    longitude : Array
         An array of longitudes in degrees.
 
     Returns
     -------
-    ArrayLike
+    Array
         The input longitudes adjusted to be within the range of -180 to 180 degrees.
 
     Notes

@@ -1,8 +1,9 @@
 from __future__ import annotations
+
 from typing import Mapping, Sequence
 
 import equinox as eqx
-import jax
+from jaxtyping import PyTree
 
 
 class Set(eqx.Module):
@@ -16,5 +17,6 @@ class Set(eqx.Module):
     size : int
         The number of members in the set.
     """
-    _members: jax.Pytree | Mapping[str, jax.Pytree] | Sequence[jax.Pytree]
+
+    _members: PyTree | Mapping[str, PyTree] | Sequence[PyTree]
     size: int

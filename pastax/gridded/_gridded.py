@@ -1,12 +1,13 @@
 from __future__ import annotations
-from typing import Dict
+
+from typing import Callable, Dict
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Bool, Float, Int, Scalar
 import numpy as np
 import xarray as xr
+from jaxtyping import Array, Bool, Float, Int, Scalar
 
 from ..utils._unit import degrees_to_meters, meters_to_degrees
 from ._coordinate import Coordinates
@@ -47,15 +48,21 @@ class Gridded(eqx.Module):
     interp_spatiotemporal(*fields, time, latitude, longitude)
         Interpolates the specified fields spatiotemporally at the given time, latitude, and longitude.
     neighborhood(*fields, time, latitude, longitude, t_width, x_width)
-        Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`, 
+        Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`,
         `longitude`.
     to_xarray()
         Returns the [`pastax.gridded.Gridded`][] object as a `xarray.Dataset`.
-    from_array(fields, time, latitude, longitude, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
-        Constructs a [`pastax.gridded.Gridded`][] object from arrays of fields and coordinates `time`, `latitude`, `longitude`.
-    from_xarray(dataset, fields, coordinates, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False, is_uv_mps=True)
+    from_array(fields, time, latitude, longitude, interpolation_method="linear", is_spherical_mesh=True,
+            use_degrees=False, is_uv_mps=True)
+        Constructs a [`pastax.gridded.Gridded`][] object from arrays of fields and coordinates `time`, `latitude`,
+        `longitude`.
+    from_xarray(dataset, fields, coordinates, interpolation_method="linear", is_spherical_mesh=True, use_degrees=False,
+            is_uv_mps=True)
         Constructs a [`pastax.gridded.Gridded`][] object from a `xarray.Dataset`.
+    xarray_to_array(dataset, fields, coordinates, transform_fn=lambda x: jnp.asarray(x, dtype=float))
+        Converts an `xarray.Dataset` to arrays of fields and coordinates.
     """
+
     coordinates: Coordinates
     dx: Float[Array, "lat lon-1"]
     dy: Float[Array, "lat-1 lon"]
@@ -69,7 +76,7 @@ class Gridded(eqx.Module):
         self,
         time: Int[Scalar, ""],
         latitude: Float[Scalar, ""],
-        longitude: Float[Scalar, ""]
+        longitude: Float[Scalar, ""],
     ) -> tuple[Int[Scalar, ""], Int[Scalar, ""], Int[Scalar, ""]]:
         """
         Get nearest indices of the spatio-temporal point `time`, `latitude`, `longitude`.
@@ -90,11 +97,7 @@ class Gridded(eqx.Module):
         """
         return self.coordinates.indices(time, latitude, longitude)
 
-    def interp_temporal(
-        self,
-        *fields: tuple[str, ...],
-        time: Float[Array, "..."]
-    ) -> tuple[Float[Array, "... ... ..."], ...]:
+    def interp_temporal(self, *fields: str, time: Float[Array, "..."]) -> tuple[Float[Array, "... ... ..."], ...]:
         """
         Interpolates the given fields in time.
 
@@ -114,9 +117,9 @@ class Gridded(eqx.Module):
 
     def interp_spatial(
         self,
-        *fields: tuple[str, ...],
+        *fields: str,
         latitude: Float[Array, "..."],
-        longitude: Float[Array, "..."]
+        longitude: Float[Array, "..."],
     ) -> tuple[Float[Array, "... ... ..."], ...]:
         """
         Interpolates the given fields in space.
@@ -135,17 +138,14 @@ class Gridded(eqx.Module):
         tuple[Float[Array, "... ... ..."], ...]
             A tuple of arrays containing interpolated values for each field.
         """
-        return tuple(
-            self.fields[field_name].interp_spatial(latitude, longitude)
-            for field_name in fields
-        )
-    
+        return tuple(self.fields[field_name].interp_spatial(latitude, longitude) for field_name in fields)
+
     def interp_spatiotemporal(
         self,
-        *fields: tuple[str, ...],
+        *fields: str,
         time: Float[Array, "..."],
         latitude: Float[Array, "..."],
-        longitude: Float[Array, "..."]
+        longitude: Float[Array, "..."],
     ) -> tuple[Float[Array, "... ... ..."], ...]:
         """
         Interpolates the specified fields spatiotemporally at the given time, latitude, and longitude.
@@ -166,19 +166,16 @@ class Gridded(eqx.Module):
         tuple[Float[Array, "... ... ..."], ...]
             A tuple of arrays containing the interpolated values for each field.
         """
-        return tuple(
-            self.fields[field_name].interp_spatiotemporal(time, latitude, longitude)
-            for field_name in fields
-        )
+        return tuple(self.fields[field_name].interp_spatiotemporal(time, latitude, longitude) for field_name in fields)
 
     def neighborhood(  # TODO: handle edge cases
         self,
-        *fields: tuple[str, ...],
+        *fields: str,
         time: Int[Scalar, ""],
         latitude: Float[Scalar, ""],
         longitude: Float[Scalar, ""],
         t_width: int,
-        x_width: int
+        x_width: int,
     ) -> Gridded:
         """
         Extracts a neighborhood of data around a specified point in time and space.
@@ -209,14 +206,14 @@ class Gridded(eqx.Module):
         from_lat_i = lat_i - x_width // 2
         from_lon_i = lon_i - x_width // 2
 
-        fields = dict(
+        fields_ = dict(
             (
                 field_name,
                 jax.lax.dynamic_slice(
                     self.fields[field_name].values,
                     (from_t_i, from_lat_i, from_lon_i),
-                    (t_width, x_width, x_width)
-                )
+                    (t_width, x_width, x_width),
+                ),
             )
             for field_name in fields
         )
@@ -226,11 +223,13 @@ class Gridded(eqx.Module):
         lon = jax.lax.dynamic_slice_in_dim(self.coordinates.longitude.values, from_lon_i, x_width)
 
         return Gridded.from_array(
-            fields, 
-            t, lat, lon, 
-            interpolation_method="linear", 
-            is_spherical_mesh=self.is_spherical_mesh, 
-            use_degrees=self.use_degrees
+            fields_,
+            t,
+            lat,
+            lon,
+            interpolation_method="linear",
+            is_spherical_mesh=self.is_spherical_mesh,
+            use_degrees=self.use_degrees,
         )
 
     def to_xarray(self) -> xr.Dataset:
@@ -248,13 +247,13 @@ class Gridded(eqx.Module):
         """
         dataset = xr.Dataset(
             data_vars=dict(
-                (var_name, (["time", "latitude", "longitude"], var.values)) for var_name, var in self.variables.items()
+                (var_name, (["time", "latitude", "longitude"], var.values)) for var_name, var in self.fields.items()
             ),
             coords=dict(
                 time=np.asarray(self.coordinates.time.values, dtype="datetime64[s]"),
                 latitude=self.coordinates.latitude.values,
-                longitude=self.coordinates.longitude.values
-            )
+                longitude=self.coordinates.longitude.values,
+            ),
         )
 
         return dataset
@@ -269,7 +268,7 @@ class Gridded(eqx.Module):
         interpolation_method: str = "linear",
         is_spherical_mesh: bool = True,
         use_degrees: bool = False,
-        is_uv_mps: bool = True
+        is_uv_mps: bool = True,
     ) -> Gridded:
         """
         Create a [`pastax.gridded.Gridded`][] object from arrays of fields, time, latitude, and longitude.
@@ -277,7 +276,7 @@ class Gridded(eqx.Module):
         Parameters
         ----------
         fields : Dict[str, Float[Array, "time lat lon"]]
-            A dictionary where keys are fields names and values are 3D arrays representing 
+            A dictionary where keys are fields names and values are 3D arrays representing
             the field data over time, latitude, and longitude.
         time : Int[Array, "time"]
             A 1D array representing the time dimension.
@@ -299,17 +298,18 @@ class Gridded(eqx.Module):
         Dataset
             The corresponding [`pastax.gridded.Gridded`][].
         """
+
         def compute_cell_dlatlon(dright: Float[Array, "latlon-1"], axis: int) -> Float[Array, "latlon"]:
             if axis == 0:
                 dcentered = (dright[1:, :] + dright[:-1, :]) / 2
-                dstart =((dright[0, :] - dcentered[0, :] / 2) * 2)[None, :]
+                dstart = ((dright[0, :] - dcentered[0, :] / 2) * 2)[None, :]
                 dend = ((dright[-1, :] - dcentered[-1, :] / 2) * 2)[None, :]
             else:
                 dcentered = (dright[:, 1:] + dright[:, :-1]) / 2
                 dstart = ((dright[:, 0] - dcentered[:, 0] / 2) * 2)[:, None]
                 dend = ((dright[:, -1] - dcentered[:, -1] / 2) * 2)[:, None]
             return jnp.concat((dstart, dcentered, dend), axis=axis)
-        
+
         use_degrees = use_degrees & is_spherical_mesh  # if flat mesh, no reason to use degrees
 
         coordinates = Coordinates.from_array(time, latitude, longitude, is_spherical_mesh)
@@ -320,7 +320,8 @@ class Gridded(eqx.Module):
 
         if is_spherical_mesh and not use_degrees:
             dlatlon = degrees_to_meters(
-                jnp.stack([dlat, jnp.zeros_like(dlat)], axis=-1), (latitude[:-1] + latitude[1:]) / 2
+                jnp.stack([dlat, jnp.zeros_like(dlat)], axis=-1),
+                (latitude[:-1] + latitude[1:]) / 2,
             )
             dlat = dlatlon[:, 0]
             _, dlat = jnp.meshgrid(longitude, dlat)
@@ -359,7 +360,7 @@ class Gridded(eqx.Module):
 
             _, lat_grid = jnp.meshgrid(longitude, latitude)
             lat_grid = lat_grid.ravel()
-             
+
             vu = eqx.filter_vmap(lambda x: meters_to_degrees(x, lat_grid))(vu)
             vu = vu.reshape(original_shape)
 
@@ -368,15 +369,18 @@ class Gridded(eqx.Module):
 
             is_uv_mps = False
 
-        fields = dict(
+        fields_ = dict(
             (
                 field_name,
                 SpatioTemporalField.from_array(
                     values,
-                    coordinates.time.values, coordinates.latitude.values, coordinates.longitude.values,
-                    interpolation_method=interpolation_method
-                )
-            ) for field_name, values in fields.items()
+                    coordinates.time.values,
+                    coordinates.latitude.values,
+                    coordinates.longitude.values,
+                    interpolation_method=interpolation_method,
+                ),
+            )
+            for field_name, values in fields.items()
         )
 
         return cls(
@@ -384,10 +388,10 @@ class Gridded(eqx.Module):
             coordinates=coordinates,
             dx=dlon,
             dy=dlat,
-            fields=fields,
+            fields=fields_,
             is_land=is_land,
             is_spherical_mesh=is_spherical_mesh,
-            use_degrees=use_degrees
+            use_degrees=use_degrees,
         )
 
     @classmethod
@@ -399,7 +403,7 @@ class Gridded(eqx.Module):
         interpolation_method: str = "linear",
         is_spherical_mesh: bool = True,
         is_uv_mps: bool = True,
-        use_degrees: bool = False
+        use_degrees: bool = False,
     ) -> Gridded:
         """
         Create a [`pastax.gridded.Gridded`][] object from a `xarray.Dataset`.
@@ -427,19 +431,33 @@ class Gridded(eqx.Module):
         Dataset
             The corresponding [`pastax.gridded.Gridded`][].
         """
-        fields, t, lat, lon = cls._to_array(dataset, fields, coordinates, to_jax=True)
+        fields_, t, lat, lon = cls.xarray_to_array(dataset, fields, coordinates)
 
-        return cls.from_array(fields, t, lat, lon, interpolation_method, is_spherical_mesh, use_degrees, is_uv_mps)
+        return cls.from_array(
+            fields_,
+            t,
+            lat,
+            lon,
+            interpolation_method,
+            is_spherical_mesh,
+            use_degrees,
+            is_uv_mps,
+        )
 
     @staticmethod
-    def _to_array(
+    def xarray_to_array(
         dataset: xr.Dataset,
         fields: Dict[str, str],  # to -> from
         coordinates: Dict[str, str],  # to -> from
-        to_jax: bool = True
-    ) -> tuple[Dict[str, Float[Array, "..."]], Float[Array, "..."], Float[Array, "..."], Float[Array, "..."]]:
+        transform_fn: Callable[[Array], Array] = lambda x: jnp.asarray(x, dtype=float),
+    ) -> tuple[
+        Dict[str, Float[Array, "..."]],
+        Float[Array, "..."],
+        Float[Array, "..."],
+        Float[Array, "..."],
+    ]:
         """
-        Converts an `xarray.Dataset` to arrays for specified fields and coordinates.
+        Converts an `xarray.Dataset` to arrays of fields and coordinates.
 
         Parameters
         ----------
@@ -449,8 +467,9 @@ class Gridded(eqx.Module):
             A dictionary mapping the target field names to the source variable names in the dataset.
         coordinates : Dict[str, str]
             A dictionary mapping the target coordinate names to the source coordinate names in the dataset.
-        to_jax : bool, optional
-            Whether to convert the arrays to JAX arrays, defaults to `True`.
+        transform_fn : Callable[[Array], Array], optional
+            Function converting dataarrays to JAX (or numpy) arrays,
+            defaults to `lambda x: jnp.asarray(x, dtype=float)`.
 
         Returns
         -------
@@ -461,17 +480,10 @@ class Gridded(eqx.Module):
             - The latitude coordinate array.
             - The longitude coordinate array.
         """
-        if to_jax:
-            transform_fn = lambda arr: jnp.asarray(arr, dtype=float)
-        else:
-            transform_fn = lambda arr: np.asarray(arr, dtype=float)
-
-        fields = dict(
-            (to_name, transform_fn(dataset[from_name].data)) for to_name, from_name in fields.items()
-        )
+        fields_ = dict((to_name, transform_fn(dataset[from_name].data)) for to_name, from_name in fields.items())
 
         t = transform_fn(dataset[coordinates["time"]].data.astype("datetime64[s]").astype(int))
         lat = transform_fn(dataset[coordinates["latitude"]].data)
         lon = transform_fn(dataset[coordinates["longitude"]].data)
 
-        return fields, t, lat, lon
+        return fields_, t, lat, lon

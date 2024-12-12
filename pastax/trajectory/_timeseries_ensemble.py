@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import Dict, Callable, ClassVar
+
+from typing import Any, Callable, ClassVar, Dict
 
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Float
 import numpy as np
 import xarray as xr
+from jaxtyping import Array, Float
 
 from ..utils._unit import Unit, units_to_str
 from ._state import State
@@ -133,13 +134,13 @@ class TimeseriesEnsemble(Unitful):
         return self.members.unit
 
     @property
-    def name(self) -> str:
+    def name(self) -> str | None:
         """
         Returns the name of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
-        str
+        str | None
             The name of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         return self.members.name
@@ -170,13 +171,13 @@ class TimeseriesEnsemble(Unitful):
         TimeseriesEnsemble
             A new [`pastax.trajectory.TimeseriesEnsemble`][] with the attached name.
         """
-        return self.__class__(self.states.value, self.times.value, unit=self.unit, name=name)
-    
+        return TimeseriesEnsemble.from_array(self.states.value, self.times.value, unit=self.unit, name=name)
+
     def crps(
         self,
         other: Timeseries,
-        metric_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike],
-        is_metric_symmetric: bool = True
+        metric_func: Callable[[Timeseries, Timeseries], Unitful | Array],
+        is_metric_symmetric: bool = True,
     ) -> Unitful:
         """
         Computes the Continuous Ranked Probability Score (CRPS) for the [`pastax.trajectory.TimeseriesEnsemble`].
@@ -185,11 +186,11 @@ class TimeseriesEnsemble(Unitful):
         ----------
         other : Timeseries
             The other timeseries to compare against.
-        metric_func : Callable[[Timeseries, Timeseries], Unitful | ArrayLike]
+        metric_func : Callable[[Timeseries, Timeseries], Unitful | Array]
             The metric function to use.
         is_metric_symmetric : bool, optional
-            Whether the metric function is symmetric, 
-            in which case half of the intra ensemble "distances" are evaluated when computing the ensemble dispersion, 
+            Whether the metric function is symmetric,
+            in which case half of the intra ensemble "distances" are evaluated when computing the ensemble dispersion,
             defaults to `True`.
 
         Returns
@@ -208,18 +209,18 @@ class TimeseriesEnsemble(Unitful):
 
     def ensemble_dispersion(
         self,
-        metric_func: Callable[[Timeseries, Timeseries], Unitful | ArrayLike],
-        is_metric_symmetric: bool = True
+        metric_func: Callable[[Timeseries, Timeseries], Unitful | Array],
+        is_metric_symmetric: bool = True,
     ) -> Unitful:
         """
         Computes the [`pastax.trajectory.TimeseriesEnsemble`][] dispersion.
 
         Parameters
         ----------
-        metric_func : Callable[[Timeseries, Timeseries], Unitful | ArrayLike]
+        metric_func : Callable[[Timeseries, Timeseries], Unitful | Array]
             The metric function to use.
         is_metric_symmetric : bool, optional
-            Whether the metric function is symmetric, 
+            Whether the metric function is symmetric,
             in which case half of the intra ensemble "distances" are evaluated, defaults to `True`.
 
         Returns
@@ -234,8 +235,8 @@ class TimeseriesEnsemble(Unitful):
 
         vmap_metric_fn = eqx.filter_vmap(
             lambda _ij: metric_func(
-                self._members_type.from_array(self.value[_ij[0], ...], self.times.value), 
-                self._members_type.from_array(self.value[_ij[1], ...], self.times.value)
+                self._members_type.from_array(self.value[_ij[0], ...], self.times.value),
+                self._members_type.from_array(self.value[_ij[1], ...], self.times.value),
             )
         )
 
@@ -247,13 +248,13 @@ class TimeseriesEnsemble(Unitful):
 
         return dispersion
 
-    def map(self, func: Callable[[Timeseries], Unitful | ArrayLike]) -> Unitful:
+    def map(self, func: Callable[[Timeseries], Unitful | Array]) -> Unitful:
         """
         Applies a function to each [`pastax.trajectory.Timeseries`][] of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Parameters
         ----------
-        func : Callable[[Timeseries], Unitful | ArrayLike]
+        func : Callable[[Timeseries], Unitful | Array]
             The function to apply to each [`pastax.trajectory.Timeseries`][].
 
         Returns
@@ -273,13 +274,13 @@ class TimeseriesEnsemble(Unitful):
     def to_xarray(self) -> xr.Dataset:
         """
         Converts the [`pastax.trajectory.TimeseriesEnsemble`][] to a `xarray.Dataset`.
-        
+
         Returns
         -------
         xr.Dataset
             The corresponding `xarray.Dataset`.
         """
-        da = self._to_dataarray()
+        da = self.to_dataarray()
         ds = da.to_dataset()
 
         return ds
@@ -289,9 +290,9 @@ class TimeseriesEnsemble(Unitful):
         cls,
         values: Float[Array, "member time state"],
         times: Float[Array, "time"],
-        unit: Unit | Dict[Unit, int | float] = {},
-        name: str = None,
-        **kwargs: Dict
+        unit: Dict[Unit, int | float] = {},
+        name: str | None = None,
+        **kwargs: Any,
     ) -> TimeseriesEnsemble:
         """
         Creates a [`pastax.trajectory.TimeseriesEnsemble`][] from arrays of values and time points.
@@ -302,11 +303,11 @@ class TimeseriesEnsemble(Unitful):
             The values for the members of the ensemble.
         times : Float[Array, "time"]
             The time points for the timeseries.
-        name : str, optional
-            The name of the timeseries, defaults to None.
-        unit : Unit | Dict[Unit, int | float], optional
+        unit : Dict[Unit, int | float], optional
             The unit of the timeseries, defaults to {}.
-        **kwargs : Dict
+        name : str | None, optional
+            The name of the timeseries, defaults to None.
+        **kwargs : Any
             Additional keyword arguments.
 
         Returns
@@ -316,21 +317,21 @@ class TimeseriesEnsemble(Unitful):
         """
         members = eqx.filter_vmap(
             lambda s: cls._members_type.from_array(s, times, unit=unit, name=name, **kwargs),
-            out_axes=eqx._vmap_pmap.if_mapped(0)
+            out_axes=eqx._vmap_pmap.if_mapped(0),
         )(values)
 
         return cls(members)
 
-    def _to_dataarray(self) -> xr.DataArray:
+    def to_dataarray(self) -> xr.DataArray:
         da = xr.DataArray(
             data=self.states.value,
             dims=["member", "time"],
             coords={
                 "member": np.arange(self.size),
-                "time": self.members.times.to_datetime()
+                "time": self.members.times.to_datetime(),
             },
             name=self.name,
-            attrs={"units": units_to_str(self.unit)}
+            attrs={"units": units_to_str(self.unit)},
         )
 
         return da

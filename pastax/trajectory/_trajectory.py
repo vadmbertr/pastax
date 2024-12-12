@@ -1,13 +1,15 @@
 from __future__ import annotations
-from typing import ClassVar, Dict
+
+from typing import Any, ClassVar, Dict
 
 import cartopy.crs as ccrs
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Int
-from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 import xarray as xr
+from jaxtyping import Array, Float, Int
+from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection
 
 from ..utils._geo import distance_on_earth
 from ..utils._unit import time_in_seconds, UNIT, Unit, units_to_str
@@ -25,14 +27,14 @@ class Trajectory(Timeseries):
     states : Location
         The locations of the trajectory.
     _states_type : ClassVar
-        The type of the states in the trajectory (set to Location).
-    id : Int[Array, ""], optional
-        The ID of the trajectory (defaults is None).
+        The type of the states in the trajectory (set to [`pastax.trajectory.Location`][]).
+    id : Int[Array, ""] | None, optional
+        The ID of the trajectory, defaults to `None`.
 
     Methods
     -------
     __init__(locations, times, id=None, **_)
-        Initializes the Trajectory with given locations, times, and optional trajectory ID.
+        Initializes the [`pastax.trajectory.Trajectory`][] with given locations, times, and optional trajectory ID.
     latitudes
         Returns the latitudes of the trajectory.
     locations
@@ -65,15 +67,15 @@ class Trajectory(Timeseries):
 
     states: Location
     _states_type: ClassVar = Location
-    id: Int[Array, ""] = None
+    id: Int[Array, ""] | None = None
 
     def __init__(
         self,
         locations: Location,
         times: Time,
-        id: Int[Array, ""] = None,
+        id: Int[Array, ""] | None = None,
         *_,
-        **__
+        **__,
     ):
         """
         Initializes the Trajectory with given locations, times, and optional trajectory ID.
@@ -84,6 +86,8 @@ class Trajectory(Timeseries):
             The locations for the trajectory.
         times : Int[Array, "... time"]
             The time points for the trajectory.
+        id : Int[Array, ""] | None, optional
+            The ID of the trajectory, defaults to None.
         """
         super().__init__(locations, times)
         self.id = id
@@ -134,7 +138,11 @@ class Trajectory(Timeseries):
         State
             The origin of the trajectory.
         """
-        return State(self.locations.value[..., 0, :], unit=self.unit, name="Origin in [latitude, longitude]")
+        return State(
+            self.locations.value[..., 0, :],
+            unit=self.unit,
+            name="Origin in [latitude, longitude]",
+        )
 
     def lengths(self) -> Timeseries:
         """
@@ -146,7 +154,12 @@ class Trajectory(Timeseries):
             The cumulative lengths of the trajectory.
         """
         lengths = self.steps().cumsum()
-        return Timeseries.from_array(lengths.value, self.times.value, unit=lengths.unit, name="Cumulative lengths")
+        return Timeseries.from_array(
+            lengths.value,
+            self.times.value,
+            unit=lengths.unit,
+            name="Cumulative lengths",
+        )
 
     def liu_index(self, other: Trajectory) -> Timeseries:
         """
@@ -190,36 +203,36 @@ class Trajectory(Timeseries):
         return Timeseries.from_array(mae.value, self.times.value, mae.unit, name="MAE")
 
     def plot(
-        self, 
-        ax: plt.Axes = None, 
-        label: str = None, 
-        color: str = None, 
-        alpha_factor: float = 1, 
-        ti: int = None,
-        **kwargs
-    ) -> plt.Axes:
+        self,
+        ax: Axes | None = None,
+        label: str | None = None,
+        color: str | None = None,
+        alpha_factor: float = 1,
+        ti: int | None = None,
+        **kwargs,
+    ) -> Axes:
         """
         Plots the trajectory.
 
         Parameters
         ----------
-        ax : plt.Axes, optional
+        ax : Axes | None, optional
             The matplotlib axis to plot on, defaults to `None`.
             If `None`, a new figure and axis are created.
-        label : str, optional
+        label : str | None, optional
             The label for the plot, defaults to `None`.
-        color : str, optional
+        color : str | None, optional
             The color for the plot, defaults to `None`.
         alpha_factor : float, optional
             A factor controlling the overall transparency of the plotted trajectory, defaults to `1`.
-        ti : int, optional
+        ti : int | None, optional
             The time index to plot up to, defaults to `None`.
         kwargs: dict, optional
             Additional arguments passed to `LineCollection`.
 
         Returns
         -------
-        plt.Axes
+        Axes
             The matplotlib axis with the plot.
         """
         if ax is None:
@@ -229,16 +242,21 @@ class Trajectory(Timeseries):
         if ti is None:
             ti = self.length
 
-        alpha = jnp.geomspace(.25, 1, ti-1) * alpha_factor
-        
+        alpha = jnp.geomspace(0.25, 1, ti - 1) * alpha_factor
+
         locations = self.locations.value[:ti, None, ::-1]
         segments = jnp.concat([locations[:-1], locations[1:]], axis=1)
 
-        lc = LineCollection(segments, color=color, alpha=alpha, **kwargs)
+        lc = LineCollection(segments, color=color, alpha=alpha, **kwargs)  # type: ignore
         ax.add_collection(lc)
 
         # trick to display label with alpha=1
-        ax.plot(self.longitudes.value[-1], self.latitudes.value[-1], label=label, color=color)
+        ax.plot(
+            self.longitudes.value[-1],
+            self.latitudes.value[-1],
+            label=label,
+            color=color,
+        )
 
         return ax
 
@@ -279,10 +297,10 @@ class Trajectory(Timeseries):
         separation_distance = eqx.filter_vmap(lambda p1, p2: p1.distance_on_earth(p2))(self.locations, other.locations)
 
         return Timeseries.from_array(
-            separation_distance.value, 
-            self.times.value, 
-            separation_distance.unit, 
-            name="Separation distance"
+            separation_distance.value,
+            self.times.value,
+            separation_distance.unit,
+            name="Separation distance",
         )
 
     def steps(self) -> Timeseries:
@@ -298,7 +316,7 @@ class Trajectory(Timeseries):
             self.locations.value[1:], self.locations.value[:-1]
         )
 
-        steps = jnp.pad(steps, (1, 0), constant_values=0.)  # adds a 1st 0 step
+        steps = jnp.pad(steps, (1, 0), constant_values=0.0)  # adds a 1st 0 step
 
         return Timeseries.from_array(steps, self.times.value, UNIT["m"], name="Trajectory steps")
 
@@ -311,16 +329,16 @@ class Trajectory(Timeseries):
         xr.Dataset
             The corresponding `xarray.Dataset`.
         """
-        return xr.Dataset(self._to_dataarray())
-    
+        return xr.Dataset(self.to_dataarray())
+
     @classmethod
     def from_array(
-        cls, 
-        values: Float[Array, "... time 2"], 
+        cls,
+        values: Float[Array, "... time 2"],
         times: Float[Array, "... time"],
-        unit: Unit | Dict[Unit, int] = UNIT["°"],
-        id: Int[Array, ""] = None,
-        **_: Dict
+        unit: Dict[Unit, int | float] = UNIT["°"],
+        id: Int[Array, ""] | None = None,
+        **_: Any,
     ) -> Trajectory:
         """
         Creates a [`pastax.trajectory.Trajectory`][] from arrays of (latitudes, longitudes) values and time points.
@@ -331,9 +349,9 @@ class Trajectory(Timeseries):
             The array of (latitudes, longitudes) values for the trajectory.
         times : Float[Array, "... time"]
             The time points for the trajectory.
-        unit : Unit | Dict[Unit, int], optional
+        unit : Dict[Unit, int | float], optional
             Unit of the trajectory locations, defaults to UNIT["°"].
-        id : Int[Array, ""], optional
+        id : Int[Array, ""] | None, optional
             The ID of the trajectory, defaults to None.
 
         Returns
@@ -341,18 +359,18 @@ class Trajectory(Timeseries):
         Trajectory
             The corresponding [`pastax.trajectory.Trajectory`][].
         """
-        return super().from_array(values, times, unit=unit, name="Location in [latitude, longitude]", id=id)
-    
+        return super().from_array(values, times, unit=unit, name="Location in [latitude, longitude]", id=id)  # type: ignore
+
     @classmethod
     def from_xarray(
-        cls, 
+        cls,
         dataset: xr.Dataset,
         time_varname: str = "time",
         lat_varname: str = "lat",  # follows clouddrift "convention"
         lon_varname: str = "lon",  # follows clouddrift "convention"
-        unit: Unit | Dict[Unit, int] = UNIT["°"],
-        id: Int[Array, ""] = None,
-        **_: Dict
+        unit: Dict[Unit, int | float] = UNIT["°"],
+        id: Int[Array, ""] | None = None,
+        **_: Any,
     ) -> Trajectory:
         """
         Creates a [`pastax.trajectory.Trajectory`][] from a `xarray.Dataset`.
@@ -367,9 +385,9 @@ class Trajectory(Timeseries):
             A string indicating the name of the latitude variable in the dataset, defaults to `lat`.
         lon_varname : str, optional
             A string indicating the name of the longitude variable in the dataset, defaults to `lon`.
-        unit : Unit | Dict[Unit, int], optional
+        unit : Dict[Unit, int | float], optional
             Unit of the trajectory locations, defaults to UNIT["°"].
-        id : Int[Array, ""], optional
+        id : Int[Array, ""] | None, optional
             The ID of the trajectory, defaults to None.
 
         Returns
@@ -378,10 +396,10 @@ class Trajectory(Timeseries):
             The corresponding [`pastax.trajectory.Trajectory`][].
         """
         values = jnp.stack([dataset[lat_varname].values, dataset[lon_varname].values], axis=-1)
-        times = time_in_seconds(dataset[time_varname].values)
+        times: Array = time_in_seconds(dataset[time_varname].values)
         return cls.from_array(values, times, unit=unit, id=id)
 
-    def _to_dataarray(self) -> Dict[str, xr.DataArray]:
+    def to_dataarray(self) -> Dict[str, xr.DataArray]:
         times = self.times.to_datetime()
         unit = units_to_str(self.unit)
 
@@ -390,14 +408,14 @@ class Trajectory(Timeseries):
             dims=["obs"],
             coords={"time": ("obs", times)},
             name="lat",
-            attrs={"units": unit}
+            attrs={"units": unit},
         )
         longitude_da = xr.DataArray(
             data=self.longitudes.value,
             dims=["obs"],
             coords={"time": ("obs", times)},
             name="lon",
-            attrs={"units": unit}
+            attrs={"units": unit},
         )
 
         return {"lat": latitude_da, "lon": longitude_da}

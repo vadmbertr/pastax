@@ -7,7 +7,7 @@ class Metric(eqx.Module):
 
     Attributes
     ----------
-    metric_fun : str 
+    metric_fun : str
         The name of the metric function or method.
     """
 
@@ -23,7 +23,7 @@ class LiuIndex(Metric):
     metric_fun : str
         The name of the metric function or method: `metric_fun="liu_index"`.
     """
-    
+
     metric_fun: str = eqx.field(static=True, default_factory=lambda: "liu_index")
 
 
@@ -36,7 +36,7 @@ class Mae(Metric):
     metric_fun : str
         The name of the metric function or method: `metric_fun="mae"`.
     """
-    
+
     metric_fun: str = eqx.field(static=True, default_factory=lambda: "mae")
 
 
@@ -49,7 +49,7 @@ class Rmse(Metric):
     metric_fun : str
         The name of the metric function or method: `metric_fun="rmse"`.
     """
-    
+
     metric_fun: str = eqx.field(static=True, default_factory=lambda: "rmse")
 
 
@@ -62,5 +62,5 @@ class SeparationDistance(Metric):
     metric_fun : str
         The name of the metric function or method: `metric_fun="separation_distance"`.
     """
-    
+
     metric_fun: str = eqx.field(static=True, default_factory=lambda: "separation_distance")

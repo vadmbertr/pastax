@@ -34,3 +34,25 @@ version = {attr = "pastax._version.version"}
 
 [tool.setuptools.packages]
 find = {}
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I001"]
+ignore = ["E402", "E721", "E731", "E741", "F722", "F811", "F821"]
+fixable = ["I001", "F401"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+lines-after-imports = 2
+extra-standard-library = ["typing_extensions"]
+order-by-type = false
+
+[tool.pyright]
+reportAssignmentType = false
+reportAttributeAccessIssue = false
+reportIncompatibleMethodOverride = false
+reportIncompatibleVariableOverride = false
+reportRedeclaration = false
+include = ["pastax"]

@@ -1,17 +1,20 @@
 from __future__ import annotations
-from fractions import Fraction
+
 import functools as ft
-from typing import Literal, Dict
+from fractions import Fraction
+from typing import Dict, Literal
 
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Float    
 import numpy as np
+from jaxtyping import Array, ArrayLike, Float
 
 from ._geo import EARTH_RADIUS
 
 
 ft.total_ordering
+
+
 class Unit(eqx.Module):
     """
     Base class representing [`pastax.utils.Unit`][] of measurement.
@@ -46,57 +49,58 @@ class Unit(eqx.Module):
         if isinstance(other, Unit):
             return self.name < other.name
         return NotImplemented
-    
+
     def __hash__(self):
         return hash(self.name)
-    
+
     def __repr__(self):
         return self.name
-    
+
     @staticmethod
-    def _pre_convert(value: ArrayLike, exp: int | float) -> ArrayLike:
+    def _pre_convert(value: Array, exp: int | float) -> Array:
         """
-        Prepares the value for conversion between "base" [`pastax.utils.Unit`][] by raising it to the power of the reciprocal of the 
-        exponent.
+        Prepares the value for conversion between "base" [`pastax.utils.Unit`][] by raising it to the power of the
+        reciprocal of the exponent.
 
         Parameters
         ----------
-        value : ArrayLike
+        value : Array
             The value to be converted.
         exp : int or float
             The exponent to use for conversion.
 
         Returns
         -------
-        ArrayLike
+        Array
             The prepared value.
         """
         if exp == 1:
             return value
         return value ** (1 / exp)
-    
+
     @staticmethod
-    def _post_convert(value: ArrayLike, exp: int | float) -> ArrayLike:
+    def _post_convert(value: Array, exp: int | float) -> Array:
         """
-        Finalizes the conversion between "base" [`pastax.utils.Unit`][] by raising the value to the power of the exponent.
+        Finalizes the conversion between "base" [`pastax.utils.Unit`][] by raising the value to the power of the
+        exponent.
 
         Parameters
         ----------
-        value : ArrayLike
+        value : Array
             The value to be converted.
         exp : int or float
             The exponent to use for conversion.
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
         """
         if exp == 1:
             return value
-        return value ** exp
-    
-    def convert_to(self, unit: Unit, value: ArrayLike, exp: int | float = 1, *args) -> ArrayLike:
+        return value**exp
+
+    def convert_to(self, unit: Unit, value: Array, exp: int | float = 1, *args) -> Array:
         """
         Converts the `value` to the specified [`pastax.utils.Unit`].
 
@@ -104,7 +108,7 @@ class Unit(eqx.Module):
         ----------
         unit : Unit
             The [`pastax.utils.Unit`][] to convert to.
-        value : ArrayLike
+        value : Array
             The value to convert.
         exp : int or float, optional
             The exponent to use for conversion, defaults to 1.
@@ -113,7 +117,7 @@ class Unit(eqx.Module):
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
 
         Raises
@@ -122,7 +126,7 @@ class Unit(eqx.Module):
             If not implemented by subclasses.
         """
         raise NotImplementedError
-    
+
 
 class Meters(Unit):
     """
@@ -136,7 +140,7 @@ class Meters(Unit):
 
     name: str = eqx.field(static=True, default_factory=lambda: "m")
 
-    def convert_to(self, unit: Unit, value: ArrayLike, exp: int | float = 1, *args) -> ArrayLike:
+    def convert_to(self, unit: Unit, value: Array, exp: int | float = 1, *args) -> Array:
         """
         Converts the value to the specified [`pastax.utils.Unit`].
 
@@ -144,7 +148,7 @@ class Meters(Unit):
         ----------
         unit : Unit
             The [`pastax.utils.Unit`][] to convert to.
-        value : ArrayLike
+        value : Array
             The value to convert.
         exp : int or float, optional
             The exponent to use for conversion, defaults to 1.
@@ -153,7 +157,7 @@ class Meters(Unit):
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
 
         Raises
@@ -163,7 +167,7 @@ class Meters(Unit):
         """
         if isinstance(unit, Meters):
             return value
-        
+
         value = self._pre_convert(value, exp)
 
         if isinstance(unit, Kilometers):
@@ -172,7 +176,7 @@ class Meters(Unit):
             value = meters_to_degrees(value, *args)
         else:
             raise ValueError(f"Cannot convert {self} to {unit}")
-    
+
         return self._post_convert(value, exp)
 
 
@@ -188,7 +192,7 @@ class Kilometers(Unit):
 
     name: str = eqx.field(static=True, default_factory=lambda: "km")
 
-    def convert_to(self, unit: Unit, value: ArrayLike, exp: int | float = 1, *args) -> ArrayLike:
+    def convert_to(self, unit: Unit, value: Array, exp: int | float = 1, *args) -> Array:
         """
         Converts the value to the specified [`pastax.utils.Unit`].
 
@@ -196,7 +200,7 @@ class Kilometers(Unit):
         ----------
         unit : Unit
             The [`pastax.utils.Unit`][] to convert to.
-        value : ArrayLike
+        value : Array
             The value to convert.
         exp : int or float, optional
             The exponent to use for conversion, defaults to 1.
@@ -205,7 +209,7 @@ class Kilometers(Unit):
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
 
         Raises
@@ -215,7 +219,7 @@ class Kilometers(Unit):
         """
         if isinstance(unit, Kilometers):
             return value
-        
+
         value = self._pre_convert(value, exp)
 
         if isinstance(unit, Meters):
@@ -224,7 +228,7 @@ class Kilometers(Unit):
             value = kilometers_to_degrees(value, *args)
         else:
             raise ValueError(f"Cannot convert {self} to {unit}")
-    
+
         return self._post_convert(value, exp)
 
 
@@ -240,7 +244,7 @@ class LatLonDegrees(Unit):
 
     name: str = eqx.field(static=True, default_factory=lambda: "°")
 
-    def convert_to(self, unit: Unit, value: ArrayLike, exp: int | float = 1, *args) -> ArrayLike:
+    def convert_to(self, unit: Unit, value: Array, exp: int | float = 1, *args) -> Array:
         """
         Converts the value to the specified [`pastax.utils.Unit`].
 
@@ -248,7 +252,7 @@ class LatLonDegrees(Unit):
         ----------
         unit : Unit
             The [`pastax.utils.Unit`][] to convert to.
-        value : ArrayLike
+        value : Array
             The value to convert.
         exp : int or float, optional
             The exponent to use for conversion, defaults to 1.
@@ -257,7 +261,7 @@ class LatLonDegrees(Unit):
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
 
         Raises
@@ -276,7 +280,7 @@ class LatLonDegrees(Unit):
             value = degrees_to_kilometers(value, *args)
         else:
             raise ValueError(f"Cannot convert {self} to {unit}")
-    
+
         return self._post_convert(value, exp)
 
 
@@ -292,7 +296,7 @@ class Seconds(Unit):
 
     name: str = eqx.field(static=True, default_factory=lambda: "s")
 
-    def convert_to(self, unit: Unit, value: ArrayLike, exp: int | float = 1, *args) -> ArrayLike:
+    def convert_to(self, unit: Unit, value: Array, exp: int | float = 1, *args) -> Array:
         """
         Converts the value to the specified unit.
 
@@ -300,7 +304,7 @@ class Seconds(Unit):
         ----------
         unit : Unit
             The [`pastax.utils.Unit`][] to convert to.
-        value : ArrayLike
+        value : Array
             The value to convert.
         exp : int or float, optional
             The exponent to use for conversion, defaults to 1.
@@ -309,7 +313,7 @@ class Seconds(Unit):
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
 
         Raises
@@ -319,7 +323,7 @@ class Seconds(Unit):
         """
         if isinstance(unit, Seconds):
             return value
-        
+
         value = self._pre_convert(value, exp)
 
         if isinstance(unit, Minutes):
@@ -330,7 +334,7 @@ class Seconds(Unit):
             value = seconds_to_days(value)
         else:
             raise ValueError(f"Cannot convert {self} to {unit}")
-    
+
         return self._post_convert(value, exp)
 
 
@@ -346,7 +350,7 @@ class Minutes(Unit):
 
     name: str = eqx.field(static=True, default_factory=lambda: "min")
 
-    def convert_to(self, unit: Unit, value: ArrayLike, exp: int | float = 1, *args) -> ArrayLike:
+    def convert_to(self, unit: Unit, value: Array, exp: int | float = 1, *args) -> Array:
         """
         Converts the value to the specified unit.
 
@@ -354,7 +358,7 @@ class Minutes(Unit):
         ----------
         unit : Unit
             The [`pastax.utils.Unit`][] to convert to.
-        value : ArrayLike
+        value : Array
             The value to convert.
         exp : int or float, optional
             The exponent to use for conversion, defaults to 1.
@@ -363,7 +367,7 @@ class Minutes(Unit):
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
 
         Raises
@@ -373,7 +377,7 @@ class Minutes(Unit):
         """
         if isinstance(unit, Minutes):
             return value
-        
+
         value = self._pre_convert(value, exp)
 
         if isinstance(unit, Seconds):
@@ -384,7 +388,7 @@ class Minutes(Unit):
             value = minutes_to_days(value)
         else:
             raise ValueError(f"Cannot convert {self} to {unit}")
-    
+
         return self._post_convert(value, exp)
 
 
@@ -400,7 +404,7 @@ class Hours(Unit):
 
     name: str = eqx.field(static=True, default_factory=lambda: "h")
 
-    def convert_to(self, unit: Unit, value: ArrayLike, exp: int | float = 1, *args) -> ArrayLike:
+    def convert_to(self, unit: Unit, value: Array, exp: int | float = 1, *args) -> Array:
         """
         Converts the value to the specified unit.
 
@@ -408,7 +412,7 @@ class Hours(Unit):
         ----------
         unit : Unit
             The [`pastax.utils.Unit`][] to convert to.
-        value : ArrayLike
+        value : Array
             The value to convert.
         exp : int or float, optional
             The exponent to use for conversion, defaults to 1.
@@ -417,7 +421,7 @@ class Hours(Unit):
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
 
         Raises
@@ -427,7 +431,7 @@ class Hours(Unit):
         """
         if isinstance(unit, Hours):
             return value
-        
+
         value = self._pre_convert(value, exp)
 
         if isinstance(unit, Seconds):
@@ -438,7 +442,7 @@ class Hours(Unit):
             value = hours_to_days(value)
         else:
             raise ValueError(f"Cannot convert {self} to {unit}")
-    
+
         return self._post_convert(value, exp)
 
 
@@ -454,7 +458,7 @@ class Days(Unit):
 
     name: str = eqx.field(static=True, default_factory=lambda: "d")
 
-    def convert_to(self, unit: Unit, value: ArrayLike, exp: int | float = 1, *args) -> ArrayLike:
+    def convert_to(self, unit: Unit, value: Array, exp: int | float = 1, *args) -> Array:
         """
         Converts the value to the specified unit.
 
@@ -462,7 +466,7 @@ class Days(Unit):
         ----------
         unit : Unit
             The [`pastax.utils.Unit`][] to convert to.
-        value : ArrayLike
+        value : Array
             The value to convert.
         exp : int or float, optional
             The exponent to use for conversion, defaults to 1.
@@ -471,7 +475,7 @@ class Days(Unit):
 
         Returns
         -------
-        ArrayLike
+        Array
             The converted value.
 
         Raises
@@ -481,7 +485,7 @@ class Days(Unit):
         """
         if isinstance(unit, Days):
             return value
-        
+
         value = self._pre_convert(value, exp)
 
         if isinstance(unit, Seconds):
@@ -492,13 +496,18 @@ class Days(Unit):
             value = days_to_hours(value)
         else:
             raise ValueError(f"Cannot convert {self} to {unit}")
-    
+
         return self._post_convert(value, exp)
-    
+
 
 UNIT = {
-    "m": Meters(), "km": Kilometers(), "°": LatLonDegrees(),
-    "s": Seconds(), "min": Minutes(), "h": Hours(), "d": Days()
+    "m": Meters(),
+    "km": Kilometers(),
+    "°": LatLonDegrees(),
+    "s": Seconds(),
+    "min": Minutes(),
+    "h": Hours(),
+    "d": Days(),
 }
 """
 A dictionary mapping unit symbols to their corresponding [`pastax.utils.Unit`][] objects.
@@ -541,76 +550,77 @@ def units_to_str(unit: Dict[Unit, int | float]) -> str:
     str
         A string representation of the [`pastax.utils.Unit`][] with their exponents.
     """
+
     def get_exp_str(exp: int | float) -> str:
         if exp == 1:
             return ""
         else:
             return f"^{{{Fraction(exp).limit_denominator()}}}"
-    
+
     def get_dim_str(dim: Unit, exp: int | float) -> str:
         if exp == 0:
             return ""
         else:
             return f"{dim}{get_exp_str(exp)}"
-    
+
     return " ".join(get_dim_str(dim, exp) for dim, exp in unit.items()).strip()
 
 
 def compose_units(
-        unit1: Dict[Unit, int | float],
-        unit2: Dict[Unit, int | float],
-        mul: Literal[-1, 1]
-    ) -> Dict[Unit, int | float]:
-        """
-        Compose two [`pastax.utils.Unit`][] dictionaries by combining their values, 
-        optionally multiplying the second dictionary's values by a factor to account for multiplication or division.
+    unit1: Dict[Unit, int | float],
+    unit2: Dict[Unit, int | float] | None,
+    mul: Literal[-1, 1],
+) -> Dict[Unit, int | float]:
+    """
+    Compose two [`pastax.utils.Unit`][] dictionaries by combining their values,
+    optionally multiplying the second dictionary's values by a factor to account for multiplication or division.
 
-        Parameters
-        ----------
-        unit1 : Dict[Unit, int | float]
-            The first [`pastax.utils.Unit`][] dictionary.
-        unit2 : Dict[Unit, int | float]
-            The second [`pastax.utils.Unit`][] dictionary.
-        mul : Literal[-1, 1]
-            The multiplier for the second [`pastax.utils.Unit`][] dictionary's values.
-            Should be either 1 in case of multiplication or -1 in case of division.
+    Parameters
+    ----------
+    unit1 : Dict[Unit, int | float]
+        The first [`pastax.utils.Unit`][] dictionary.
+    unit2 : Dict[Unit, int | float]
+        The second [`pastax.utils.Unit`][] dictionary.
+    mul : Literal[-1, 1]
+        The multiplier for the second [`pastax.utils.Unit`][] dictionary's values.
+        Should be either 1 in case of multiplication or -1 in case of division.
 
-        Returns
-        -------
-        Dict[Unit, int | float]
-            The composed [`pastax.utils.Unit`][] dictionary, or an empty dictionary if both input dictionaries are empty.
-        """
-        if (not unit1) and (not unit2):
-            return {}
-        if not unit1:
-            return unit2
-        if not unit2:
-            return unit1
-        
-        unit = unit1.copy()
+    Returns
+    -------
+    Dict[Unit, int | float]
+        The composed [`pastax.utils.Unit`][] dictionary, or an empty dictionary if both input dictionaries are empty.
+    """
+    if (not unit1) and (not unit2):
+        return {}
+    if not unit1:
+        return unit2  # type: ignore
+    if not unit2:
+        return unit1
 
-        for k, v in unit2.items():
-            v *= mul
-            if k in unit:
-                unit[k] += v
-            else:
-                unit[k] = v
-        
-        return unit
+    unit = unit1.copy()
+
+    for k, v in unit2.items():
+        v *= mul
+        if k in unit:
+            unit[k] += v
+        else:
+            unit[k] = v
+
+    return unit
 
 
-def meters_to_kilometers(arr: ArrayLike) -> ArrayLike:
+def meters_to_kilometers(arr: Array) -> Array:
     """
     Converts an array of distances from meters to kilometers.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of distances in meters.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of distances in kilometers.
     """
     return arr / 1000
@@ -637,18 +647,18 @@ def meters_to_degrees(arr: Float[Array, "... 2"], latitude: Float[Array, "..."])
     return arr
 
 
-def kilometers_to_meters(arr: ArrayLike) -> ArrayLike:
+def kilometers_to_meters(arr: Array) -> Array:
     """
     Converts an array of distances from kilometers to meters.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of distances in kilometers.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of distances in meters.
     """
     return arr * 1000
@@ -713,225 +723,225 @@ def degrees_to_kilometers(arr: Float[Array, "... 2"], latitude: Float[Array, "..
     return meters_to_kilometers(degrees_to_meters(arr, latitude))
 
 
-def seconds_to_minutes(arr: ArrayLike) -> ArrayLike:
+def seconds_to_minutes(arr: Array) -> Array:
     """
     Converts an array of time durations from seconds to minutes.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in seconds.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in minutes.
     """
     return arr / 60
 
 
-def seconds_to_hours(arr: ArrayLike) -> ArrayLike:
+def seconds_to_hours(arr: Array) -> Array:
     """
     Converts an array of time durations from seconds to hours.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in seconds.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in hours.
     """
     return minutes_to_hours(seconds_to_minutes(arr))
 
 
-def seconds_to_days(arr: ArrayLike) -> ArrayLike:
+def seconds_to_days(arr: Array) -> Array:
     """
     Converts an array of time durations from seconds to days.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in seconds.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in days.
     """
     return minutes_to_days(seconds_to_minutes(arr))
 
 
-def minutes_to_seconds(arr: ArrayLike) -> ArrayLike:
+def minutes_to_seconds(arr: Array) -> Array:
     """
     Converts an array of time durations from minutes to seconds.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in minutes.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in seconds.
     """
     return arr * 60
 
 
-def minutes_to_hours(arr: ArrayLike) -> ArrayLike:
+def minutes_to_hours(arr: Array) -> Array:
     """
     Converts an array of time durations from minutes to hours.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in minutes.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in hours.
     """
     return arr / 60
 
 
-def minutes_to_days(arr: ArrayLike) -> ArrayLike:
+def minutes_to_days(arr: Array) -> Array:
     """
     Converts an array of time durations from minutes to days.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in minutes.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in days.
     """
     return hours_to_days(minutes_to_hours(arr))
 
 
-def hours_to_seconds(arr: ArrayLike) -> ArrayLike:
+def hours_to_seconds(arr: Array) -> Array:
     """
     Converts an array of time durations from hours to seconds.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in hours.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in seconds.
     """
     return minutes_to_seconds(hours_to_minutes(arr))
 
 
-def hours_to_minutes(arr: ArrayLike) -> ArrayLike:
+def hours_to_minutes(arr: Array) -> Array:
     """
     Converts an array of time durations from hours to minutes.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in hours.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in minutes.
     """
     return arr * 60
 
 
-def hours_to_days(arr: ArrayLike) -> ArrayLike:
+def hours_to_days(arr: Array) -> Array:
     """
     Converts an array of time durations from hours to days.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in hours.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in days.
     """
     return arr / 24
 
 
-def days_to_seconds(arr: ArrayLike) -> ArrayLike:
+def days_to_seconds(arr: Array) -> Array:
     """
     Converts an array of time durations from days to seconds.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in days.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in seconds.
     """
     return hours_to_seconds(days_to_hours(arr))
 
 
-def days_to_minutes(arr: ArrayLike) -> ArrayLike:
+def days_to_minutes(arr: Array) -> Array:
     """
     Converts an array of time durations from days to minutes.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in days.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in minutes.
     """
     return hours_to_minutes(days_to_hours(arr))
 
 
-def days_to_hours(arr: ArrayLike) -> ArrayLike:
+def days_to_hours(arr: Array) -> Array:
     """
     Converts an array of time durations from days to hours.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array
         An array of time durations in days.
 
     Returns
     -------
-    ArrayLike
+    Array
         An array of time durations in hours.
     """
     return arr * 24
 
 
-def time_in_seconds(arr: ArrayLike) -> ArrayLike:
+def time_in_seconds(arr: Array | ArrayLike) -> Array | ArrayLike:
     """
     Converts an array of datetime64 values to seconds since the Unix epoch.
 
     Parameters
     ----------
-    arr : ArrayLike
+    arr : Array | ArrayLike
         An array of datetime64 values or a single datetime64 value.
 
     Returns
     -------
-    ArrayLike
+    Array | ArrayLike
         An array of integers representing the number of seconds since the Unix epoch.
     """
-    if (isinstance(arr, np.datetime64) or (isinstance(arr, np.ndarray) and np.issubdtype(arr.dtype, np.datetime64))):
+    if isinstance(arr, np.datetime64) or (isinstance(arr, np.ndarray) and np.issubdtype(arr.dtype, np.datetime64)):
         arr = arr.astype("datetime64[s]").astype(int)
 
     return arr
