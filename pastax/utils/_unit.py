@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools as ft
 from fractions import Fraction
-from typing import Dict, Literal
+from typing import Literal
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -536,13 +536,13 @@ Unit
 """
 
 
-def units_to_str(unit: Dict[Unit, int | float]) -> str:
+def units_to_str(unit: dict[Unit, int | float]) -> str:
     """
     Converts a dictionary of [`pastax.utils.Unit`][] with their exponents to a string representation.
 
     Parameters
     ----------
-    unit : Dict[Unit, int or float]
+    unit : dict[Unit, int or float]
         A dictionary of [`pastax.utils.Unit`][] with their exponents.
 
     Returns
@@ -567,19 +567,19 @@ def units_to_str(unit: Dict[Unit, int | float]) -> str:
 
 
 def compose_units(
-    unit1: Dict[Unit, int | float],
-    unit2: Dict[Unit, int | float] | None,
+    unit1: dict[Unit, int | float],
+    unit2: dict[Unit, int | float] | None,
     mul: Literal[-1, 1],
-) -> Dict[Unit, int | float]:
+) -> dict[Unit, int | float]:
     """
     Compose two [`pastax.utils.Unit`][] dictionaries by combining their values,
     optionally multiplying the second dictionary's values by a factor to account for multiplication or division.
 
     Parameters
     ----------
-    unit1 : Dict[Unit, int | float]
+    unit1 : dict[Unit, int | float]
         The first [`pastax.utils.Unit`][] dictionary.
-    unit2 : Dict[Unit, int | float]
+    unit2 : dict[Unit, int | float]
         The second [`pastax.utils.Unit`][] dictionary.
     mul : Literal[-1, 1]
         The multiplier for the second [`pastax.utils.Unit`][] dictionary's values.
@@ -587,7 +587,7 @@ def compose_units(
 
     Returns
     -------
-    Dict[Unit, int | float]
+    dict[Unit, int | float]
         The composed [`pastax.utils.Unit`][] dictionary, or an empty dictionary if both input dictionaries are empty.
     """
     if (not unit1) and (not unit2):

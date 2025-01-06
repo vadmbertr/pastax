@@ -45,18 +45,18 @@ class Coordinate(eqx.Module):
         """
         return self._values
 
-    def index(self, query: Float[Array, "..."]) -> Int[Array, "..."]:
+    def index(self, query: Float[Array, "Nq"]) -> Int[Array, "Nq"]:
         """
         Returns the nearest index interpolation for the given query.
 
         Parameters
         ----------
-        query : Float[Array, "..."]
+        query : Float[Array, "Nq"]
             The query array for which the nearest indices are to be found.
 
         Returns
         -------
-        Int[Array, "..."]
+        Int[Array, "Nq"]
             An array of integers representing the nearest indices.
         """
         return self.indices(query).astype(int)
@@ -127,6 +127,7 @@ class LongitudeCoordinate(Coordinate):
 
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
+    is_spherical: bool
 
     @property
     def values(self) -> Float[Array, "dim"]:
@@ -138,26 +139,36 @@ class LongitudeCoordinate(Coordinate):
                 Float[Array, "dim"]
                     The coordinate values.
         """
-        return self._values - 180
+        values = self._values
+        if self.is_spherical:
+            values -= 180
 
-    def index(self, query: Float[Array, "..."]) -> Int[Array, "..."]:
+        return values
+
+    def index(self, query: Float[Array, "Nq"]) -> Int[Array, "Nq"]:
         """
         Returns the nearest index interpolation for the given query.
 
         Parameters
         ----------
-        query : Float[Array, "..."]
+        query : Float[Array, "Nq"]
             The query array for which the nearest indices are to be found.
 
         Returns
         -------
-        Int[Array, "..."]
+        Int[Array, "Nq"]
             An array of integers representing the nearest indices.
         """
-        return self.indices(query + 180).astype(int)
+        if self.is_spherical:
+            query = longitude_in_180_180_degrees(query)  # force to be in -180 to 180 degrees
+            query += 180  # shift back to 0 to 360 degrees
+
+        return self.indices(query).astype(int)
 
     @classmethod
-    def from_array(cls, values: Float[Array, "dim"], **interpolator_kwargs: Any) -> LongitudeCoordinate:
+    def from_array(
+        cls, values: Float[Array, "dim"], is_spherical: bool = True, **interpolator_kwargs: Any
+    ) -> LongitudeCoordinate:
         """
         Create a LongitudeCoordinate object from an array of values.
 
@@ -168,6 +179,8 @@ class LongitudeCoordinate(Coordinate):
         ----------
         values : Float[Array, "dim"]
             An array of coordinate values.
+        is_spherical : bool, optional
+            Whether the mesh uses spherical coordinate, defaults to `True`.
         **interpolator_kwargs : Any
             Additional keyword arguments for the interpolator.
 
@@ -177,103 +190,12 @@ class LongitudeCoordinate(Coordinate):
             A [`pastax.gridded.LongitudeCoordinate`][] object containing the provided values and corresponding indices
             interpolator.
         """
-        values += 180
+        if is_spherical:
+            values = longitude_in_180_180_degrees(values)  # force to be in -180 to 180 degrees
+            values += 180  # shift back to 0 to 360 degrees
+            interpolator_kwargs["period"] = 360
 
         interpolator_kwargs["method"] = "nearest"
         indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
 
-        return cls(_values=values, indices=indices)
-
-
-class Coordinates(eqx.Module):
-    """
-    Class for handling time, latitude, and longitude coordinates.
-
-    Attributes
-    ----------
-    time : Coordinate
-        The time [`pastax.gridded.Coordinate`][].
-    latitude : Coordinate
-        The latitude [`pastax.gridded.Coordinate`][].
-    longitude : Coordinate
-        The longitude [`pastax.gridded.Coordinate`][].
-
-    Methods
-    -------
-    indices(time, latitude, longitude)
-        Returns the indices of the given time, latitude, and longitude arrays.
-
-    from_array(time, latitude, longitude, is_spherical_mesh)
-        Creates a [`pastax.gridded.Coordinates`][] object from arrays of time, latitude, and longitude.
-    """
-
-    time: Coordinate
-    latitude: Coordinate
-    longitude: Coordinate | LongitudeCoordinate
-
-    def indices(
-        self,
-        time: Int[Array, "..."],
-        latitude: Float[Array, "..."],
-        longitude: Float[Array, "..."],
-    ) -> tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]:
-        """
-        Returns the nearest indices for the given time, latitude, and longitude.
-
-        Parameters
-        ----------
-        time : Int[Array, "..."]
-            The time array for which to get the nearest indices.
-        latitude : Float[Array, "..."]
-            The latitude array for which to get the nearest indices.
-        longitude : Float[Array, "..."]
-            The longitude array for which to get the nearest indices.
-
-        Returns
-        -------
-        tuple[Int[Array, "..."], Int[Array, "..."], Int[Array, "..."]]
-            A tuple containing the indices for time, latitude, and longitude respectively.
-        """
-        return (
-            self.time.index(time),
-            self.latitude.index(latitude),
-            self.longitude.index(longitude),
-        )
-
-    @classmethod
-    def from_array(
-        cls,
-        time: Int[Array, "time"],
-        latitude: Float[Array, "lat"],
-        longitude: Float[Array, "lon"],
-        is_spherical_mesh: bool,
-    ) -> Coordinates:
-        """
-        Create a [`pastax.gridded.Coordinates`][] object from arrays of time, latitude, and longitude.
-
-        Parameters
-        ----------
-        time : Int[Array, "time"]
-            Array of time values.
-        latitude : Float[Array, "lat"]
-            Array of latitude values.
-        longitude : Float[Array, "lon"]
-            Array of longitude values.
-        is_spherical_mesh : bool
-            Whether the mesh is spherical (or flat).
-
-        Returns
-        -------
-        Coordinates
-            A [`pastax.gridded.Coordinates`][] object with time, latitude, and longitude.
-        """
-        t = Coordinate.from_array(time, extrap=True)
-        lat = Coordinate.from_array(latitude, extrap=True)
-
-        if is_spherical_mesh:
-            longitude = longitude_in_180_180_degrees(longitude)
-            lon = LongitudeCoordinate.from_array(longitude, extrap=True, period=360)
-        else:
-            lon = Coordinate.from_array(longitude, extrap=True)
-
-        return cls(time=t, latitude=lat, longitude=lon)
+        return cls(_values=values, indices=indices, is_spherical=is_spherical)

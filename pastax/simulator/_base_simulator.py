@@ -2,7 +2,7 @@ from typing import Callable
 
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Int, PyTree, Scalar
+from jaxtyping import Array, Float, PyTree, Scalar
 
 from ..trajectory import Displacement, Location, Trajectory, TrajectoryEnsemble
 from ..utils._unit import UNIT
@@ -72,7 +72,7 @@ class BaseSimulator(eqx.Module):
         ts: Float[Array, "time"],
         dt0: Float[Scalar, ""],
         solver: Callable | None = None,
-        n_samples: Int[Scalar, ""] | None = None,
+        n_samples: int | None = None,
         key: Array | None = None,
     ) -> Trajectory | TrajectoryEnsemble:
         r"""
@@ -113,7 +113,7 @@ class BaseSimulator(eqx.Module):
             The initial time step of the solver, in seconds.
         solver : Callable | None, optional
             The solver to use for the simulation, defaults to None.
-        n_samples : Int[Scalar, ""] | None, optional
+        n_samples : int | None, optional
             The number of samples to generate, default to None, meaning a single [`pastax.trajectory.Trajectory`][].
         key : Array | None, optional
             The random key for sampling, defaults to None.

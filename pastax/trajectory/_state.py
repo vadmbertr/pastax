@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict
-
 import equinox as eqx
 from jaxtyping import Array
 
@@ -17,8 +15,8 @@ class State(Unitful):
     ----------
     _value : Float[Array, "state"]
         The value of the state.
-    _unit : Dict[Unit, int | float], optional
-        The unit of the state, defaults to an empty `Dict`.
+    _unit : dict[Unit, int | float], optional
+        The unit of the state, defaults to an empty `dict`.
     name : str | None, optional
         The name of the state, defaults to `None`.
 
@@ -35,7 +33,7 @@ class State(Unitful):
     def __init__(
         self,
         value: Array,
-        unit: Dict[Unit, int | float] = {},
+        unit: dict[Unit, int | float] = {},
         name: str | None = None,
     ):
         """
@@ -45,8 +43,8 @@ class State(Unitful):
         ----------
         value : Array
             The value of the state.
-        unit : Dict[Unit, int | float], optional
-            The unit of the state, defaults to an empty `Dict`.
+        unit : dict[Unit, int | float], optional
+            The unit of the state, defaults to an empty `dict`.
         name : str | None, optional
             The type of the state, defaults to `None`.
         """

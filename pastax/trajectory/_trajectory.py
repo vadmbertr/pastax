@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict
+from typing import Any, ClassVar
 
 import cartopy.crs as ccrs
 import equinox as eqx
@@ -336,7 +336,7 @@ class Trajectory(Timeseries):
         cls,
         values: Float[Array, "... time 2"],
         times: Float[Array, "... time"],
-        unit: Dict[Unit, int | float] = UNIT["°"],
+        unit: dict[Unit, int | float] = UNIT["°"],
         id: Int[Array, ""] | None = None,
         **_: Any,
     ) -> Trajectory:
@@ -349,7 +349,7 @@ class Trajectory(Timeseries):
             The array of (latitudes, longitudes) values for the trajectory.
         times : Float[Array, "... time"]
             The time points for the trajectory.
-        unit : Dict[Unit, int | float], optional
+        unit : dict[Unit, int | float], optional
             Unit of the trajectory locations, defaults to UNIT["°"].
         id : Int[Array, ""] | None, optional
             The ID of the trajectory, defaults to None.
@@ -368,7 +368,7 @@ class Trajectory(Timeseries):
         time_varname: str = "time",
         lat_varname: str = "lat",  # follows clouddrift "convention"
         lon_varname: str = "lon",  # follows clouddrift "convention"
-        unit: Dict[Unit, int | float] = UNIT["°"],
+        unit: dict[Unit, int | float] = UNIT["°"],
         id: Int[Array, ""] | None = None,
         **_: Any,
     ) -> Trajectory:
@@ -385,7 +385,7 @@ class Trajectory(Timeseries):
             A string indicating the name of the latitude variable in the dataset, defaults to `lat`.
         lon_varname : str, optional
             A string indicating the name of the longitude variable in the dataset, defaults to `lon`.
-        unit : Dict[Unit, int | float], optional
+        unit : dict[Unit, int | float], optional
             Unit of the trajectory locations, defaults to UNIT["°"].
         id : Int[Array, ""] | None, optional
             The ID of the trajectory, defaults to None.
@@ -399,7 +399,7 @@ class Trajectory(Timeseries):
         times: Array = time_in_seconds(dataset[time_varname].values)
         return cls.from_array(values, times, unit=unit, id=id)
 
-    def to_dataarray(self) -> Dict[str, xr.DataArray]:
+    def to_dataarray(self) -> dict[str, xr.DataArray]:
         times = self.times.to_datetime()
         unit = units_to_str(self.unit)
 

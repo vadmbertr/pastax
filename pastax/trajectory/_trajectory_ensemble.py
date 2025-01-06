@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar, Dict
+from typing import ClassVar
 
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
@@ -316,9 +316,9 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         cls,
         values: Float[Array, "member time 2"],
         times: Float[Array, "time"],
-        unit: Unit | Dict[Unit, int | float] = UNIT["°"],
+        unit: Unit | dict[Unit, int | float] = UNIT["°"],
         id: Int[Array, ""] | None = None,
-        **_: Dict,
+        **_: dict,
     ) -> TrajectoryEnsemble:
         """
         Creates a [`pastax.trajectory.TrajectoryEnsemble`][] from arrays of values and time points.
@@ -329,7 +329,7 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
             The array of (latitudes, longitudes) values for the members of the trajectory ensemble.
         times : Float[Array, "time"]
             The time points for the trajectories.
-        unit : Unit | Dict[Unit, int | float], optional
+        unit : Unit | dict[Unit, int | float], optional
             Unit of the trajectories locations, defaults to UNIT["°"].
         id : Int[Array, ""] | None, optional
             The ID of the trajectories, defaults to None.
@@ -341,13 +341,13 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         """
         return super().from_array(values, times, unit=unit, id=id)  # type: ignore
 
-    def to_dataarray(self) -> Dict[str, xr.DataArray]:
+    def to_dataarray(self) -> dict[str, xr.DataArray]:
         """
         Converts the [`pastax.trajectory.TrajectoryEnsemble`][] to a dictionary of `xarray.DataArray`.
 
         Returns
         -------
-        Dict[str, xr.DataArray]
+        dict[str, xr.DataArray]
             A dictionary where keys are the variable names and values are the corresponding `xarray.DataArray`.
         """
         member = np.arange(self.size)

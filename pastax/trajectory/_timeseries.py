@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, ClassVar, Dict
+from typing import Any, Callable, ClassVar
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -97,13 +97,13 @@ class Timeseries(Unitful):
         return self.states.value
 
     @property
-    def unit(self) -> Dict[Unit, int | float]:
+    def unit(self) -> dict[Unit, int | float]:
         """
         Returns the unit of the [`pastax.trajectory.Timeseries`].
 
         Returns
         -------
-        Dict[Unit, int | float]
+        dict[Unit, int | float]
             The unit of the [`pastax.trajectory.Timeseries`].
         """
         return self.states.unit
@@ -199,7 +199,7 @@ class Timeseries(Unitful):
         cls,
         values: Float[Array, "time state"],
         times: Float[Array, "time"],
-        unit: Dict[Unit, int | float] = {},
+        unit: dict[Unit, int | float] = {},
         name: str | None = None,
         **kwargs: Any,
     ) -> Timeseries:
@@ -212,8 +212,8 @@ class Timeseries(Unitful):
             The array of values for the timeseries.
         times : Float[Array, "time"]
             The time points for the timeseries.
-        unit : Dict[Unit, int | float], optional
-            The unit of the timeseries, defaults to an empty Dict.
+        unit : dict[Unit, int | float], optional
+            The unit of the timeseries, defaults to an empty dict.
         name : str | None, optional
             The name of the timeseries, defaults to None.
         **kwargs : Any
