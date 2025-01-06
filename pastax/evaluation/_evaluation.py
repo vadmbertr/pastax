@@ -17,31 +17,20 @@ class Evaluation(Set):
     """
     Class for accessing and visualizing a dictionary of metric timeseries or timeseries ensemble.
 
-    Attributes
-    ----------
-    _members : dict[str, Timeseries | TimeseriesEnsemble]
-        A dictionary holding the metrics.
-
     Methods
     -------
     __init__(states):
         Initializes the `Evaluation` object with a dictionary of metric timeseries or timeseries ensemble.
-
     get(key):
         Retrieves a metric by key.
-
     items():
         Returns the items of the metrics dictionary.
-
     keys():
         Returns the keys of the metrics dictionary.
-
     values():
         Returns the values of the metrics dictionary.
-
     plot(fig, ti):
         Plots the metrics timeseries or timeseries ensemble up to the time index `ti` on the figure `fig`.
-
     __getitem__(key):
         Retrieves a metric by key.
     """

@@ -25,8 +25,6 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
     ----------
     members : Trajectory
         The members of the trajectory ensemble.
-    _members_type : ClassVar
-        The type of the members in the ensemble (set to Trajectory).
 
     Methods
     -------

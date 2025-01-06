@@ -34,9 +34,7 @@ class Gridded(eqx.Module):
         Spatial field used for masking (`True` means masked, `False` not masked).
     is_spherical_mesh: bool
         Boolean indicating whether the mesh uses spherical coordinates.
-    interpolation_method: Literal[
-        "nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"
-    ]
+    interpolation_method: Literal["nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"]
         String indicating the interpolation method used when interpolating the fields.
         For details, see [`interpax` documentation](https://interpax.readthedocs.io/en/latest/index.html).
     use_degrees : bool
@@ -46,15 +44,10 @@ class Gridded(eqx.Module):
     -------
     indices(time, latitude, longitude)
         Gets nearest indices of the spatio-temporal point `time`, `latitude`, `longitude`.
-    interp_temporal(*fields, time)
-        Interpolates the specified fields temporally at the given time.
-    interp_spatial(*fields, latitude, longitude)
-        Interpolates the specified fields spatially at the given latitude and longitude.
-    interp_spatiotemporal(*fields, time, latitude, longitude)
-        Interpolates the specified fields spatiotemporally at the given time, latitude, and longitude.
+    interp(*fields, **coordinates)
+        Interpolates the given fields at the given coordinates.
     neighborhood(*fields, time, latitude, longitude, t_width, x_width)
-        Gets a neighborhood `t_width`*`x_width`*`x_width` around the spatio-temporal point `time`, `latitude`,
-        `longitude`.
+        Extracts a neighborhood of data around a specified point in time and space.
     to_xarray()
         Returns the [`pastax.gridded.Gridded`][] object as a `xarray.Dataset`.
     from_array(fields, time, latitude, longitude, interpolation_method="linear", is_spherical_mesh=True,
@@ -285,9 +278,7 @@ class Gridded(eqx.Module):
             A 1D array representing the longitude dimension.
         is_masked : Bool[Array, "lat lon"], optional
             2D array used for masking fields (`True` means masked, `False` not masked).
-        interpolation_method : Literal[
-            "nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"
-        ], optional
+        interpolation_method : Literal["nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"], optional
             String indicating the interpolation method used when interpolating the fields, defaults to `"linear"`.
             For details, see [`interpax` documentation](https://interpax.readthedocs.io/en/latest/index.html).
         is_spherical_mesh : bool, optional
@@ -431,9 +422,8 @@ class Gridded(eqx.Module):
             A dictionary mapping the target field names (keys) to the source variable names in the dataset (values).
         coordinates : dict[str, str]
             A dictionary mapping the coordinate names ('time', 'latitude', 'longitude') to their corresponding names in
-            the dataset.Literal[
-            "nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"
-        ], optional
+            the dataset.
+        interpolation_method: Literal["nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"], optional
             String indicating the interpolation method used when interpolating the fields, defaults to `"linear"`.
             For details, see [`interpax` documentation](https://interpax.readthedocs.io/en/latest/index.html).
         is_spherical_mesh : bool, optional

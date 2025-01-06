@@ -13,10 +13,6 @@ class State(Unitful):
 
     Attributes
     ----------
-    _value : Float[Array, "state"]
-        The value of the state.
-    _unit : dict[Unit, int | float], optional
-        The unit of the state, defaults to an empty `dict`.
     name : str | None, optional
         The name of the state, defaults to `None`.
 

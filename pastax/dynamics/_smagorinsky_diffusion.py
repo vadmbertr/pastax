@@ -40,14 +40,10 @@ class SmagorinskyDiffusion(eqx.Module):
         where $C_s$ is the ***trainable*** Smagorinsky constant, $\Delta x \Delta y$ a spatial scaling factor, and the
         rest of the expression represents the horizontal diffusion.
 
-    Attributes
-    ----------
-    _cs : Float[Scalar, ""], optional
-        The Smagorinsky constant, defaults to `jnp.asarray(0.1)`.
-        Internally a transformation of the Smagorinsky constant ensuring it remains positive is used.
-
     Methods
     -------
+    cs
+        Returns the Smagorinsky constant.
     _neighborhood(*fields, t, y, gridded)
         Restricts the [`pastax.gridded.Gridded`][] to a neighborhood around the given location and time.
     _smagorinsky_coefficients(t, y, gridded)
@@ -79,7 +75,7 @@ class SmagorinskyDiffusion(eqx.Module):
     @property
     def cs(self) -> Float[Scalar, ""]:
         """
-        The Smagorinsky constant.
+        Returns the Smagorinsky constant.
         """
         return _to_cs(self._cs)
 

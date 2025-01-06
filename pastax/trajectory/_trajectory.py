@@ -26,8 +26,6 @@ class Trajectory(Timeseries):
     ----------
     states : Location
         The locations of the trajectory.
-    _states_type : ClassVar
-        The type of the states in the trajectory (set to [`pastax.trajectory.Location`][]).
     id : Int[Array, ""] | None, optional
         The ID of the trajectory, defaults to `None`.
 

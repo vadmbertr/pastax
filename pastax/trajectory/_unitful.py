@@ -34,10 +34,6 @@ class Unitful(eqx.Module):
 
     Attributes
     ----------
-    _value : Float[Array, "quantity"]
-        The value of the quantity.
-    _unit : dict[Unit, int | float], optional
-        The dictionary of [`pastax.utils.Unit`][] of the quantity, defaults to an empty dictionary (i.e. no unit).
 
     Methods
     -------
@@ -45,6 +41,8 @@ class Unitful(eqx.Module):
         Initializes the [`pastax.utils.Unitful`][] with given value, and unit.
     value
         Returns the value of the quantity.
+    unit
+        Returns the unit of the quantity.
     cumsum(axis=None)
         Computes the cumulative sum of the quantity along the specified axis.
     euclidean_distance(other)
