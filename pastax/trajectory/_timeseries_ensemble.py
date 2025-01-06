@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, ClassVar, Dict
+from typing import Any, Callable, ClassVar
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -122,13 +122,13 @@ class TimeseriesEnsemble(Unitful):
         return self.members.times
 
     @property
-    def unit(self) -> Dict[Unit, int | float]:
+    def unit(self) -> dict[Unit, int | float]:
         """
         Returns the unit of the [`pastax.trajectory.TimeseriesEnsemble`].
 
         Returns
         -------
-        Dict[Unit, int | float]
+        dict[Unit, int | float]
             The unit of the [`pastax.trajectory.TimeseriesEnsemble`].
         """
         return self.members.unit
@@ -290,7 +290,7 @@ class TimeseriesEnsemble(Unitful):
         cls,
         values: Float[Array, "member time state"],
         times: Float[Array, "time"],
-        unit: Dict[Unit, int | float] = {},
+        unit: dict[Unit, int | float] = {},
         name: str | None = None,
         **kwargs: Any,
     ) -> TimeseriesEnsemble:
@@ -303,7 +303,7 @@ class TimeseriesEnsemble(Unitful):
             The values for the members of the ensemble.
         times : Float[Array, "time"]
             The time points for the timeseries.
-        unit : Dict[Unit, int | float], optional
+        unit : dict[Unit, int | float], optional
             The unit of the timeseries, defaults to {}.
         name : str | None, optional
             The name of the timeseries, defaults to None.

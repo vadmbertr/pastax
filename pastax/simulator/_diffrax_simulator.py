@@ -6,7 +6,7 @@ import diffrax as dfx
 import jax
 import jax.numpy as jnp
 import jax.random as jrd
-from jaxtyping import Array, Float, Int, PyTree, Scalar
+from jaxtyping import Array, Float, PyTree, Scalar
 
 from ..trajectory import Location, Trajectory, TrajectoryEnsemble
 from ._base_simulator import BaseSimulator
@@ -34,7 +34,7 @@ class DiffraxSimulator(BaseSimulator):
         ts: Float[Array, "time"],
         dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
-        n_samples: Int[Scalar, ""] | None = None,
+        n_samples: int | None = None,
         key: Array | None = None,
     ) -> Trajectory | TrajectoryEnsemble:
         r"""
@@ -89,7 +89,7 @@ class DiffraxSimulator(BaseSimulator):
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
-        n_samples : Int[Scalar, ""] | None, optional
+        n_samples : int | None, optional
             The number of samples to generate, defaults to None, meaning a single trajectory.
         key : Array | None, optional
             The random key for sampling, defaults to None, useless for the deterministic simulator.
@@ -128,7 +128,7 @@ class DeterministicSimulator(DiffraxSimulator):
         ts: Float[Array, "time"],
         dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
-        n_samples: Int[Scalar, ""] | None = None,
+        n_samples: int | None = None,
         key: Array | None = None,
     ) -> Trajectory:
         r"""
@@ -182,7 +182,7 @@ class DeterministicSimulator(DiffraxSimulator):
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
-        n_samples : Int[Scalar, ""] | None, optional
+        n_samples : int | None, optional
             The number of samples to generate, defaults to None, not use with deterministic simulators.
         key : Array | None, optional
             The random key for sampling, default to None, not use with deterministic simulators.
@@ -192,21 +192,18 @@ class DeterministicSimulator(DiffraxSimulator):
         Trajectory
             The simulated [`pastax.trajectory.Trajectory`][], including the initial conditions (x0, t0).
         """
-        t0 = ts[0]
-        t1 = ts[-1]
-
-        ys: Array = dfx.diffeqsolve(
+        ys = dfx.diffeqsolve(
             dfx.ODETerm(dynamics),  # type: ignore
             solver,
-            t0=t0,
-            t1=t1,
+            t0=ts[0],
+            t1=ts[-1],
             dt0=dt0,
             y0=x0.value,
             args=args,
             saveat=dfx.SaveAt(ts=ts[1:]),
         ).ys
 
-        return Trajectory.from_array(jnp.concat((x0.value[None], ys), axis=0), ts, unit=x0.unit)
+        return Trajectory.from_array(jnp.concat((x0.value[None], ys), axis=0), ts, unit=x0.unit)  # type: ignore
 
 
 class SDEControl(dfx.AbstractPath):
@@ -228,6 +225,8 @@ class SDEControl(dfx.AbstractPath):
         Evaluates the path at the given time points.
     """
 
+    t0: Float[Scalar, ""]
+    t1: Float[Scalar, ""]
     brownian_motion: dfx.VirtualBrownianTree
 
     def evaluate(
@@ -353,9 +352,8 @@ class StochasticSimulator(DiffraxSimulator):
 
         @jax.vmap
         def solve(subkey: Array) -> Float[Array, "time 2"]:
-            eps = 1e-3
-            brownian_motion = dfx.VirtualBrownianTree(t0, t1 + eps, tol=eps, shape=(2,), key=subkey)
-            sde_control = SDEControl(brownian_motion=brownian_motion)
+            brownian_motion = dfx.VirtualBrownianTree(t0, t1, tol=1e-3, shape=(2,), key=subkey)
+            sde_control = SDEControl(t0=t0, t1=t1, brownian_motion=brownian_motion)
             sde_term = dfx.ControlTerm(dynamics, sde_control)  # type: ignore
 
             ys = dfx.diffeqsolve(

@@ -145,9 +145,9 @@ class SmagorinskyDiffusion(eqx.Module):
         """
         neighborhood = self._neighborhood("u", "v", t=t, y=y, gridded=gridded)
 
-        u, v = neighborhood.interp_temporal("u", "v", time=t)  # "x_width x_width"
-        dudx, dudy, dvdx, dvdy = spatial_derivative(
-            u, v, dx=neighborhood.dx, dy=neighborhood.dy, is_land=neighborhood.is_land
+        fields = neighborhood.interp("u", "v", time=t)  # "x_width x_width"
+        (dudx, dudy), (dvdx, dvdy) = spatial_derivative(
+            fields["u"], fields["v"], dx=neighborhood.dx, dy=neighborhood.dy, is_masked=neighborhood.is_masked.values
         )  # "x_width-2 x_width-2"
 
         # computes Smagorinsky coefficients
@@ -157,8 +157,8 @@ class SmagorinskyDiffusion(eqx.Module):
         smag_ds = Gridded.from_array(
             {"smag_k": smag_k[None, ...]},
             time=t[None],
-            latitude=neighborhood.coordinates.latitude.values[1:-1],
-            longitude=neighborhood.coordinates.longitude.values[1:-1],
+            latitude=neighborhood.coordinates["latitude"][1:-1],
+            longitude=neighborhood.coordinates["longitude"][1:-1],
             interpolation_method="linear",
             is_spherical_mesh=neighborhood.is_spherical_mesh,
             use_degrees=neighborhood.use_degrees,
@@ -195,18 +195,18 @@ class SmagorinskyDiffusion(eqx.Module):
         smag_k = jnp.squeeze(smag_ds.fields["smag_k"].values)  # "x_width-2 x_width-2"
 
         # $\mathbf{u}(t, \mathbf{X}(t))$ term
-        u, v = gridded.interp_spatiotemporal("u", "v", time=t, latitude=latitude, longitude=longitude)
-        vu = jnp.asarray([v, u], dtype=float)  # "2"
+        scalar_values = gridded.interp("u", "v", time=t, latitude=latitude, longitude=longitude)
+        vu = jnp.asarray([scalar_values["v"], scalar_values["u"]])  # "2"
 
         # $(\nabla \cdot \mathbf{K})(t, \mathbf{X}(t))$ term
-        dkdx, dkdy = spatial_derivative(
-            smag_k, dx=smag_ds.dx, dy=smag_ds.dy, is_land=smag_ds.is_land
+        ((dkdx, dkdy),) = spatial_derivative(
+            smag_k, dx=smag_ds.dx, dy=smag_ds.dy, is_masked=smag_ds.is_masked.values
         )  # "x_width-4 x_width-4"
         dkdx = ipx.interp2d(
             latitude,
             longitude,
-            smag_ds.coordinates.latitude[1:-1],
-            smag_ds.coordinates.longitude.values[1:-1],
+            smag_ds.coordinates["latitude"][1:-1],
+            smag_ds.coordinates["longitude"][1:-1],
             dkdx,
             method="linear",
             extrap=True,
@@ -214,13 +214,13 @@ class SmagorinskyDiffusion(eqx.Module):
         dkdy = ipx.interp2d(
             latitude,
             longitude,
-            smag_ds.coordinates.latitude[1:-1],
-            smag_ds.coordinates.longitude[1:-1],
+            smag_ds.coordinates["latitude"][1:-1],
+            smag_ds.coordinates["longitude"][1:-1],
             dkdy,
             method="linear",
             extrap=True,
         )
-        gradk = jnp.asarray([dkdy, dkdx], dtype=float)  # "2"
+        gradk = jnp.asarray([dkdy, dkdx])  # "2"
 
         return vu + gradk
 
@@ -243,8 +243,8 @@ class SmagorinskyDiffusion(eqx.Module):
         """
         latitude, longitude = y[0], y[1]
 
-        smag_k = smag_ds.interp_spatial("smag_k", latitude=latitude, longitude=longitude)[0]
-        smag_k = jnp.squeeze(smag_k)  # scalar
+        scalar_value = smag_ds.interp("smag_k", latitude=latitude, longitude=longitude)
+        smag_k = jnp.squeeze(scalar_value["smag_k"])  # scalar
         smag_k = (2 * smag_k) ** (1 / 2)
 
         return jnp.eye(2) * smag_k
@@ -313,14 +313,14 @@ class StochasticSmagorinskyDiffusion(SmagorinskyDiffusion):
         return dlatlon
 
     @classmethod
-    def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1)):
+    def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1, dtype=float)):
         """
         Initializes the stochastic Smagorinsky diffusion with the given Smagorinsky constant.
 
         Parameters
         ----------
         cs : Float[Scalar, ""], optional
-            The Smagorinsky constant, defaults to `jnp.asarray(0.1)`.
+            The Smagorinsky constant, defaults to `jnp.asarray(0.1, dtype=float)`.
 
         Returns
         -------
@@ -377,7 +377,7 @@ class DeterministicSmagorinskyDiffusion(SmagorinskyDiffusion):
         Float[Array, "2 3"]
             The deterministic part of the dynamics.
         """
-        t_ = jnp.asarray(t)
+        t_ = jnp.asarray(t, dtype=float)
         gridded = args
 
         smag_ds = self._smagorinsky_diffusion(t_, y, gridded)  # "1 x_width-2 x_width-2"
@@ -389,14 +389,14 @@ class DeterministicSmagorinskyDiffusion(SmagorinskyDiffusion):
         return dlatlon
 
     @classmethod
-    def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1)):
+    def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1, dtype=float)):
         """
         Initializes the deterministic Smagorinsky diffusion with the given Smagorinsky constant.
 
         Parameters
         ----------
         cs : Float[Scalar, ""], optional
-            The Smagorinsky constant, defaults to `jnp.asarray(0.1)`.
+            The Smagorinsky constant, defaults to `jnp.asarray(0.1, dtype=float)`.
 
         Returns
         -------

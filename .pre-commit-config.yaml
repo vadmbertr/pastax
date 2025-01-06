@@ -3,8 +3,10 @@ repos:
     rev: v0.8.2
     hooks:
       - id: ruff  # linter
+        types_or: [ python, pyi ]
         args: [ --fix ]
       - id: ruff-format  # formatter
+        types_or: [ python, pyi ]
   - repo: https://github.com/RobertCraigie/pyright-python
     rev: v1.1.372
     hooks:

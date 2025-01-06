@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict
-
 import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike
@@ -9,19 +7,19 @@ from jaxtyping import Array, ArrayLike
 from ..utils._unit import compose_units, Unit
 
 
-def unit_converter(x: Unit | Dict[Unit, int]) -> Dict[Unit, int]:
+def unit_converter(x: Unit | dict[Unit, int]) -> dict[Unit, int]:
     """
     Converts a [`pastax.utils.Unit`][] to a dictionary with [`pastax.utils.Unit`][] as keys and their exponents as
     values.
 
     Parameters
     ----------
-    x : Unit or Dict[Unit, int]
+    x : Unit or dict[Unit, int]
         A [`pastax.utils.Unit`][] or a dictionary with [`pastax.utils.Unit`][] as keys and their exponents as values.
 
     Returns
     -------
-    Dict[Unit, int]
+    dict[Unit, int]
         A dictionary with [`pastax.utils.Unit`][] as keys and their exponents as values.
     """
     if isinstance(x, Unit):
@@ -38,7 +36,7 @@ class Unitful(eqx.Module):
     ----------
     _value : Float[Array, "quantity"]
         The value of the quantity.
-    _unit : Dict[Unit, int | float], optional
+    _unit : dict[Unit, int | float], optional
         The dictionary of [`pastax.utils.Unit`][] of the quantity, defaults to an empty dictionary (i.e. no unit).
 
     Methods
@@ -70,9 +68,9 @@ class Unitful(eqx.Module):
     """
 
     _value: Array = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float))
-    _unit: Dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter)
+    _unit: dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter)
 
-    def __init__(self, value: Array = jnp.asarray(jnp.nan), unit: Dict[Unit, int | float] = {}):
+    def __init__(self, value: Array = jnp.asarray(jnp.nan, dtype=float), unit: dict[Unit, int | float] = {}):
         """
         Initializes the [`pastax.utils.Unitful`][] with given value and unit.
 
@@ -80,8 +78,8 @@ class Unitful(eqx.Module):
         ----------
         value : Array
             The value of the quantity.
-        unit : Dict[Unit, int | float], optional
-            The unit of the quantity, defaults to an empty Dict.
+        unit : dict[Unit, int | float], optional
+            The unit of the quantity, defaults to an empty dict.
         """
         self._value = value
         self._unit = unit
@@ -99,13 +97,13 @@ class Unitful(eqx.Module):
         return self._value
 
     @property
-    def unit(self) -> Dict[Unit, int | float]:
+    def unit(self) -> dict[Unit, int | float]:
         """
         Returns the unit of the quantity.
 
         Returns
         -------
-        Dict[Unit, int | float]
+        dict[Unit, int | float]
             The unit of the quantity.
         """
         return self._unit
@@ -188,7 +186,7 @@ class Unitful(eqx.Module):
 
     def __extract_from_other(
         self, other: Unitful | ArrayLike, additive_op: bool
-    ) -> tuple[ArrayLike, Dict[Unit, int | float] | None]:
+    ) -> tuple[ArrayLike, dict[Unit, int | float] | None]:
         """
         Extract value and unit from other operand if it is a [`pastax.utils.Unitful`][] instance.
 
@@ -201,7 +199,7 @@ class Unitful(eqx.Module):
 
         Returns
         -------
-        tuple[ArrayLike, Dict[Unit, int | float] | None]
+        tuple[ArrayLike, dict[Unit, int | float] | None]
             The value and unit of the other operand.
 
         Raises

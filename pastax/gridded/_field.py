@@ -5,7 +5,9 @@ from typing import Any
 import equinox as eqx
 import interpax as ipx
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Bool, Float, Int
+
+from ..utils._geo import longitude_in_180_180_degrees
 
 
 class Field(eqx.Module):
@@ -14,7 +16,7 @@ class Field(eqx.Module):
 
     Attributes
     ----------
-    _values : Float[Array, "..."] | Int[Array, "..."]
+    _values : Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]
         The gridded values of the field.
 
     Methods
@@ -23,21 +25,21 @@ class Field(eqx.Module):
         Retrieves the value(s) at the specified index or slice of the grid.
     """
 
-    _values: Float[Array, "..."] | Int[Array, "..."]
+    _values: Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]
 
     @property
-    def values(self) -> Float[Array, "dim"]:
+    def values(self) -> Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]:
         """
         Returns the gridded values.
 
         Returns
         -------
-        Float[Array, "dim"]
+        Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]
             The gridded values.
         """
         return self._values
 
-    def __getitem__(self, item: Any) -> Float[Array, "..."] | Int[Array, "..."]:
+    def __getitem__(self, item: Any) -> Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]:
         """
         Retrieve an item from the values array.
 
@@ -48,7 +50,7 @@ class Field(eqx.Module):
 
         Returns
         -------
-        Float[Array, "..."] | Int[Array, "..."]
+        Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]
             The item retrieved from the values array.
         """
         return self.values.__getitem__(item)
@@ -60,48 +62,73 @@ class SpatialField(Field):
 
     Attributes
     ----------
-    _values : Float[Array, "lat lon"]
+    _values : Bool[Array, "lat lon"] | Float[Array, "lat lon"] | Int[Array, "lat lon"]
         The gridded data values.
     _fx : ipx.Interpolator2D
         The interpolator for spatial data.
 
     Methods
     -------
-    interp_spatial(latitude, longitude)
-        Interpolates the spatial data at the given latitude and longitude.
+    interp(**coordinates)
+        Interpolates the field at the given coordinates.
 
     from_array(values, latitude, longitude, interpolation_method)
         Creates a [`pastax.gridded.SpatialField`][] instance from the given array of values, latitude, and longitude
         using the specified interpolation method.
     """
 
-    _values: Float[Array, "lat lon"]
+    _values: Bool[Array, "lat lon"] | Float[Array, "lat lon"] | Int[Array, "lat lon"]
     _fx: ipx.Interpolator2D
 
-    def interp_spatial(self, latitude: Float[Array, "..."], longitude: Float[Array, "..."]) -> Float[Array, "... ..."]:
+    def interp(self, **coordinates: Float[Array, "Nq"]) -> Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]:
+        """
+        Interpolates the field at the given coordinates.
+
+        Parameters
+        ----------
+        **coordinates : Float[Array, "Nq"]
+            The 2-dimensional points to interpolate to.
+
+        Returns
+        -------
+        Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]
+            Interpolated values at the given coordinates.
+        """
+        if "latitude" in coordinates and "longitude" in coordinates:
+            return self._interp_spatial(
+                latitude=coordinates["latitude"],
+                longitude=coordinates["longitude"],
+            )
+        else:
+            return self.values
+
+    def _interp_spatial(
+        self, latitude: Float[Array, "Nq"], longitude: Float[Array, "Nq"]
+    ) -> Bool[Array, "Nq ..."] | Float[Array, "Nq ..."] | Int[Array, "Nq ..."]:
         """
         Interpolates spatial data based on given latitude and longitude arrays.
 
         Parameters
         ----------
-        latitude : Float[Array, "..."]
+        latitude : Float[Array, "Nq"]
             Array of latitude values.
-        longitude : Float[Array, "..."]
+        longitude : Float[Array, "Nq"]
             Array of longitude values.
 
         Returns
         -------
-        Float[Array, "... ..."]
+        Bool[Array, "Nq ..."] | Float[Array, "Nq ..."] | Int[Array, "Nq ..."]
             Interpolated spatial data array.
         """
-        longitude += 180  # circular domain
+        longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
+        longitude += 180  # shift back to 0 to 360 degrees
 
         return self._fx(latitude, longitude)
 
     @classmethod
     def from_array(
         cls,
-        values: Float[Array, "lat lon"],
+        values: Bool[Array, "lat lon"] | Float[Array, "lat lon"] | Int[Array, "lat lon"],
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"],
         interpolation_method: str,
@@ -111,7 +138,7 @@ class SpatialField(Field):
 
         Parameters
         ----------
-        values : Float[Array, "lat lon"]
+        values : Bool[Array, "lat lon"] | Float[Array, "lat lon"] | Int[Array, "lat lon"]
             A 2D array of values representing the spatial data.
         latitude : Float[Array, "lat"]
             A 1D array of latitude values.
@@ -125,9 +152,12 @@ class SpatialField(Field):
         SpatialField
             A [`pastax.gridded.SpatialField`][] object containing the values and the interpolated spatial field.
         """
+        longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
+        longitude += 180  # shift back to 0 to 360 degrees
+
         _fx = ipx.Interpolator2D(
             latitude,
-            longitude + 180,  # circular domain
+            longitude,  # circular domain
             values,
             method=interpolation_method,
             extrap=True,
@@ -143,7 +173,7 @@ class SpatioTemporalField(Field):
 
     Attributes
     ----------
-    values : Float[Array, "time lat lon"]
+    values : Bool[Array, "time lat lon"] | Float[Array, "time lat lon"] | Int[Array, "time lat lon"]
         The values of the spatiotemporal field.
     _ft : ipx.Interpolator1D
         Interpolator for the temporal dimension.
@@ -154,83 +184,113 @@ class SpatioTemporalField(Field):
 
     Methods
     -------
-    interp_temporal(time)
-        Interpolates the spatiotemporal field at the given times.
-    interp_spatial(latitude, longitude)
-        Interpolates the spatiotemporal field at the given latitudes and longitudes.
-    interp_spatiotemporal(time, latitude, longitude)
-        Interpolates the spatiotemporal field at the given times, latitudes, and longitudes.
+    interp(**coordinates)
+        Interpolates the field at the given coordinates.
     from_array(values, time, latitude, longitude, interpolation_method)
         Creates a [`pastax.gridded.SpatioTemporalField`][] instance from the given array of values and coordinates.
     """
 
-    _values: Float[Array, "time lat lon"]
+    _values: Bool[Array, "time lat lon"] | Float[Array, "time lat lon"] | Int[Array, "time lat lon"]
     _ft: ipx.Interpolator1D
     _fx: ipx.Interpolator2D
     _ftx: ipx.Interpolator3D
 
-    def interp_temporal(self, time: Float[Array, "..."]) -> Float[Array, "... ... ..."]:
+    def interp(self, **coordinates: Float[Array, "Nq"]) -> Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]:
+        """
+        Interpolates the field at the given coordinates.
+
+        Parameters
+        ----------
+        **coordinates : Float[Array, "Nq"]
+            The N-dimensional points to interpolate to.
+
+        Returns
+        -------
+        Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]
+            Interpolated values at the given coordinates.
+        """
+        if "time" in coordinates and "latitude" in coordinates and "longitude" in coordinates:
+            return self._interp_spatiotemporal(
+                time=coordinates["time"],
+                latitude=coordinates["latitude"],
+                longitude=coordinates["longitude"],
+            )
+        elif "latitude" in coordinates and "longitude" in coordinates:
+            return self._interp_spatial(
+                latitude=coordinates["latitude"],
+                longitude=coordinates["longitude"],
+            )
+        elif "time" in coordinates:
+            return self._interp_temporal(time=coordinates["time"])
+        else:
+            return self.values
+
+    def _interp_temporal(
+        self, time: Float[Array, "Nq"]
+    ) -> Bool[Array, "Nq lat lon"] | Float[Array, "Nq lat lon"] | Int[Array, "Nq lat lon"]:
         """
         Interpolates the spatiotemporal field at the given time points.
 
         Parameters
         ----------
-        time : Float[Array, "..."]
+        time : Float[Array, Nq"]
             An array of time points at which to interpolate the spatiotemporal field.
 
         Returns
         -------
-        Float[Array, "... ... ..."]
+        Bool[Array, "Nq lat lon"] | Float[Array, "Nq lat lon"] | Int[Array, "Nq lat lon"]
             Interpolated values at the given time points.
         """
         return self._ft(time)
 
-    def interp_spatial(
-        self, latitude: Float[Array, "..."], longitude: Float[Array, "..."]
-    ) -> Float[Array, "... ... ..."]:
+    def _interp_spatial(
+        self, latitude: Float[Array, "Nq"], longitude: Float[Array, "Nq"]
+    ) -> Bool[Array, "Nq time"] | Float[Array, "Nq time"] | Int[Array, "Nq time"]:
         """
         Interpolates the spatiotemporal field at the given latitude/longitude points.
 
         Parameters
         ----------
-        latitude : Float[Array, "..."]
+        latitude : Float[Array, "Nq"]
             Array of latitude values.
-        longitude : Float[Array, "..."]
+        longitude : Float[Array, "Nq"]
             Array of longitude values.
 
         Returns
         -------
-        Float[Array, "... ... ..."]
+        Bool[Array, "Nq time"] | Float[Array, "Nq time"] | Int[Array, "Nq time"]
             Interpolated values at the given latitude/longitude points.
         """
-        longitude += 180  # circular domain
+        longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
+        longitude += 180  # shift back to 0 to 360 degrees
 
-        return jnp.moveaxis(self._fx(latitude, longitude), -1, 0)  # time dim is moved back to the first axis
+        return self._fx(latitude, longitude)
 
-    def interp_spatiotemporal(
+    def _interp_spatiotemporal(
         self,
-        time: Float[Array, "..."],
-        latitude: Float[Array, "..."],
-        longitude: Float[Array, "..."],
-    ) -> Float[Array, "... ... ..."]:
+        time: Float[Array, "Nq"],
+        latitude: Float[Array, "Nq"],
+        longitude: Float[Array, "Nq"],
+    ) -> Bool[Array, "Nq"] | Float[Array, "Nq"] | Int[Array, "Nq"]:
         """
         Interpolates the spatiotemporal field at the given time/latitude/longitude points.
 
         Parameters
         ----------
-        time : Float[Array, "..."]
+        time : Float[Array, "Nq"]
             Array of time values.
-        latitude : Float[Array, "..."]
+        latitude : Float[Array, "Nq"]
             Array of latitude values.
-        longitude : Float[Array, "..."]
+        longitude : Float[Array, "Nq"]
             Array of longitude values.
 
         Returns
         -------
-        Float[Array, "... ... ..."]
+        Bool[Array, "Nq"] | Float[Array, "Nq"] | Int[Array, "Nq"]
             Interpolated values at the given time/latitude/longitude points.
         """
-        longitude += 180  # circular domain
+        longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
+        longitude += 180  # shift back to 0 to 360 degrees
 
         return self._ftx(time, latitude, longitude)
 
@@ -266,10 +326,13 @@ class SpatioTemporalField(Field):
             A [`pastax.gridded.SpatioTemporalField`][] object containing the original values and temporal, spatial,
             and spatiotemporal interpolators.
         """
+        longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
+        longitude += 180  # shift back to 0 to 360 degrees
+
         _ft = ipx.Interpolator1D(time, values, method=interpolation_method, extrap=True)
         _fx = ipx.Interpolator2D(
             latitude,
-            longitude + 180,  # circular domain
+            longitude,
             jnp.moveaxis(values, 0, -1),  # time dim is moved to the last axis as it is not interpolated
             method=interpolation_method,
             extrap=True,
@@ -278,7 +341,7 @@ class SpatioTemporalField(Field):
         _ftx = ipx.Interpolator3D(
             time,
             latitude,
-            longitude + 180,  # circular domain
+            longitude,
             values,
             method=interpolation_method,
             extrap=True,

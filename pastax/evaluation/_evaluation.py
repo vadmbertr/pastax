@@ -1,6 +1,5 @@
 import math
 from collections.abc import Iterable
-from typing import Dict
 
 import jax.numpy as jnp
 import xarray as xr
@@ -20,7 +19,7 @@ class Evaluation(Set):
 
     Attributes
     ----------
-    _members : Dict[str, Timeseries | TimeseriesEnsemble]
+    _members : dict[str, Timeseries | TimeseriesEnsemble]
         A dictionary holding the metrics.
 
     Methods
@@ -47,11 +46,11 @@ class Evaluation(Set):
         Retrieves a metric by key.
     """
 
-    _members: Dict[str, Timeseries | tuple[TimeseriesEnsemble, Timeseries, Timeseries]]
+    _members: dict[str, Timeseries | tuple[TimeseriesEnsemble, Timeseries, Timeseries]]
 
     def __init__(
         self,
-        states: Dict[str, Timeseries | tuple[TimeseriesEnsemble, Timeseries, Timeseries]],
+        states: dict[str, Timeseries | tuple[TimeseriesEnsemble, Timeseries, Timeseries]],
     ):
         """
         Initializes the [`pastax.evaluation.Evaluation`][] object with a dictionary of metric timeseries or timeseries
@@ -59,7 +58,7 @@ class Evaluation(Set):
 
         Parameters
         ----------
-        states : Dict[str, Timeseries | tuple[TimeseriesEnsemble, Timeseries, Timeseries]]
+        states : dict[str, Timeseries | tuple[TimeseriesEnsemble, Timeseries, Timeseries]]
             The initial metrics dictionary.
         """
         self._members = states
@@ -125,13 +124,13 @@ class Evaluation(Set):
         """
         return self._members.values()
 
-    def to_dataarray(self) -> Dict[str, xr.DataArray]:
+    def to_dataarray(self) -> dict[str, xr.DataArray]:
         """
         Converts the evaluation results to a dictionary of `xarray.DataArray`s.
 
         Returns
         -------
-        Dict[str, xr.DataArray]
+        dict[str, xr.DataArray]
             A dictionary where keys are the evaluation metric names and values are the corresponding
             `xarray.DataArray`s.
         """

@@ -10,11 +10,11 @@ from ..utils import meters_to_degrees
 
 def _linear_uv(t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
     t_ = jnp.asarray(t, dtype=float)
-    dataset = args
     latitude, longitude = y[0], y[1]
+    dataset = args
 
-    u, v = dataset.interp_spatiotemporal("u", "v", time=t_, latitude=latitude, longitude=longitude)
-    dlatlon = jnp.asarray([v, u], dtype=float)
+    scalar_values = dataset.interp("u", "v", time=t_, latitude=latitude, longitude=longitude)
+    dlatlon = jnp.asarray([scalar_values["v"], scalar_values["u"]])
 
     return dlatlon
 

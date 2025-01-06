@@ -7,12 +7,12 @@ def spatial_derivative(
     *fields: Float[Array, "(time) lat lon"],
     dx: Float[Array, "lat lon-1"],
     dy: Float[Array, "lat-1 lon"],
-    is_land: Bool[Array, "lat lon"],
-) -> tuple[Float[Array, "(time) lat lon"], ...]:
+    is_masked: Bool[Array, "lat lon"],
+) -> tuple[tuple[Float[Array, "(time) lat lon"], Float[Array, "(time) lat lon"]], ...]:
     """
     Computes spatial derivatives for given fields using central finite differences.
 
-    This function calculates the spatial derivatives of the provided fields, taking into account the presence of land
+    This function calculates the spatial derivatives of the provided fields, taking into account the presence of mask
     and the grid spacing in both latitude and longitude directions.
     It uses central finite differences for the computation and leverages JAX for efficient computation and automatic
     differentiation.
@@ -26,54 +26,54 @@ def spatial_derivative(
         Gridded spacing in the longitude direction.
     dy : Float[Array, "lat-1 lon"]
         Gridded spacing in the latitude direction.
-    is_land : Bool[Array, "lat lon"]
-        Boolean array indicating the presence of land at each grid point.
+    is_masked : Bool[Array, "lat lon"]
+        Boolean array indicating whether a grid point should be masked (`True` means masked, `False` not masked).
 
     Returns
     -------
-    tuple[Float[Array, "(time) lat lon"], ...]
+    tuple[tuple[Float[Array, "(time) lat lon"], Float[Array, "(time) lat lon"]], ...]
         A tuple containing the spatial derivatives of the input fields.
         Each derivative is a 2D or 3D array with dimensions (latitude, longitude) or (time, latitude, longitude).
-        For field f1 and f2, returns (df1_x, df1_y, df2_x, df2_y).
+        For field f1 and f2, returns ((df1_x, df1_y), (df2_x, df2_y)).
     """
 
-    def central_finite_difference(_f: Float[Array, "(time) lat lon"], _axis: int) -> Float[Array, "(time) lat-2 lon-2"]:
-        def _axis1(
-            _dxy: Float[Array, "(time) lat(-1) lon(-1)"],
-        ) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
-            _f_l = _f[..., :-2, 1:-1]
-            _f_r = _f[..., 2:, 1:-1]
+    def central_finite_difference(
+        field: Float[Array, "(time) lat lon"], axis: int
+    ) -> Float[Array, "(time) lat-2 lon-2"]:
+        def _axis1(dxy: Float[Array, "lat-1 lon"]) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
+            field_start = field[..., :-2, 1:-1]
+            field_end = field[..., 2:, 1:-1]
 
-            _is_land_l = is_land[:-2, 1:-1]
-            _is_land_r = is_land[2:, 1:-1]
+            is_masked_start = is_masked[:-2, 1:-1]
+            is_masked_end = is_masked[2:, 1:-1]
 
-            _dx_l = _dxy[:-1, 1:-1]
-            _dx_r = _dxy[1:, 1:-1]
+            dx_start = dxy[:-1, 1:-1]
+            dx_end = dxy[1:, 1:-1]
 
-            return _f_l, _f_r, _is_land_l, _is_land_r, _dx_l, _dx_r
+            return field_start, field_end, is_masked_start, is_masked_end, dx_start, dx_end
 
-        def _axis2(
-            _dxy: Float[Array, "(time) lat(-1) lon(-1)"],
-        ) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
-            _f_l = _f[..., 1:-1, :-2]
-            _f_r = _f[..., 1:-1, 2:]
+        def _axis2(dxy: Float[Array, "lat lon-1"]) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
+            field_start = field[..., 1:-1, :-2]
+            field_end = field[..., 1:-1, 2:]
 
-            _is_land_l = is_land[1:-1, :-2]
-            _is_land_r = is_land[1:-1, 2:]
+            is_masked_start = is_masked[1:-1, :-2]
+            is_masked_end = is_masked[1:-1, 2:]
 
-            _dx_l = _dxy[1:-1, :-1]
-            _dx_r = _dxy[1:-1, 1:]
+            dx_start = dxy[1:-1, :-1]
+            dx_end = dxy[1:-1, 1:]
 
-            return _f_l, _f_r, _is_land_l, _is_land_r, _dx_l, _dx_r
+            return field_start, field_end, is_masked_start, is_masked_end, dx_start, dx_end
 
-        f_l, f_r, is_land_l, is_land_r, dx_l, dx_r = jax.lax.cond(_axis == -1, lambda: _axis2(dx), lambda: _axis1(dy))
+        field_start, field_end, is_masked_start, is_masked_end, dx_start, dx_end = jax.lax.cond(
+            axis == -1, lambda: _axis2(dx), lambda: _axis1(dy)
+        )
 
-        f_c = _f[..., 1:-1, 1:-1]
-        f_l: Array = jnp.where(is_land_l, f_c, f_l)
-        f_r: Array = jnp.where(is_land_r, f_c, f_r)
+        field_center = field[..., 1:-1, 1:-1]
+        field_start = jnp.where(is_masked_start, field_center, field_start)
+        field_end = jnp.where(is_masked_end, field_center, field_end)
 
-        return (f_r - f_l) / (dx_r + dx_l)
+        return (field_end - field_start) / (dx_end + dx_start)  # type: ignore
 
-    derivatives = tuple(central_finite_difference(f, axis) for f in fields for axis in (-1, -2))
+    derivatives = tuple(tuple(central_finite_difference(field, axis) for axis in (-1, -2)) for field in fields)
 
-    return derivatives
+    return derivatives  # type: ignore
