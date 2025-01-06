@@ -30,8 +30,6 @@ class TimeseriesEnsemble(Unitful):
     ----------
     members : Timeseries
         The members of the [`pastax.trajectory.TimeseriesEnsemble`].
-    _members_type : ClassVar
-        The type of the members in the [`pastax.trajectory.TimeseriesEnsemble`].
     size : int
         The number of members in the [`pastax.trajectory.TimeseriesEnsemble`].
 

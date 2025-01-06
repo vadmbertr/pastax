@@ -28,8 +28,6 @@ class Timeseries(Unitful):
     ----------
     states : State
         The [`pastax.trajectory.State`][] of the [`pastax.trajectory.Timeseries`].
-    _states_type : ClassVar
-        The type of the [`pastax.trajectory.State`][] in the [`pastax.trajectory.Timeseries`].
     times : Time
         The [`pastax.trajectory.Time`][] points of the [`pastax.trajectory.Timeseries`].
     length : int

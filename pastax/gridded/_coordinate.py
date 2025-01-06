@@ -16,18 +16,19 @@ class Coordinate(eqx.Module):
 
     Attributes
     ----------
-    _values : Float[Array, "dim"]
-        1D array of coordinate values.
     indices : ipx.Interpolator1D
         Interpolator for nearest index interpolation.
 
     Methods
     -------
+    values
+        Returns the coordinate values.
     index(query)
         Returns the nearest index for the given query coordinates.
-
     from_array(values, **interpolator_kwargs)
         Creates a [`pastax.gridded.Coordinate`][] instance from an array of values.
+    __getitem__(item:)
+        Retrieve an item from the coordinate array.
     """
 
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
@@ -36,12 +37,12 @@ class Coordinate(eqx.Module):
     @property
     def values(self) -> Float[Array, "dim"]:
         """
-                Returns the coordinate values.
-        #
-                Returns
-                -------
-                Float[Array, "dim"]
-                    The coordinate values.
+        Returns the coordinate values.
+
+        Returns
+        -------
+        Float[Array, "dim"]
+            The coordinate values.
         """
         return self._values
 
@@ -111,16 +112,17 @@ class LongitudeCoordinate(Coordinate):
 
     Attributes
     ----------
-    _values : Float[Array, "dim"]
-        1D array of longitude coordinate values.
     indices : ipx.Interpolator1D
         Interpolator for nearest index interpolation.
+    is_spherical : bool
+        Whether the mesh uses spherical coordinate.
 
     Methods
     -------
+    values
+        Returns the coordinate values.
     index(query)
         Returns the nearest index for the given query coordinates.
-
     from_array(values, **interpolator_kwargs)
         Creates a [`pastax.gridded.LongitudeCoordinate`][] instance from an array of values.
     """
@@ -132,12 +134,12 @@ class LongitudeCoordinate(Coordinate):
     @property
     def values(self) -> Float[Array, "dim"]:
         """
-                Returns the coordinate values.
-        #
-                Returns
-                -------
-                Float[Array, "dim"]
-                    The coordinate values.
+        Returns the coordinate values.
+
+        Returns
+        -------
+        Float[Array, "dim"]
+            The coordinate values.
         """
         values = self._values
         if self.is_spherical:

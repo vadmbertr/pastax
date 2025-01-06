@@ -12,8 +12,6 @@ class Set(eqx.Module):
 
     Attributes
     ----------
-    _members : jax.Pytree or Mapping[str, jax.Pytree] or Sequence[jax.Pytree]
-        The members of the set.
     size : int
         The number of members in the set.
     """

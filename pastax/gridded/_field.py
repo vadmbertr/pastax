@@ -14,14 +14,11 @@ class Field(eqx.Module):
     """
     Base class for representing a field on a grid.
 
-    Attributes
-    ----------
-    _values : Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]
-        The gridded values of the field.
-
     Methods
     -------
-    __getitem__(item:)
+    values
+        Returns the field values.
+    __getitem__(item)
         Retrieves the value(s) at the specified index or slice of the grid.
     """
 
@@ -30,7 +27,7 @@ class Field(eqx.Module):
     @property
     def values(self) -> Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]:
         """
-        Returns the gridded values.
+        Returns the field values.
 
         Returns
         -------
@@ -60,18 +57,10 @@ class SpatialField(Field):
     """
     Class representing a spatial (2D) field with interpolation capabilities.
 
-    Attributes
-    ----------
-    _values : Bool[Array, "lat lon"] | Float[Array, "lat lon"] | Int[Array, "lat lon"]
-        The gridded data values.
-    _fx : ipx.Interpolator2D
-        The interpolator for spatial data.
-
     Methods
     -------
     interp(**coordinates)
         Interpolates the field at the given coordinates.
-
     from_array(values, latitude, longitude, interpolation_method)
         Creates a [`pastax.gridded.SpatialField`][] instance from the given array of values, latitude, and longitude
         using the specified interpolation method.
@@ -170,17 +159,6 @@ class SpatialField(Field):
 class SpatioTemporalField(Field):
     """
     Class representing a spatiotemporal (3D) field with interpolation capabilities.
-
-    Attributes
-    ----------
-    values : Bool[Array, "time lat lon"] | Float[Array, "time lat lon"] | Int[Array, "time lat lon"]
-        The values of the spatiotemporal field.
-    _ft : ipx.Interpolator1D
-        Interpolator for the temporal dimension.
-    _fx : ipx.Interpolator2D
-        Interpolator for the spatial dimensions (latitude and longitude).
-    _ftx : ipx.Interpolator3D
-        Interpolator for the spatiotemporal dimensions.
 
     Methods
     -------

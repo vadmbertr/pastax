@@ -17,11 +17,6 @@ class Location(State):
 
     Attributes
     ----------
-    _value : Float[Array, "... 2"]
-        The latitude and longitude of the [`pastax.trajectory.Location`][].
-    _unit : dict[Unit, int | float]
-        The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Location`][], defaults to
-        [`pastax.utils.LatLonDegrees`][].
     name : str
         The name of the [`pastax.trajectory.Location`][], set to `"Location in [latitude, longitude]"`.
 
@@ -120,11 +115,6 @@ class Displacement(State):
 
     Attributes
     ----------
-    _value : Float[Array, "... 2"]
-        The latitude and longitude components of the [`pastax.trajectory.Displacement`].
-    _unit : dict[Unit, int | float]
-        The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Displacement`], defaults to
-        [`pastax.utils.LatLonDegrees`][].
     name : str
         The name of the [`pastax.trajectory.Displacement`], set to `"Displacement in [latitude, longitude]"`.
 
@@ -189,10 +179,6 @@ class Time(State):
 
     Attributes
     ----------
-    _value : Array
-        The [`pastax.trajectory.Time`][] value.
-    _unit : dict[Unit, int | float]
-        The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Time`], defaults to [`pastax.utils.Seconds`][].
     name : str
         The name of the [`pastax.trajectory.Time`], set to `"Time since epoch"`.
 
