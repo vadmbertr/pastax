@@ -313,10 +313,9 @@ class TimeseriesEnsemble(Unitful):
         TimeseriesEnsemble
             The corresponding [`pastax.trajectory.TimeseriesEnsemble`][].
         """
-        members = eqx.filter_vmap(
-            lambda s: cls._members_type.from_array(s, times, unit=unit, name=name, **kwargs),
-            out_axes=eqx._vmap_pmap.if_mapped(0),
-        )(values)
+        members = eqx.filter_vmap(lambda x: cls._members_type.from_array(x, times, unit=unit, name=name, **kwargs))(
+            values
+        )
 
         return cls(members)
 

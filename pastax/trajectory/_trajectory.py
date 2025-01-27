@@ -333,7 +333,7 @@ class Trajectory(Timeseries):
     def from_array(
         cls,
         values: Float[Array, "... time 2"],
-        times: Float[Array, "... time"],
+        times: Float[Array, "time"],
         unit: dict[Unit, int | float] = UNIT["°"],
         id: Int[Array, ""] | None = None,
         **_: Any,
@@ -345,7 +345,7 @@ class Trajectory(Timeseries):
         ----------
         values : Float[Array, "... time 2"]
             The array of (latitudes, longitudes) values for the trajectory.
-        times : Float[Array, "... time"]
+        times : Float[Array, "time"]
             The time points for the trajectory.
         unit : dict[Unit, int | float], optional
             Unit of the trajectory locations, defaults to UNIT["°"].
