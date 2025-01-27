@@ -90,6 +90,8 @@ class DiffraxSimulator(BaseSimulator):
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
+        ad: Literal["forward", "reverse"], optional
+            The mode used for differentiating through the solve, defaults to "forward".
         n_samples : int | None, optional
             The number of samples to generate, defaults to None, meaning a single trajectory.
         key : Array | None, optional
@@ -192,6 +194,8 @@ class DeterministicSimulator(DiffraxSimulator):
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
+        ad: Literal["forward", "reverse"], optional
+            The mode used for differentiating through the solve, defaults to "forward".
         n_samples : int | None, optional
             The number of samples to generate, defaults to None, not use with deterministic simulators.
         key : Array | None, optional
@@ -347,6 +351,8 @@ class StochasticSimulator(DiffraxSimulator):
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
+        ad: Literal["forward", "reverse"], optional
+            The mode used for differentiating through the solve, defaults to "forward".
         n_samples : int, optional
             The number of samples to generate, defaults to `100`.
         key : Array, optional
