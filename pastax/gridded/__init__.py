@@ -9,11 +9,11 @@ from ._operators import spatial_derivative
 
 
 __all__ = [
-    "Gridded",
     "Coordinate",
     "LongitudeCoordinate",
     "Field",
     "SpatialField",
     "SpatioTemporalField",
+    "Gridded",
     "spatial_derivative",
 ]

@@ -4,9 +4,9 @@ This module provides dynamics examples to be used with [`pastax.simulator.BaseSi
 
 from ._linear_uv import linear_uv, LinearUV
 from ._smagorinsky_diffusion import (
-    DeterministicSmagorinskyDiffusion,
     SmagorinskyDiffusion,
     StochasticSmagorinskyDiffusion,
+    DeterministicSmagorinskyDiffusion,
 )
 
 

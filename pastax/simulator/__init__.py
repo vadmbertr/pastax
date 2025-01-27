@@ -7,8 +7,8 @@ from ._base_simulator import BaseSimulator
 from ._diffrax_simulator import (
     DiffraxSimulator,
     DeterministicSimulator,
-    SDEControl,
     StochasticSimulator,
+    SDEControl,
 )
 
 
