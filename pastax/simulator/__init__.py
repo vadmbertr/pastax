@@ -5,8 +5,8 @@ and [`pastax.trajectory.TrajectoryEnsemble`][] simulation in JAX.
 
 from ._base_simulator import BaseSimulator
 from ._diffrax_simulator import (
-    DeterministicSimulator,
     DiffraxSimulator,
+    DeterministicSimulator,
     SDEControl,
     StochasticSimulator,
 )
