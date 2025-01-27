@@ -106,6 +106,20 @@ class Unitful(eqx.Module):
         """
         return self._unit
 
+    def convert_to(self, to_unit: dict[Unit, Unit]) -> Unitful:
+        value = self.value
+        unit = {}
+
+        for k, v in to_unit.items():
+            if k not in self.unit:
+                raise ValueError(
+                    f"Cannot convert from {k} to {v} as {k} is not present in the current unit {self.unit}"
+                )
+            value = k.convert_to(v, value, self.unit[k])
+            unit[v] = self.unit[k]
+
+        return Unitful(value, unit)
+
     def cumsum(self, axis: ArrayLike | None = None) -> Unitful:
         """
         Computes the cumulative sum of the quantity.

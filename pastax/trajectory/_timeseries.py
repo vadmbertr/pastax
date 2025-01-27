@@ -225,14 +225,7 @@ class Timeseries(Unitful):
         values = jnp.asarray(values, dtype=float)
         times = jnp.asarray(times, dtype=float)
 
-        values: State = eqx.filter_vmap(
-            lambda value: cls._states_type(value, unit=unit, name=name),
-            out_axes=eqx._vmap_pmap.if_mapped(0),
-        )(values)
-
-        times: Time = eqx.filter_vmap(lambda time: Time(time), out_axes=eqx._vmap_pmap.if_mapped(0))(times)
-
-        return cls(values, times, **kwargs)
+        return cls(cls._states_type(values, unit=unit, name=name), Time(times), **kwargs)
 
     def to_dataarray(self) -> xr.DataArray:
         da = xr.DataArray(
