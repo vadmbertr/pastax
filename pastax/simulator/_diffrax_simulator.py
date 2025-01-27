@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Literal
 
 import diffrax as dfx
 import jax
@@ -34,6 +34,7 @@ class DiffraxSimulator(BaseSimulator):
         ts: Float[Array, "time"],
         dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
+        ad: Literal["forward", "reverse"] = "forward",
         n_samples: int | None = None,
         key: Array | None = None,
     ) -> Trajectory | TrajectoryEnsemble:
@@ -107,6 +108,14 @@ class DiffraxSimulator(BaseSimulator):
         """
         raise NotImplementedError
 
+    @staticmethod
+    def _get_adjoint(ad):
+        if ad == "forward":
+            adjoint = dfx.ForwardMode()
+        else:
+            adjoint = dfx.RecursiveCheckpointAdjoint()
+        return adjoint
+
 
 class DeterministicSimulator(DiffraxSimulator):
     """
@@ -128,6 +137,7 @@ class DeterministicSimulator(DiffraxSimulator):
         ts: Float[Array, "time"],
         dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
+        ad: Literal["forward", "reverse"] = "forward",
         n_samples: int | None = None,
         key: Array | None = None,
     ) -> Trajectory:
@@ -200,10 +210,11 @@ class DeterministicSimulator(DiffraxSimulator):
             dt0=dt0,
             y0=x0.value,
             args=args,
-            saveat=dfx.SaveAt(ts=ts[1:]),
+            saveat=dfx.SaveAt(ts=ts),
+            adjoint=self._get_adjoint(ad),
         ).ys
 
-        return Trajectory.from_array(jnp.concat((x0.value[None], ys), axis=0), ts, unit=x0.unit)  # type: ignore
+        return Trajectory.from_array(ys, ts, unit=x0.unit)  # type: ignore
 
 
 class SDEControl(dfx.AbstractPath):
@@ -284,6 +295,7 @@ class StochasticSimulator(DiffraxSimulator):
         ts: Float[Array, "time"],
         dt0: Float[Scalar, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
+        ad: Literal["forward", "reverse"] = "forward",
         n_samples: int = 100,
         key: Array = jrd.key(0),
     ) -> TrajectoryEnsemble:
@@ -347,6 +359,7 @@ class StochasticSimulator(DiffraxSimulator):
         """
         t0 = ts[0]
         t1 = ts[-1]
+        adjoint = self._get_adjoint(ad)
 
         keys = jrd.split(key, n_samples)
 
@@ -364,12 +377,12 @@ class StochasticSimulator(DiffraxSimulator):
                 dt0=dt0,
                 y0=x0.value,
                 args=args,
-                saveat=dfx.SaveAt(ts=ts[1:]),
+                saveat=dfx.SaveAt(ts=ts),
+                adjoint=adjoint,
             ).ys
 
             return ys  # type: ignore
 
         ys = solve(keys)
 
-        y0 = jnp.tile(x0.value, (n_samples, 1, 1))
-        return TrajectoryEnsemble.from_array(jnp.concat((y0, ys), axis=1), ts, unit=x0.unit)
+        return TrajectoryEnsemble.from_array(ys, ts, unit=x0.unit)
