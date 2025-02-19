@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Callable, ClassVar
+import dataclasses
+from typing import Any, Callable, ClassVar, Optional
 
 import equinox as eqx
+import jax.interpreters.batching as batching
+import jax.interpreters.pxla as pxla
 import jax.numpy as jnp
 import numpy as np
 import xarray as xr
@@ -15,11 +18,21 @@ from ._timeseries import Timeseries
 from ._unitful import Unitful
 
 
-def _in_axes_func(leaf):
-    axes = None
-    if eqx.is_array(leaf) and leaf.ndim > 1:
-        axes = 0
-    return axes
+# copy-paste from equinox
+@dataclasses.dataclass(frozen=True)
+class _if_mapped:
+    axis: int
+
+    def __call__(self, x: Any) -> Optional[int]:
+        if isinstance(x, batching.BatchTracer):
+            if x.batch_dim is batching.not_mapped:
+                return None
+            else:
+                return self.axis
+        elif isinstance(x, pxla.MapTracer):
+            return self.axis
+        else:
+            return None
 
 
 class TimeseriesEnsemble(Unitful):
@@ -260,9 +273,11 @@ class TimeseriesEnsemble(Unitful):
         Unitful
             The result of applying the function to each [`pastax.trajectory.Timeseries`][].
         """
-        unit = {}
-        res = eqx.filter_vmap(func, in_axes=_in_axes_func)(self.members)
+        in_axes = eqx.filter(self.members, False)
+        in_axes = eqx.tree_at(lambda x: x.states._value, in_axes, 0, is_leaf=lambda x: x is None)
+        res = eqx.filter_vmap(func, in_axes=(in_axes,))(self.members)
 
+        unit = {}
         if isinstance(res, Unitful):
             unit = res.unit
             res = res.value
@@ -313,9 +328,9 @@ class TimeseriesEnsemble(Unitful):
         TimeseriesEnsemble
             The corresponding [`pastax.trajectory.TimeseriesEnsemble`][].
         """
-        members = eqx.filter_vmap(lambda x: cls._members_type.from_array(x, times, unit=unit, name=name, **kwargs))(
-            values
-        )
+        members = eqx.filter_vmap(
+            lambda x: cls._members_type.from_array(x, times, unit=unit, name=name, **kwargs), out_axes=_if_mapped(0)
+        )(values)
 
         return cls(members)
 

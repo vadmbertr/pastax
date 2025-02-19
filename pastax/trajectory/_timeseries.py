@@ -13,13 +13,6 @@ from ._states import Time
 from ._unitful import Unitful
 
 
-def _in_axes_func(leaf):
-    axes = None
-    if eqx.is_array(leaf) and leaf.ndim > 0:
-        axes = 0
-    return axes
-
-
 class Timeseries(Unitful):
     """
     Class representing a [`pastax.trajectory.Timeseries`].
@@ -59,7 +52,7 @@ class Timeseries(Unitful):
 
     states: State
     _states_type: ClassVar = State
-    times: Time  # = eqx.field(static=True)  # TODO: not sure if this is correct
+    times: Time
     length: int = eqx.field(static=True)
 
     _value: None = eqx.field(repr=False)
@@ -169,9 +162,11 @@ class Timeseries(Unitful):
         Timeseries
             The result of applying the function to each [`pastax.trajectory.State`][].
         """
-        unit = {}
-        res = eqx.filter_vmap(func, in_axes=_in_axes_func)(self.states)
+        in_axes = eqx.filter(self.states, False)
+        in_axes = eqx.tree_at(lambda x: x._value, in_axes, 0, is_leaf=lambda x: x is None)
+        res = eqx.filter_vmap(func, in_axes=(in_axes,))(self.states)
 
+        unit = {}
         if isinstance(res, Unitful):
             unit = res.unit
             res = res.value
