@@ -2,30 +2,29 @@ from __future__ import annotations
 
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, Real
 
 from ..gridded import Gridded
 from ..utils import meters_to_degrees
 
 
-def _linear_uv(t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
-    t_ = jnp.asarray(t, dtype=float)
-    latitude, longitude = y[0], y[1]
+def _linear_uv(t: Real[Array, ""], y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
+    latitude, longitude = y
     dataset = args
 
-    scalar_values = dataset.interp("u", "v", time=t_, latitude=latitude, longitude=longitude)
+    scalar_values = dataset.interp("u", "v", time=t, latitude=latitude, longitude=longitude)
     dlatlon = jnp.asarray([scalar_values["v"], scalar_values["u"]])
 
     return dlatlon
 
 
-def linear_uv(t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
+def linear_uv(t: Real[Array, ""], y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
     """
     Computes the Lagrangian drift velocity by interpolating in space and time the velocity fields.
 
     Parameters
     ----------
-    t : float
+    t : Real[Array, ""]
         The current time.
     y : Float[Array, "2"]
         The current state (latitude and longitude in degrees).
@@ -76,13 +75,13 @@ class LinearUV(eqx.Module):
         converter=lambda x: jnp.asarray(x, dtype=float), default_factory=lambda: [1, 1]
     )
 
-    def __call__(self, t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
+    def __call__(self, t: Real[Array, ""], y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
         """
         Computes the Lagrangian drift velocity as the linear relation `intercept + slope * [v, u]`.
 
         Parameters
         ----------
-        t : float
+        t : Real[Array, ""]
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude in degrees).
