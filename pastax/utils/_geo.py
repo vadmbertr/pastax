@@ -29,9 +29,10 @@ def distance_on_earth(latlon1: Float[Array, "... 2"], latlon2: Float[Array, "...
     """
 
     def safe_for_grad_sqrt(x):
-        # grad(sqrt(x)) is not defined at x=0, here we are happy if it evaluates to 0 when x is a
-        y = jnp.sqrt(jnp.where(x != 0.0, x, 1.0))  # type: ignore
-        return jnp.where(x != 0.0, y, 0.0)
+        # grad(sqrt(x)) is not defined for x=0, here we are happy if it evaluates to 0 in that case
+        mask = x != 0.0
+        y = jnp.sqrt(jnp.where(mask, x, 1.0))  # type: ignore
+        return jnp.where(mask, y, 0.0)
 
     lat1_rad = jnp.radians(latlon1[..., 0])
     lat2_rad = jnp.radians(latlon2[..., 0])
