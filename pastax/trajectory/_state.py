@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import equinox as eqx
-from jaxtyping import Array
+from jaxtyping import Array, Real
 
 from ..utils._unit import Unit
 from ._unitful import Unitful
@@ -28,7 +28,7 @@ class State(Unitful):
 
     def __init__(
         self,
-        value: Array,
+        value: Real[Array, "..."],
         unit: dict[Unit, int | float] = {},
         name: str | None = None,
     ):
@@ -37,7 +37,7 @@ class State(Unitful):
 
         Parameters
         ----------
-        value : Array
+        value : Real[Array, "..."]
             The value of the state.
         unit : dict[Unit, int | float], optional
             The unit of the state, defaults to an empty `dict`.
