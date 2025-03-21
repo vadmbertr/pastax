@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike
+from jaxtyping import Array, ArrayLike, Float, Real
 
 from ..utils._unit import compose_units, Unit
 
@@ -65,43 +67,45 @@ class Unitful(eqx.Module):
         Subtracts another quantity or array like from this quantity.
     """
 
-    _value: Array = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float))
-    _unit: dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter)
+    _value: Real[Array, "..."] = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float))
+    _unit: dict[Unit, Real[Any, ""]] = eqx.field(static=True, converter=unit_converter)
 
-    def __init__(self, value: Array = jnp.asarray(jnp.nan, dtype=float), unit: dict[Unit, int | float] = {}):
+    def __init__(
+        self, value: Real[Any, "..."] = jnp.asarray(jnp.nan, dtype=float), unit: dict[Unit, Real[Any, "..."]] = {}
+    ):
         """
         Initializes the [`pastax.utils.Unitful`][] with given value and unit.
 
         Parameters
         ----------
-        value : Array
+        value : Real[Any, "..."]
             The value of the quantity.
-        unit : dict[Unit, int | float], optional
+        unit : dict[Unit, Real[Any, "..."]], optional
             The unit of the quantity, defaults to an empty dict.
         """
         self._value = value
         self._unit = unit
 
     @property
-    def value(self) -> Array:
+    def value(self) -> Float[Array, "..."]:
         """
         Returns the value of the quantity.
 
         Returns
         -------
-        Array
+        Float[Array, "..."]
             The value of the quantity.
         """
         return self._value
 
     @property
-    def unit(self) -> dict[Unit, int | float]:
+    def unit(self) -> dict[Unit, Real[Any, ""]]:
         """
         Returns the unit of the quantity.
 
         Returns
         -------
-        dict[Unit, int | float]
+        dict[Unit, Real[Any, ""]]
             The unit of the quantity.
         """
         return self._unit
@@ -137,13 +141,13 @@ class Unitful(eqx.Module):
         """
         return Unitful(self.value.cumsum(axis), self.unit)  # type: ignore
 
-    def euclidean_distance(self, other: Unitful | Array) -> Unitful:
+    def euclidean_distance(self, other: Unitful | Real[Array, "..."]) -> Unitful:
         """
         Computes the Euclidean distance between this quantity and another quantity.
 
         Parameters
         ----------
-        other : Unitful | Array
+        other : Unitful | Real[Array, "..."]
             The other quantity to compute the distance to.
 
         Returns
@@ -234,13 +238,13 @@ class Unitful(eqx.Module):
 
         return other_value, other_unit  # type: ignore
 
-    def __add__(self, other: Unitful | ArrayLike) -> Unitful:
+    def __add__(self, other: Unitful | Real[Any, "..."]) -> Unitful:
         """
         Adds another quantity or array like to this quantity.
 
         Parameters
         ----------
-        other : Unitful | ArrayLike
+        other : Unitful | Real[Any, "..."]
             The other operand to add.
 
         Returns
@@ -255,13 +259,13 @@ class Unitful(eqx.Module):
         other_value, _ = self.__extract_from_other(other, additive_op=True)
         return Unitful(self.value + other_value, self.unit)
 
-    def __mul__(self, other: Unitful | ArrayLike) -> Unitful:
+    def __mul__(self, other: Unitful | Real[Any, "..."]) -> Unitful:
         """
         Multiplies this quantity by another quantity or array like.
 
         Parameters
         ----------
-        other : Unitful | Array
+        other : Unitful | Real[Any, "..."]
             The other operand to multiply.
 
         Returns
@@ -272,13 +276,13 @@ class Unitful(eqx.Module):
         other_value, other_unit = self.__extract_from_other(other, additive_op=False)
         return Unitful(self.value * other_value, compose_units(self.unit, other_unit, 1))
 
-    def __pow__(self, pow: int | float) -> Unitful:
+    def __pow__(self, pow: Real[Any, "..."]) -> Unitful:
         """
         Raises this quantity to the power of pow.
 
         Parameters
         ----------
-        power : Number
+        power : Real[Any, "..."]
             The power to apply.
 
         Returns
@@ -289,13 +293,13 @@ class Unitful(eqx.Module):
         unit = {k: v * pow for k, v in self.unit.items()}
         return Unitful(self.value**pow, unit)
 
-    def __truediv__(self, other: Unitful | ArrayLike) -> Unitful:
+    def __truediv__(self, other: Unitful | Real[Any, "..."]) -> Unitful:
         """
         Divides this quantity by another quantity or array like.
 
         Parameters
         ----------
-        other : Unitful | ArrayLike
+        other : Unitful | Real[Any, "..."]
             The other operand to divide by.
 
         Returns
@@ -306,13 +310,13 @@ class Unitful(eqx.Module):
         other_value, other_unit = self.__extract_from_other(other, additive_op=False)
         return Unitful(self.value / other_value, compose_units(self.unit, other_unit, -1))
 
-    def __sub__(self, other: Unitful | ArrayLike) -> Unitful:
+    def __sub__(self, other: Unitful | Real[Any, "..."]) -> Unitful:
         """
         Subtracts another quantity or array like from this quantity.
 
         Parameters
         ----------
-        other : Unitful | ArrayLike
+        other : Unitful | Real[Any, "..."]
             The other operand to subtract.
 
         Returns

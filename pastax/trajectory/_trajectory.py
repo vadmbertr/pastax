@@ -127,7 +127,7 @@ class Trajectory(Timeseries):
         return self.locations.longitude
 
     @property
-    def origin(self) -> State:
+    def origin(self) -> Location:
         """
         Returns the origin of the trajectory.
 
@@ -136,7 +136,7 @@ class Trajectory(Timeseries):
         State
             The origin of the trajectory.
         """
-        return State(
+        return Location(
             self.locations.value[..., 0, :],
             unit=self.unit,
             name="Origin in [latitude, longitude]",

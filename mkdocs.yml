@@ -69,6 +69,7 @@ plugins:
           import:
             - https://docs.kidger.site/diffrax/objects.inv
             - https://docs.kidger.site/equinox/objects.inv
+            - https://docs.kidger.site/lineax/objects.inv
           options:
             allow_inspection: true
             docstring_style: numpy

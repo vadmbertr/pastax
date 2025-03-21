@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
+
 import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, Real
 
 from ..utils._geo import distance_on_earth, longitude_in_180_180_degrees
 from ..utils._unit import UNIT, Unit
@@ -37,7 +39,7 @@ class Location(State):
 
     def __init__(
         self,
-        value: Float[Array, "... 2"],
+        value: Float[Any, "... 2"],
         unit: dict[Unit, int | float] = UNIT["°"],
         **_,
     ):
@@ -46,7 +48,7 @@ class Location(State):
 
         Parameters
         ----------
-        value : Float[Array, "2"]
+        value : Float[Array, "... 2"] | Sequence[float]
             The latitude and longitude of the location.
         unit : dict[str, Unit], optional
             The [`pastax.utils.Unit`][] of the location, defaults to [`pastax.utils.LatLonDegrees`][].
@@ -130,7 +132,7 @@ class Displacement(State):
 
     def __init__(
         self,
-        value: Float[Array, "... 2"],
+        value: Real[Any, "... 2"],
         unit: dict[Unit, int | float] = UNIT["°"],
         **_,
     ):
@@ -140,7 +142,7 @@ class Displacement(State):
 
         Parameters
         ----------
-        value : Float[Array, "2"]
+        value : Real[Any, "2"]
             The latitude and longitude components of the [`pastax.trajectory.Displacement`].
         unit : dict[str, Unit], optional
             The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Displacement`], defaults to
@@ -190,13 +192,13 @@ class Time(State):
         Converts the [`pastax.trajectory.Time`][] to a `numpy.ndarray` of `datetime64[s]`.
     """
 
-    def __init__(self, value: Array, unit: dict[Unit, int | float] = UNIT["s"], **_):
+    def __init__(self, value: Real[Any, "..."], unit: dict[Unit, int | float] = UNIT["s"], **_):
         """
         Initializes the [`pastax.trajectory.Time`][] with given time value.
 
         Parameters
         ----------
-        value : Array
+        value : Real[Any, "..."]
             The time value.
         unit : dict[Unit, int | float], optional
             The [`pastax.utils.Unit`][] of the [`pastax.trajectory.Time`], defaults to [`pastax.utils.Seconds`][].

@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+from typing import Any
+
 import equinox as eqx
 import interpax as ipx
+import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Scalar
+from jaxtyping import Array, Float, Real
+import lineax as lx
 
 from ..gridded import Gridded, spatial_derivative
 from ..utils import meters_to_degrees
 
 
-def _to_cs(x: Float[Scalar, ""]) -> Float[Scalar, ""]:
+def _to_cs(x: Real[Any, ""]) -> Real[Array, ""]:
     return jnp.exp(x)
 
 
-def _from_cs(x: Float[Scalar, ""]) -> Float[Scalar, ""]:
+def _from_cs(x: Real[Any, ""]) -> Real[Array, ""]:
     return jnp.log(jnp.clip(x, min=1e-4))
 
 
@@ -67,20 +71,20 @@ class SmagorinskyDiffusion(eqx.Module):
     As the class inherits from [`equinox.Module`][], its `cs` attribute can be treated as a trainable parameter.
     """
 
-    _cs: Float[Scalar, ""] = eqx.field(
+    _cs: Real[Array, ""] = eqx.field(
         converter=lambda x: jnp.asarray(x, dtype=float),
-        default_factory=lambda: _from_cs(jnp.asarray(0.1)),
+        default_factory=lambda: _from_cs(0.1),
     )
 
     @property
-    def cs(self) -> Float[Scalar, ""]:
+    def cs(self) -> Float[Array, ""]:
         """
         Returns the Smagorinsky constant.
         """
         return _to_cs(self._cs)
 
     @staticmethod
-    def _neighborhood(*fields: str, t: Float[Scalar, ""], y: Float[Array, "2"], gridded: Gridded) -> Gridded:
+    def _neighborhood(*fields: str, t: Real[Array, ""], y: Float[Array, "2"], gridded: Gridded) -> Gridded:
         """
         Restricts the [`pastax.gridded.Gridded`][] to a neighborhood around the given location and time.
 
@@ -88,7 +92,7 @@ class SmagorinskyDiffusion(eqx.Module):
         ----------
         *fields : list[str]
             The fields to retain in the neighborhood.
-        t : Float[Scalar, ""]
+        t : Real[Array, ""]
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
@@ -107,7 +111,7 @@ class SmagorinskyDiffusion(eqx.Module):
 
         return neighborhood
 
-    def _smagorinsky_diffusion(self, t: Float[Scalar, ""], y: Float[Array, "2"], gridded: Gridded) -> Gridded:
+    def _smagorinsky_diffusion(self, t: Real[Array, ""], y: Float[Array, "2"], gridded: Gridded) -> Gridded:
         r"""
         Computes the Smagorinsky diffusion:
 
@@ -122,7 +126,7 @@ class SmagorinskyDiffusion(eqx.Module):
 
         Parameters
         ----------
-        t : Float[Scalar, ""]
+        t : Real[Array, ""]
             The simulation time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
@@ -165,14 +169,14 @@ class SmagorinskyDiffusion(eqx.Module):
 
     @staticmethod
     def _deterministic_dynamics(
-        t: Float[Scalar, ""], y: Float[Array, "2"], gridded: Gridded, smag_ds: Gridded
+        t: Real[Array, ""], y: Float[Array, "2"], gridded: Gridded, smag_ds: Gridded
     ) -> Float[Array, "2"]:
         r"""
         Computes the deterministic part of the dynamics: $(\mathbf{u} + \nabla K)(t, \mathbf{X}(t))$.
 
         Parameters
         ----------
-        t : Float[Scalar, ""]
+        t : Real[Array, ""]
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
@@ -272,16 +276,16 @@ class StochasticSmagorinskyDiffusion(SmagorinskyDiffusion):
     Methods
     -------
     __call__(t, y, args)
-        Computes and stacks the deterministic and stochastic terms of the dynamics.
+        Computes the deterministic and stochastic terms of the dynamics and returns them as lineax.PyTreeLinearOperator.
     """
 
-    def __call__(self, t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2 3"]:
+    def __call__(self, t: Real[Array, ""], y: Float[Array, "2"], args: Gridded) -> lx.PyTreeLinearOperator:
         r"""
-        Computes and stacks the deterministic and stochastic terms of the dynamics.
+        Computes the deterministic and stochastic terms of the dynamics and returns them as [`lineax.PyTreeLinearOperator`][].
 
         Parameters
         ----------
-        t : float
+        t : Real[Array, ""]
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
@@ -290,32 +294,30 @@ class StochasticSmagorinskyDiffusion(SmagorinskyDiffusion):
 
         Returns
         -------
-        Float[Array, "2 3"]
+        lx.PyTreeLinearOperator
             The stacked deterministic and stochastic parts of the dynamics.
         """
-        t_ = jnp.asarray(t)
         gridded = args
 
-        smag_ds = self._smagorinsky_diffusion(t_, y, gridded)  # "1 x_width-2 x_width-2"
+        smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width-2 x_width-2"
 
-        dlatlon_deter = self._deterministic_dynamics(t_, y, gridded, smag_ds)
+        dlatlon_deter = self._deterministic_dynamics(t, y, gridded, smag_ds)
         dlatlon_stoch = self._stochastic_dynamics(y, smag_ds)
 
-        dlatlon = jnp.column_stack([dlatlon_deter, dlatlon_stoch])
-
         if gridded.is_spherical_mesh and not gridded.use_degrees:
-            dlatlon = meters_to_degrees(dlatlon.T, latitude=y[0]).T
+            dlatlon_deter = meters_to_degrees(dlatlon_deter, latitude=y[0])
+            dlatlon_stoch = meters_to_degrees(dlatlon_stoch, latitude=y[0])
 
-        return dlatlon
+        return lx.PyTreeLinearOperator((dlatlon_deter, dlatlon_stoch), jax.ShapeDtypeStruct((2,), float))
 
     @classmethod
-    def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1, dtype=float)):
+    def from_cs(cls, cs: Real[Any, ""] = 0.1):
         """
         Initializes the stochastic Smagorinsky diffusion with the given Smagorinsky constant.
 
         Parameters
         ----------
-        cs : Float[Scalar, ""], optional
+        cs : Real[Any, ""], optional
             The Smagorinsky constant, defaults to `jnp.asarray(0.1, dtype=float)`.
 
         Returns
@@ -355,13 +357,13 @@ class DeterministicSmagorinskyDiffusion(SmagorinskyDiffusion):
         Computes the deterministic term of the dynamics.
     """
 
-    def __call__(self, t: float, y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
+    def __call__(self, t: Real[Array, ""], y: Float[Array, "2"], args: Gridded) -> Float[Array, "2"]:
         r"""
         Computes the deterministic term of the dynamics.
 
         Parameters
         ----------
-        t : float
+        t : Real[Array, ""]
             The current time.
         y : Float[Array, "2"]
             The current state (latitude and longitude).
@@ -373,11 +375,10 @@ class DeterministicSmagorinskyDiffusion(SmagorinskyDiffusion):
         Float[Array, "2 3"]
             The deterministic part of the dynamics.
         """
-        t_ = jnp.asarray(t, dtype=float)
         gridded = args
 
-        smag_ds = self._smagorinsky_diffusion(t_, y, gridded)  # "1 x_width-2 x_width-2"
-        dlatlon = self._deterministic_dynamics(t_, y, gridded, smag_ds)
+        smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width-2 x_width-2"
+        dlatlon = self._deterministic_dynamics(t, y, gridded, smag_ds)
 
         if gridded.is_spherical_mesh and not gridded.use_degrees:
             dlatlon = meters_to_degrees(dlatlon, latitude=y[0])
@@ -385,13 +386,13 @@ class DeterministicSmagorinskyDiffusion(SmagorinskyDiffusion):
         return dlatlon
 
     @classmethod
-    def from_cs(cls, cs: Float[Scalar, ""] = jnp.asarray(0.1, dtype=float)):
+    def from_cs(cls, cs: Real[Any, ""] = 0.1):
         """
         Initializes the deterministic Smagorinsky diffusion with the given Smagorinsky constant.
 
         Parameters
         ----------
-        cs : Float[Scalar, ""], optional
+        cs : Real[Any, ""], optional
             The Smagorinsky constant, defaults to `jnp.asarray(0.1, dtype=float)`.
 
         Returns

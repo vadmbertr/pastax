@@ -146,7 +146,7 @@ class SpatialField(Field):
 
         _fx = ipx.Interpolator2D(
             latitude,
-            longitude,  # circular domain
+            longitude,  # periodic domain
             values,
             method=interpolation_method,
             extrap=True,

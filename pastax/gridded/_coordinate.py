@@ -114,7 +114,7 @@ class LongitudeCoordinate(Coordinate):
     ----------
     indices : ipx.Interpolator1D
         Interpolator for nearest index interpolation.
-    is_spherical : bool
+    is_periodic : bool
         Whether the mesh uses spherical coordinate.
 
     Methods
@@ -129,7 +129,7 @@ class LongitudeCoordinate(Coordinate):
 
     _values: Float[Array, "dim"]  # only handles 1D coordinates, i.e. rectilinear grids
     indices: ipx.Interpolator1D
-    is_spherical: bool
+    is_periodic: bool
 
     @property
     def values(self) -> Float[Array, "dim"]:
@@ -142,7 +142,7 @@ class LongitudeCoordinate(Coordinate):
             The coordinate values.
         """
         values = self._values
-        if self.is_spherical:
+        if self.is_periodic:
             values -= 180
 
         return values
@@ -161,7 +161,7 @@ class LongitudeCoordinate(Coordinate):
         Int[Array, "Nq"]
             An array of integers representing the nearest indices.
         """
-        if self.is_spherical:
+        if self.is_periodic:
             query = longitude_in_180_180_degrees(query)  # force to be in -180 to 180 degrees
             query += 180  # shift back to 0 to 360 degrees
 
@@ -169,7 +169,7 @@ class LongitudeCoordinate(Coordinate):
 
     @classmethod
     def from_array(
-        cls, values: Float[Array, "dim"], is_spherical: bool = True, **interpolator_kwargs: Any
+        cls, values: Float[Array, "dim"], is_periodic: bool = True, **interpolator_kwargs: Any
     ) -> LongitudeCoordinate:
         """
         Create a LongitudeCoordinate object from an array of values.
@@ -181,8 +181,8 @@ class LongitudeCoordinate(Coordinate):
         ----------
         values : Float[Array, "dim"]
             An array of coordinate values.
-        is_spherical : bool, optional
-            Whether the mesh uses spherical coordinate, defaults to `True`.
+        is_periodic : bool, optional
+            Whether the dimension should be consired periodic, defaults to `True`.
         **interpolator_kwargs : Any
             Additional keyword arguments for the interpolator.
 
@@ -192,7 +192,7 @@ class LongitudeCoordinate(Coordinate):
             A [`pastax.gridded.LongitudeCoordinate`][] object containing the provided values and corresponding indices
             interpolator.
         """
-        if is_spherical:
+        if is_periodic:
             values = longitude_in_180_180_degrees(values)  # force to be in -180 to 180 degrees
             values += 180  # shift back to 0 to 360 degrees
             interpolator_kwargs["period"] = 360
@@ -200,4 +200,4 @@ class LongitudeCoordinate(Coordinate):
         interpolator_kwargs["method"] = "nearest"
         indices = ipx.Interpolator1D(values, jnp.arange(values.size), **interpolator_kwargs)
 
-        return cls(_values=values, indices=indices, is_spherical=is_spherical)
+        return cls(_values=values, indices=indices, is_periodic=is_periodic)

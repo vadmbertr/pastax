@@ -305,11 +305,11 @@ class Gridded(eqx.Module):
                 dend = ((dright[:, -1] - dcentered[:, -1] / 2) * 2)[:, None]
             return jnp.concat((dstart, dcentered, dend), axis=axis)
 
-        use_degrees = use_degrees & is_spherical_mesh  # if flat mesh, no reason to use degrees
+        use_degrees = use_degrees & is_spherical_mesh  # if not spherical mesh, no reason to use degrees
 
         time_coord = Coordinate.from_array(time, extrap=True)
         latitude_coord = Coordinate.from_array(latitude, extrap=True)
-        longitude_coord = LongitudeCoordinate.from_array(longitude, is_spherical=is_spherical_mesh, extrap=True)
+        longitude_coord = LongitudeCoordinate.from_array(longitude, is_periodic=is_spherical_mesh, extrap=True)
 
         # compute grid spacings and cells area
         dlat = jnp.diff(latitude)
