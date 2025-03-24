@@ -1,10 +1,9 @@
-from typing import Callable
+from typing import Any, Callable, Literal
 
 import equinox as eqx
-import jax.numpy as jnp
-from jaxtyping import Array, Float, PyTree, Scalar
+from jaxtyping import Array, Int, Key, PyTree, Real
 
-from ..trajectory import Displacement, Location, Trajectory, TrajectoryEnsemble
+from ..trajectory import Location, Trajectory, TrajectoryEnsemble
 from ..utils._unit import UNIT
 
 
@@ -31,49 +30,17 @@ class BaseSimulator(eqx.Module):
 
     id: str | None = None
 
-    @staticmethod
-    def get_domain(  # TODO: to be removed?
-        x0: Location, ts: Float[Array, "time"]
-    ) -> tuple[Float[Array, ""], Float[Array, ""], Location, Location]:
-        """
-        Computes the minimum and maximum time and location bounds of the simulation space-time domain.
-
-        Parameters
-        ----------
-        x0 : Location
-            The initial [`pastax.trajectory.Location`][].
-        ts : Float[Array, "time"]
-            The time steps for the simulation.
-
-        Returns
-        -------
-        tuple[Float[Array, ""], Float[Array, ""], Location, Location]
-            The minimum time, maximum time, minimum location, and maximum location bounds.
-        """
-        one_day = 60 * 60 * 24
-        min_time = ts[0] - one_day
-        max_time = ts[-1] + one_day  # this way we can always interpolate in time
-        n_days = (max_time - min_time) / one_day
-
-        max_travel_distance = 0.5  # in °/day ; inferred from data
-        max_travel_distance *= n_days - 2  # in °
-        max_travel_distance = Displacement(jnp.full(2, max_travel_distance, dtype=float), unit=UNIT["°"])
-
-        min_corner = Location(x0.value - max_travel_distance)
-        max_corner = Location(x0.value + max_travel_distance)
-
-        return min_time, max_time, min_corner, max_corner
-
     def __call__(
         self,
-        dynamics: Callable[[int, Float[Array, "2"], PyTree], PyTree],
+        dynamics: Callable[[Real[Any, ""], PyTree, PyTree], PyTree],
         args: PyTree,
         x0: Location,
-        ts: Float[Array, "time"],
-        dt0: Float[Scalar, ""],
-        solver: Callable | None = None,
-        n_samples: int | None = None,
-        key: Array | None = None,
+        ts: Real[Array, "time"],
+        dt0: Real[Any, ""],
+        solver: Callable,
+        ad: Literal["forward", "reverse", None] = "forward",
+        n_samples: Int[Any, ""] | None = None,
+        key: Key[Array, ""] | None = None,
     ) -> Trajectory | TrajectoryEnsemble:
         r"""
         Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][]
@@ -85,7 +52,7 @@ class BaseSimulator(eqx.Module):
 
         Parameters
         ----------
-        dynamics: Callable[[int, Float[Array, "2"], PyTree], PyTree]
+        dynamics: Callable[[Real[Any, ""], PyTree, PyTree], PyTree]
             A Callable (including an [`equinox.Module`][] with a __call__ method) describing the dynamics of the
             right-hand-side of the solved Differential Equation.
 
@@ -107,16 +74,18 @@ class BaseSimulator(eqx.Module):
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].
-        ts : Float[Array, "time"]
+        ts : Real[Any, "time"]
             The time steps for the simulation outputs (including t0).
-        dt0 : Float[Scalar, ""], optional
+        dt0 : Real[Any, ""]
             The initial time step of the solver, in seconds.
-        solver : Callable | None, optional
-            The solver to use for the simulation, defaults to None.
-        n_samples : int | None, optional
-            The number of samples to generate, default to None, meaning a single [`pastax.trajectory.Trajectory`][].
-        key : Array | None, optional
-            The random key for sampling, defaults to None.
+        solver : Callable
+            The solver to use for the simulation.
+        ad: Literal["forward", "reverse", None], optional
+            The mode used for differentiating through the solve, defaults to "forward".
+        n_samples : Int[Any, ""] | None, optional
+            The number of samples to generate, defaults to None (not used for deterministic simulators).
+        key : Key[Array, ""] | None, optional
+            The random key for sampling, defaults to None (not used for deterministic simulators).
 
         Returns
         -------

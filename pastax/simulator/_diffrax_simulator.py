@@ -4,9 +4,11 @@ from typing import Any, Callable, Literal
 
 import diffrax as dfx
 import jax
+import jax.interpreters
+import jax.interpreters.partial_eval
 import jax.numpy as jnp
 import jax.random as jrd
-from jaxtyping import Array, Float, Key, PyTree, Real
+from jaxtyping import Array, Float, Int, Key, PyTree, Real
 
 from ..trajectory import Location, Trajectory, TrajectoryEnsemble
 from ._base_simulator import BaseSimulator
@@ -26,16 +28,37 @@ class DiffraxSimulator(BaseSimulator):
         using a given [`diffrax.AbstractSolver`][].
     """
 
+    @staticmethod
+    def _get_diffeqsolve_args(ts, dt0, ad):
+        t0 = ts[0]
+        t1 = ts[-1]
+
+        if not isinstance(ts, jax.interpreters.partial_eval.DynamicJaxprTracer):
+            steps = jnp.arange(t0, t1 + dt0, dt0)
+            stepsize_controller = dfx.StepTo(ts=steps)
+            max_steps = steps.size
+            dt0 = None
+        else:
+            stepsize_controller = dfx.ConstantStepSize()
+            max_steps = None
+
+        if ad == "reverse":
+            adjoint = dfx.RecursiveCheckpointAdjoint()
+        else:
+            adjoint = dfx.ForwardMode()
+
+        return t0, t1, dt0, stepsize_controller, adjoint, max_steps
+
     def __call__(
         self,
-        dynamics: Callable[[Real[Array, ""], Float[Array, "2"], PyTree], PyTree],
+        dynamics: Callable[[Real[Any, ""], PyTree, PyTree], PyTree],
         args: PyTree,
         x0: Location,
-        ts: Float[Any, "time"],
+        ts: Real[Any, "time"],
         dt0: Real[Any, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
-        ad: Literal["forward", "reverse"] = "forward",
-        n_samples: int | None = None,
+        ad: Literal["forward", "reverse", None] = "forward",
+        n_samples: Int[Any, ""] | None = None,
         key: Key[Array, ""] | None = None,
     ) -> Trajectory | TrajectoryEnsemble:
         r"""
@@ -46,7 +69,7 @@ class DiffraxSimulator(BaseSimulator):
 
         Parameters
         ----------
-        dynamics: Callable[[Real[Array, ""], Float[Array, "2"], PyTree], PyTree]
+        dynamics: Callable[[Real[Any, ""], PyTree, PyTree], PyTree]
             A Callable (including an [`equinox.Module`][] with a __call__ method) describing the dynamics of the
             right-hand-side of the solved Differential Equation.
 
@@ -84,18 +107,18 @@ class DiffraxSimulator(BaseSimulator):
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].
-        ts : Float[Any, "time"]
+        ts : Real[Any, "time"]
             The time steps for the simulation outputs.
         dt0 : Real[Any, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
-        ad: Literal["forward", "reverse"], optional
+        ad: Literal["forward", "reverse", None], optional
             The mode used for differentiating through the solve, defaults to "forward".
-        n_samples : int | None, optional
-            The number of samples to generate, defaults to None, meaning a single trajectory.
+        n_samples : Int[Any, ""] | None, optional
+            The number of samples to generate, defaults to None (not used for deterministic simulators).
         key : Key[Array, ""] | None, optional
-            The random key for sampling, defaults to None, useless for the deterministic simulator.
+            The random key for sampling, defaults to None (not used for deterministic simulators).
 
         Returns
         -------
@@ -109,14 +132,6 @@ class DiffraxSimulator(BaseSimulator):
             If the method is not implemented by the subclass.
         """
         raise NotImplementedError
-
-    @staticmethod
-    def _get_adjoint(ad):
-        if ad == "forward":
-            adjoint = dfx.ForwardMode()
-        else:
-            adjoint = dfx.RecursiveCheckpointAdjoint()
-        return adjoint
 
 
 class DeterministicSimulator(DiffraxSimulator):
@@ -133,14 +148,14 @@ class DeterministicSimulator(DiffraxSimulator):
 
     def __call__(
         self,
-        dynamics: Callable[[Real[Array, ""], Float[Array, "2"], PyTree], PyTree],
+        dynamics: Callable[[Real[Any, ""], PyTree, PyTree], PyTree],
         args: PyTree,
         x0: Location,
-        ts: Float[Any, "time"],
+        ts: Real[Any, "time"],
         dt0: Real[Any, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
-        ad: Literal["forward", "reverse"] = "forward",
-        n_samples: int | None = None,
+        ad: Literal["forward", "reverse", None] = "forward",
+        n_samples: Int[Any, ""] | None = None,
         key: Key[Array, ""] | None = None,
     ) -> Trajectory:
         r"""
@@ -150,7 +165,7 @@ class DeterministicSimulator(DiffraxSimulator):
 
         Parameters
         ----------
-        dynamics : Callable[[Real[Array, ""], Float[Array, "2"], PyTree], PyTree]
+        dynamics : Callable[[Real[Any, ""], PyTree, PyTree], PyTree]
             A Callable (including an [`equinox.Module`][] with a `__call__` method) describing the dynamics of the
             right-hand-side of the solved Ordinary Differential Equation.
 
@@ -168,9 +183,9 @@ class DeterministicSimulator(DiffraxSimulator):
 
             Parameters
             ----------
-            t : Real[Array, ""]
+            t : Real[Any, ""]
                 The current time.
-            y : Float[Array, "2"]
+            y : PyTree
                 The current state (latitude and longitude in degrees).
             args : PyTree
                 The PyTree of argument(s) required to compute the `dynamics`.
@@ -188,15 +203,15 @@ class DeterministicSimulator(DiffraxSimulator):
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].
-        ts : Float[Any, "time"]
+        ts : Real[Any, "time"]
             The time steps for the simulation outputs.
         dt0 : Real[Any, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
-        ad: Literal["forward", "reverse"], optional
+        ad: Literal["forward", "reverse", None], optional
             The mode used for differentiating through the solve, defaults to "forward".
-        n_samples : int | None, optional
+        n_samples : Int[Any, ""] | None, optional
             The number of samples to generate, defaults to None, not use with deterministic simulators.
         key : Key[Array, ""] | None, optional
             The random key for sampling, default to None, not use with deterministic simulators.
@@ -206,20 +221,20 @@ class DeterministicSimulator(DiffraxSimulator):
         Trajectory
             The simulated [`pastax.trajectory.Trajectory`][], including the initial conditions (x0, t0).
         """
-        t0 = ts[0]
-        t1 = ts[-1]
+        t0, t1, dt0, stepsize_controller, adjoint, max_steps = self._get_diffeqsolve_args(ts, dt0, ad)
 
         ys = dfx.diffeqsolve(
-            dfx.ODETerm(dynamics),  # type: ignore
+            dfx.ODETerm(dynamics),
             solver,
             t0=t0,
             t1=t1,
-            dt0=None,
+            dt0=dt0,
             y0=x0.value,
             args=args,
             saveat=dfx.SaveAt(ts=ts),
-            stepsize_controller=dfx.StepTo(ts=jnp.arange(t0, t1 + dt0, dt0)),
-            adjoint=self._get_adjoint(ad),
+            stepsize_controller=stepsize_controller,
+            adjoint=adjoint,
+            max_steps=max_steps,
         ).ys
 
         return Trajectory.from_array(ys, ts, unit=x0.unit)  # type: ignore
@@ -231,12 +246,12 @@ class SDEControl(dfx.AbstractPath):
 
     Attributes
     ----------
-    t0 : Real[Array, ""]
+    t0 : Real[Any, ""]
         The initial time.
-    t1 : Real[Array, ""]
+    t1 : Real[Any, ""]
         The final time.
-    brownian_motion : dfx.VirtualBrownianTree
-        The [`diffrax.VirtualBrownianTree`][] used in the Stochastic Differential Equation.
+    brownian_motion : dfx.VirtualBrownianTree | dfx.UnsafeBrownianPath
+        The [`diffrax.AbstractBrownianPath`][] used in the Stochastic Differential Equation.
 
     Methods
     -------
@@ -244,14 +259,14 @@ class SDEControl(dfx.AbstractPath):
         Evaluates the path at the given time points.
     """
 
-    t0: Real[Array, ""]
-    t1: Real[Array, ""]
-    brownian_motion: dfx.VirtualBrownianTree
+    t0: Real[Any, ""]
+    t1: Real[Any, ""]
+    brownian_motion: dfx.VirtualBrownianTree | dfx.UnsafeBrownianPath
 
     def evaluate(
         self,
-        t0: Real[Array, ""],
-        t1: Real[Array, ""] | None = None,
+        t0: Real[Any, ""],
+        t1: Real[Any, ""] | None = None,
         left: bool = True,
         use_levy: bool = False,
     ) -> tuple[Real[Any, ""], Float[Any, "x"]]:
@@ -260,9 +275,9 @@ class SDEControl(dfx.AbstractPath):
 
         Parameters
         ----------
-        t0 : Real[Array, ""]
+        t0 : Real[Any, ""]
             The initial time.
-        t1 : Real[Array, ""], optional
+        t1 : Real[Any, ""], optional
             The final time, defaults to None.
         left : bool, optional
             Whether to use the left limit, defaults to True.
@@ -271,7 +286,7 @@ class SDEControl(dfx.AbstractPath):
 
         Returns
         -------
-        (Real[Any, ""], Float[Array, "x+1"])
+        (Real[Any, ""], Float[Any, "x"])
             The evaluated control.
         """
         return t1 - t0, self.brownian_motion.evaluate(t0=t0, t1=t1, left=left, use_levy=use_levy)
@@ -292,14 +307,14 @@ class StochasticSimulator(DiffraxSimulator):
 
     def __call__(
         self,
-        dynamics: Callable[[Real[Array, ""], Float[Array, "2"], PyTree], PyTree],
+        dynamics: Callable[[Real[Any, ""], PyTree, PyTree], PyTree],
         args: PyTree,
         x0: Location,
         ts: Real[Any, "time"],
         dt0: Real[Any, ""],
         solver: dfx.AbstractSolver = dfx.Heun(),
-        ad: Literal["forward", "reverse"] = "forward",
-        n_samples: int = 100,
+        ad: Literal["forward", "reverse", None] = "forward",
+        n_samples: Int[Any, ""] = 100,
         key: Key[Array, ""] = jrd.key(0),
     ) -> TrajectoryEnsemble:
         r"""
@@ -308,7 +323,7 @@ class StochasticSimulator(DiffraxSimulator):
 
         Parameters
         ----------
-        dynamics : Callable[[Real[Array, ""], Float[Array, "2"], PyTree], PyTree]
+        dynamics : Callable[[Real[Any, ""], PyTree, PyTree], PyTree]
             A Callable (including an [`equinox.Module`][] with a `__call__` method) describing the dynamics of the
             right-hand-side of the solved Stochastic Differential Equation.
 
@@ -324,9 +339,9 @@ class StochasticSimulator(DiffraxSimulator):
 
             Parameters
             ----------
-            t : Real[Array, ""]
+            t : Real[Any, ""]
                 The current time.
-            y : Float[Array, "2"]
+            y : PyTree
                 The current state (latitude and longitude in degrees).
             args : PyTree
                 The PyTree of argument(s) required to compute the `dynamics`.
@@ -344,15 +359,16 @@ class StochasticSimulator(DiffraxSimulator):
             (SSC, SSH, SST, etc...).
         x0 : Location
             The initial [`pastax.trajectory.Location`][].
-        ts : Float[Array, "time"]
+        ts : Real[Any, "time"]
             The time steps for the simulation outputs (including t0).
-        dt0 : Float[Any, ""]
+        dt0 : Real[Any, ""]
             The initial time step of the solver, in seconds.
         solver : dfx.AbstractSolver, optional
             The [`diffrax.AbstractSolver`][] to use for the simulation, defaults to [`diffrax.Heun`][].
-        ad: Literal["forward", "reverse"], optional
+        ad: Literal["forward", "reverse", None], optional
             The mode used for differentiating through the solve, defaults to "forward".
-        n_samples : int, optional
+            If automatic differentiation is not needed, passing `None` can allow for faster forward simulations.
+        n_samples : Int[Any, ""], optional
             The number of samples to generate, defaults to `100`.
         key : Key[Array, ""], optional
             The random key for sampling, defaults to `jrd.key(0)`.
@@ -362,29 +378,32 @@ class StochasticSimulator(DiffraxSimulator):
         TrajectoryEnsemble
             The simulated [`pastax.trajectory.TrajectoryEnsemble`][].
         """
-        t0 = ts[0]
-        t1 = ts[-1]
-        adjoint = self._get_adjoint(ad)
+        t0, t1, _dt0, stepsize_controller, adjoint, max_steps = self._get_diffeqsolve_args(ts, dt0, ad)
+
+        if ad is None:
+            brownian_path = lambda k: dfx.UnsafeBrownianPath(shape=(2,), key=k)
+        else:
+            brownian_path = lambda k: dfx.VirtualBrownianTree(t0, t1, tol=dt0, shape=(2,), key=k)
 
         keys = jrd.split(key, n_samples)
 
         @jax.vmap
         def solve(subkey: Array) -> Float[Array, "time 2"]:
-            brownian_motion = dfx.VirtualBrownianTree(t0, t1, tol=dt0, shape=(2,), key=subkey)
-            sde_control = SDEControl(t0=t0, t1=t1, brownian_motion=brownian_motion)
-            sde_term = dfx.ControlTerm(dynamics, sde_control)  # type: ignore
+            sde_control = SDEControl(t0=t0, t1=t1, brownian_motion=brownian_path(subkey))
+            sde_term = dfx.ControlTerm(dynamics, sde_control)
 
             ys = dfx.diffeqsolve(
                 sde_term,
                 solver,
                 t0=t0,
                 t1=t1,
-                dt0=None,
+                dt0=_dt0,
                 y0=x0.value,
                 args=args,
                 saveat=dfx.SaveAt(ts=ts),
+                stepsize_controller=stepsize_controller,
                 adjoint=adjoint,
-                stepsize_controller=dfx.StepTo(ts=jnp.arange(t0, t1 + dt0, dt0)),
+                max_steps=max_steps,
             ).ys
 
             return ys  # type: ignore
