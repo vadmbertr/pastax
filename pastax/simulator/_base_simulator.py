@@ -19,8 +19,6 @@ class BaseSimulator(eqx.Module):
 
     Methods
     -------
-    get_domain(x0, t0, ts)
-        Computes the minimum and maximum time and location bounds of the simulation space-time domain.
     __call__(dynamics, args, x0, ts, solver, dt0)
         Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][]
         following the prescribe drift `dynamics` and physical field(s) `args`,

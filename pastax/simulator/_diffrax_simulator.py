@@ -19,55 +19,86 @@ class DiffraxSimulator(BaseSimulator):
 
     Methods
     -------
-    __call__(dynamics, args, x0, ts, solver, dt0)
+    get_diffeqsolve_best_args(ts, dt0, n_steps, constant_step_size, save_at_steps, ad_mode)
+        Returns optimal argument values for the [`diffrax.diffeqsolve`][] function.
+    __call__(dynamics, args, x0, ts, solver, dt0, saveat, stepsize_controller, adjoint, max_steps)
         Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][]
         following the prescribe drift `dynamics` and physical field(s) `args`,
         from the initial [`pastax.trajectory.Location`][] `x0` at time steps (including t0) `ts`,
-        using a given [`diffrax.AbstractSolver`][].
+        using given [`diffrax.AbstractSolver`][], [`diffrax.SaveAt`][], [`diffrax.AbstractStepSizeController`][] and
+        [`diffrax.AbstractAdjoint`][].
     """
 
     @classmethod
-    def _get_diffeqsolve_best_args(
+    def get_diffeqsolve_best_args(
         cls,
         ts: Real[Any, "time"],
         dt0: Real[Any, ""],
-        constant_step_size: bool = True,
         n_steps: Int[Any, ""] = None,
+        constant_step_size: bool = True,
+        save_at_steps: bool = False,
         ad_mode: Literal["forward", "reverse"] = "forward",
     ) -> tuple[
         Real[Any, ""],
         dfx.SaveAt,
-        dfx.StepsizeController,
-        dfx.Adjoint,
+        dfx.AbstractStepSizeController,
+        dfx.AbstractAdjoint,
         Int[Any, ""],
         Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath],
     ]:
+        """
+        Returns optimal argument values for the [`diffrax.diffeqsolve`][] function.
+
+        Significant speedups can be achieved by carefully selecting the arguments passed to [`diffrax.diffeqsolve`][],
+        which is then called internally by the `__call__` method.
+        This method applies general heuristics to determine optimal argument values based on a high-level description
+        of the problem, derived from its own input arguments.
+
+        Parameters
+        ----------
+        ts : Real[Any, "time"]
+            The time steps for the simulation outputs, including $t_0$, unit should be the same as for `dt0`.
+        dt0 : Real[Any, ""]
+            The initial time step of the solver, unit should be the same as for `ts`.
+        n_steps : Int[Any, ""], optional
+            The number of steps to be taken, defaults to `None`.
+        constant_step_size : bool, optional
+            Whether a constant step size is used, defaults to `True`.
+        save_at_steps : bool, optional
+            Whether the solution is to be saved at each integration step, defaults to `False`.
+        ad_mode : Literal["forward", "reverse"], optional
+            The mode for automatic differentiation, defaults to "forward".
+        """
         t0 = ts[0]
         t1 = ts[-1]
 
-        if constant_step_size and n_steps is not None:
-            brownian_motion: Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] = (
-                lambda shape, key: PrecomputedBrownianMotion(n_steps=n_steps, dt=dt0, shape=shape, key=key)
-            )
-        else:
-            brownian_motion: Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] = (
-                lambda shape, key: dfx.VirtualBrownianTree(t0, t1, tol=dt0, shape=shape, key=key)
-            )
-
         if n_steps is not None:
-            dt0 = None
-            saveat = dfx.SaveAt(steps=True)
+            dt0_ = None
             stepsize_controller = dfx.StepTo(ts=jnp.linspace(t0, t1, n_steps + 1))
         else:
-            saveat = dfx.SaveAt(ts=ts)
+            dt0_ = dt0
             stepsize_controller = dfx.ConstantStepSize()
+
+        if save_at_steps:
+            saveat = dfx.SaveAt(steps=True)
+        else:
+            saveat = dfx.SaveAt(ts=ts)
 
         if ad_mode == "reverse":
             adjoint = dfx.RecursiveCheckpointAdjoint()
         else:
             adjoint = dfx.ForwardMode()
 
-        return dt0, saveat, stepsize_controller, adjoint, n_steps, brownian_motion
+        if constant_step_size and n_steps is not None:
+            brownian_motion: Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] = (
+                lambda shape, key: PrecomputedBrownianMotion(t0=t0, n_steps=n_steps, dt=dt0, shape=shape, key=key)
+            )
+        else:
+            brownian_motion: Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] = (
+                lambda shape, key: dfx.VirtualBrownianTree(t0, t1, tol=dt0, shape=shape, key=key)
+            )
+
+        return dt0_, saveat, stepsize_controller, adjoint, n_steps, brownian_motion
 
     def __call__(
         self,
@@ -78,15 +109,16 @@ class DiffraxSimulator(BaseSimulator):
         solver: dfx.AbstractSolver = dfx.Heun(),
         dt0: Real[Any, ""] = None,
         saveat: dfx.SaveAt | None = None,
-        stepsize_controller: dfx.StepsizeController = dfx.ConstantStepSize(),
-        adjoint: dfx.Adjoint = dfx.ForwardMode(),
+        stepsize_controller: dfx.AbstractStepSizeController = dfx.ConstantStepSize(),
+        adjoint: dfx.AbstractAdjoint = dfx.ForwardMode(),
         max_steps: Int[Any, ""] = 4096,
     ) -> Trajectory | TrajectoryEnsemble:
         r"""
         Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][]
         following the prescribe drift `dynamics` and physical field(s) `args`,
         from the initial [`pastax.trajectory.Location`][] `x0` at time steps (including t0) `ts`,
-        using a given [`diffrax.AbstractSolver`][].
+        using given [`diffrax.AbstractSolver`][], [`diffrax.SaveAt`][], [`diffrax.AbstractStepSizeController`][] and
+        [`diffrax.AbstractAdjoint`][].
 
         Parameters
         ----------
@@ -136,11 +168,12 @@ class DiffraxSimulator(BaseSimulator):
             The initial time step of the solver, unit should be the same as for `ts`, defaults to `None`.
         saveat : dfx.SaveAt, optional
             The [`diffrax.SaveAt`][] object to use for saving the solution, defaults to `SaveAt(ts=ts)`.
-        stepsize_controller : dfx.StepsizeController, optional
-            The [`diffrax.StepsizeController`][] to use for controlling the stepsize,
+        stepsize_controller : dfx.AbstractStepSizeController, optional
+            The [`diffrax.AbstractStepSizeController`][] to use for controlling the stepsize,
             defaults to [`diffrax.ConstantStepSize`][].
-        adjoint : dfx.Adjoint, optional
-            The [`diffrax.Adjoint`][] object to use for the adjoint method, defaults to [`diffrax.ForwardMode`][].
+        adjoint : dfx.AbstractAdjoint, optional
+            The [`diffrax.AbstractAdjoint`][] object to use for the adjoint method,
+            defaults to [`diffrax.ForwardMode`][].
             [`diffrax.ForwardMode`][] should be used when computing the gradient in forward automtic differentiation
             mode with respect to few (<50) parameters, while [`diffrax.RecursiveCheckpointAdjoint`][] should be used
             when computing the gradient in reverse automatic differentiation mode with respect to many (>50) parameters.
@@ -167,10 +200,11 @@ class DeterministicSimulator(DiffraxSimulator):
 
     Methods
     -------
-    __call__(dynamics, args, x0, ts, dt0, solver, n_samples, key)
+    __call__(dynamics, args, x0, ts, solver, dt0, saveat, stepsize_controller, adjoint, max_steps)
         Simulates a [`pastax.trajectory.Trajectory`][] following the prescribe drift `dynamics`
         and physical field(s) `args`, from the initial [`pastax.trajectory.Location`][] `x0`
-        at time steps (including t0) `ts`, using a given [`diffrax.AbstractSolver`][].
+        at time steps (including t0) `ts`, using given [`diffrax.AbstractSolver`][], [`diffrax.SaveAt`][],
+        [`diffrax.AbstractStepSizeController`][] and [`diffrax.AbstractAdjoint`][].
     """
 
     def __call__(
@@ -182,14 +216,15 @@ class DeterministicSimulator(DiffraxSimulator):
         solver: dfx.AbstractSolver = dfx.Heun(),
         dt0: Real[Any, ""] = None,
         saveat: dfx.SaveAt | None = None,
-        stepsize_controller: dfx.StepsizeController = dfx.ConstantStepSize(),
-        adjoint: dfx.Adjoint = dfx.ForwardMode(),
+        stepsize_controller: dfx.AbstractStepSizeController = dfx.ConstantStepSize(),
+        adjoint: dfx.AbstractAdjoint = dfx.ForwardMode(),
         max_steps: Int[Any, ""] = 4096,
     ) -> Trajectory:
         r"""
         Simulates a [`pastax.trajectory.Trajectory`][] following the prescribe drift `dynamics`
         and physical field(s) `args`, from the initial [`pastax.trajectory.Location`][] `x0`
-        at time steps (including t0) `ts`, using a given [`diffrax.AbstractSolver`][].
+        at time steps (including t0) `ts`, using given [`diffrax.AbstractSolver`][], [`diffrax.SaveAt`][],
+        [`diffrax.AbstractStepSizeController`][] and [`diffrax.AbstractAdjoint`][].
 
         Parameters
         ----------
@@ -239,11 +274,12 @@ class DeterministicSimulator(DiffraxSimulator):
             The initial time step of the solver, unit should be the same as for `ts`, defaults to `None`.
         saveat : dfx.SaveAt, optional
             The [`diffrax.SaveAt`][] object to use for saving the solution, defaults to `SaveAt(ts=ts)`.
-        stepsize_controller : dfx.StepsizeController, optional
-            The [`diffrax.StepsizeController`][] to use for controlling the stepsize,
+        stepsize_controller : dfx.AbstractStepSizeController, optional
+            The [`diffrax.AbstractStepSizeController`][] to use for controlling the stepsize,
             defaults to [`diffrax.ConstantStepSize`][].
-        adjoint : dfx.Adjoint, optional
-            The [`diffrax.Adjoint`][] object to use for the adjoint method, defaults to [`diffrax.ForwardMode`][].
+        adjoint : dfx.AbstractAdjoint, optional
+            The [`diffrax.AbstractAdjoint`][] object to use for the adjoint method,
+            defaults to [`diffrax.ForwardMode`][].
             [`diffrax.ForwardMode`][] should be used when computing the gradient in forward automtic differentiation
             mode with respect to few (<50) parameters, while [`diffrax.RecursiveCheckpointAdjoint`][] should be used
             when computing the gradient in reverse automatic differentiation mode with respect to many (>50) parameters.
@@ -285,7 +321,7 @@ class PrecomputedBrownianMotion(dfx.AbstractBrownianPath):
 
     Attributes
     ----------
-    dWs : Float[Any, "nt x"]
+    dWs : Float[Any, "n_steps x"]
         The precomputed Brownian increments.
     counter : int
         The current index for the Brownian increments.
@@ -296,22 +332,34 @@ class PrecomputedBrownianMotion(dfx.AbstractBrownianPath):
         Returns the next Brownian increment.
     """
 
-    dWs: Float[Any, "nt x"]
-    counter: int = 0
+    t0: Real[Any, ""]
+    dt: Real[Any, ""]
+    dWs: Float[Any, "n_steps x"]
 
     def __init__(
         self,
+        t0: Real[Any, ""],
         n_steps: Real[Any, ""],
         dt: Real[Any, ""],
         shape: tuple[Real[Any, ""], ...],
         key: Key[Array, ""],
     ):
+        self.t0 = t0
+        self.dt = dt
         self.dWs = jrd.normal(key, (n_steps, *shape)) * jnp.sqrt(dt)
+
+    @property
+    def t1(self):
+        return jnp.inf
+
+    @property
+    def levy_area(self):
+        return dfx.BrownianIncrement
 
     def evaluate(
         self,
         t0: Real[Any, ""],
-        t1: Real[Any, ""],
+        t1: Real[Any, ""] = None,
         left: bool = True,
         use_levy: bool = False,
     ) -> tuple[Real[Any, ""], Float[Any, "x"]]:
@@ -323,20 +371,19 @@ class PrecomputedBrownianMotion(dfx.AbstractBrownianPath):
         ----------
         t0 : Real[Any, ""]
             The initial time.
-        t1 : Real[Any, ""]
-            The final time.
+        t1 : Real[Any, ""], optional
+            The final time, defaults to `None`, not used.
         left : bool, optional
-            Whether to use the left limit, defaults to True.
+            Whether to use the left limit, defaults to `True`, not used.
         use_levy : bool, optional
-            Whether to use the Levy area, defaults to False.
+            Whether to use the Levy area, defaults to `False`, not used.
 
         Returns
         -------
         Float[Any, "x"]
             The Brownian increment.
         """
-        dW = self.dWs[self.counter]
-        self.counter += 1
+        dW = self.dWs[jnp.array((t0 - self.t0) // self.dt, int)]
         return dW
 
 
@@ -398,11 +445,12 @@ class StochasticSimulator(DiffraxSimulator):
 
     Methods
     -------
-    __call__(dynamics, args, x0, ts, dt0, solver, n_samples, key)
+    __call__(dynamics, args, x0, ts, solver, dt0, saveat, stepsize_controller, adjoint, max_steps, n_samples, key, brownian_motion)
         Simulates a [`pastax.trajectory.TrajectoryEnsemble`][] of `n_samples` [`pastax.trajectory.Trajectory`][]
         following the prescribe drift `dynamics` and physical field(s) `args`,
         from the initial [`pastax.trajectory.Location`][] `x0` at time steps (including t0) `ts`,
-        using a given [`diffrax.AbstractSolver`][].
+        using given [`diffrax.AbstractSolver`][], [`diffrax.SaveAt`][], [`diffrax.AbstractStepSizeController`][],
+        [`diffrax.AbstractAdjoint`][] and [`diffrax.AbstractBrownianPath`][].
     """
 
     def __call__(
@@ -414,16 +462,19 @@ class StochasticSimulator(DiffraxSimulator):
         solver: dfx.AbstractSolver = dfx.Heun(),
         dt0: Real[Any, ""] = None,
         saveat: dfx.SaveAt | None = None,
-        stepsize_controller: dfx.StepsizeController = dfx.ConstantStepSize(),
-        adjoint: dfx.Adjoint = dfx.ForwardMode(),
+        stepsize_controller: dfx.AbstractStepSizeController = dfx.ConstantStepSize(),
+        adjoint: dfx.AbstractAdjoint = dfx.ForwardMode(),
         max_steps: Int[Any, ""] = 4096,
         n_samples: Int[Any, ""] = 100,
         key: Key[Array, ""] = jrd.key(0),
-        brownian_path: Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] | None = None,
+        brownian_motion: Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] | None = None,
     ) -> TrajectoryEnsemble:
         r"""
-        Simulates a [`pastax.trajectory.TrajectoryEnsemble`][] based on the initial [`pastax.trajectory.Location`][]
-        and time steps (including t0).
+        Simulates a [`pastax.trajectory.TrajectoryEnsemble`][] of `n_samples` [`pastax.trajectory.Trajectory`][]
+        following the prescribe drift `dynamics` and physical field(s) `args`,
+        from the initial [`pastax.trajectory.Location`][] `x0` at time steps (including t0) `ts`,
+        using given [`diffrax.AbstractSolver`][], [`diffrax.SaveAt`][], [`diffrax.AbstractStepSizeController`][],
+        [`diffrax.AbstractAdjoint`][] and [`diffrax.AbstractBrownianPath`][].
 
         Parameters
         ----------
@@ -471,11 +522,11 @@ class StochasticSimulator(DiffraxSimulator):
             The initial time step of the solver, unit should be the same as for `ts`, defaults to `None`.
         saveat : dfx.SaveAt, optional
             The [`diffrax.SaveAt`][] object to use for saving the solution, defaults to `SaveAt(ts=ts)`.
-        stepsize_controller : dfx.StepsizeController, optional
-            The [`diffrax.StepsizeController`][] to use for controlling the stepsize,
+        stepsize_controller : dfx.AbstractStepSizeController, optional
+            The [`diffrax.AbstractStepSizeController`][] to use for controlling the stepsize,
             defaults to [`diffrax.ConstantStepSize`][].
-        adjoint : dfx.Adjoint, optional
-            The [`diffrax.Adjoint`][] object to use for the adjoint method, defaults to [`diffrax.ForwardMode`][].
+        adjoint : dfx.AbstractAdjoint, optional
+            The [`diffrax.AbstractAdjoint`][] object to use for the adjoint method, defaults to [`diffrax.ForwardMode`][].
             [`diffrax.ForwardMode`][] should be used when computing the gradient in forward automtic differentiation
             mode with respect to few (<50) parameters, while [`diffrax.RecursiveCheckpointAdjoint`][] should be used
             when computing the gradient in reverse automatic differentiation mode with respect to many (>50) parameters.
@@ -485,7 +536,7 @@ class StochasticSimulator(DiffraxSimulator):
             The number of samples to generate, defaults to `100`.
         key : Key[Array, ""], optional
             The random key for sampling, defaults to `jrd.key(0)`.
-        brownian_path : Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] | None, optional
+        brownian_motion : Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] | None, optional
             The [`diffrax.AbstractBrownianPath`][] to use for the simulation, defaults to `None`.
 
         Returns
@@ -498,14 +549,14 @@ class StochasticSimulator(DiffraxSimulator):
         if saveat is None:
             saveat = dfx.SaveAt(ts=ts)
 
-        if brownian_path is None:
-            brownian_path = lambda shape, key: dfx.VirtualBrownianTree(t0, t1, tol=dt0, shape=shape, key=key)
+        if brownian_motion is None:
+            brownian_motion = lambda shape, key: dfx.VirtualBrownianTree(t0, t1, tol=dt0, shape=shape, key=key)
 
         keys = jrd.split(key, n_samples)
 
         @jax.vmap
         def solve(subkey: Array) -> Float[Array, "time 2"]:
-            sde_control = SDEControl(t0=t0, t1=t1, brownian_motion=brownian_path((2,), subkey))
+            sde_control = SDEControl(t0=t0, t1=t1, brownian_motion=brownian_motion((2,), subkey))
             sde_term = dfx.ControlTerm(dynamics, sde_control)
 
             ys = dfx.diffeqsolve(
