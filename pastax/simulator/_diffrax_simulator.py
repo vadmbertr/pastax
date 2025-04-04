@@ -537,7 +537,20 @@ class StochasticSimulator(DiffraxSimulator):
         key : Key[Array, ""], optional
             The random key for sampling, defaults to `jrd.key(0)`.
         brownian_motion : Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] | None, optional
-            The [`diffrax.AbstractBrownianPath`][] to use for the simulation, defaults to `None`.
+            A Callable returning the [`diffrax.AbstractBrownianPath`][] to use for the simulation of the Brownian motion, defaults to `None`.
+            If `None`, a [`diffrax.VirtualBrownianTree`][] is used.
+
+            Parameters
+            ----------
+            shape : tuple[int, ...]
+                The shape of the Brownian motion.
+            key : Key[Array, ""]
+                The random key for sampling.
+
+            Returns
+            -------
+            dfx.AbstractBrownianPath
+                The [`diffrax.AbstractBrownianPath`][] object.
 
         Returns
         -------
