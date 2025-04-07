@@ -323,8 +323,12 @@ class PrecomputedBrownianMotion(dfx.AbstractBrownianPath):
     ----------
     dWs : Float[Any, "n_steps x"]
         The precomputed Brownian increments.
-    counter : int
-        The current index for the Brownian increments.
+    t0 : Real[Any, ""]
+        The "real" or "observed" initial time, not to be confused with the initial time of an integration step period.
+    dt : Real[Any, ""]
+        The constant time step for the Brownian increments.
+    dWs : Float[Any, "n_steps x"]
+        The precomputed Brownian increments.
 
     Methods
     -------
