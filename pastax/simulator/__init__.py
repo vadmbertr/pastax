@@ -8,14 +8,7 @@ from ._diffrax_simulator import (
     DiffraxSimulator,
     DeterministicSimulator,
     StochasticSimulator,
-    SDEControl,
 )
 
 
-__all__ = [
-    "BaseSimulator",
-    "DiffraxSimulator",
-    "DeterministicSimulator",
-    "StochasticSimulator",
-    "SDEControl",
-]
+__all__ = ["BaseSimulator", "DiffraxSimulator", "DeterministicSimulator", "StochasticSimulator"]
