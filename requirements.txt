@@ -1,7 +1,7 @@
 cartopy
 cmocean
 diffrax>=0.7.0
-equinox>=0.12.1
+equinox
 interpax
 jax>=0.5.0
 jaxtyping
