@@ -1,9 +1,9 @@
 cartopy
 cmocean
-diffrax
-equinox
+diffrax>=0.7.0
+equinox>=0.12.1
 interpax
-jax
+jax>=0.5.0
 jaxtyping
 lineax
 matplotlib
