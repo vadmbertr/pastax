@@ -11,7 +11,7 @@ from jaxtyping import Array, Bool, Float, Int, Scalar
 
 from ..utils._unit import degrees_to_meters, meters_to_degrees
 from ._coordinate import Coordinate, LongitudeCoordinate
-from ._field import SpatialField, SpatioTemporalField
+from ._field import SpatioTemporalField
 
 
 class Gridded(eqx.Module):
@@ -30,8 +30,6 @@ class Gridded(eqx.Module):
         Array of latitudinal distances in meters.
     fields : dict[str, SpatioTemporalField]
         Dictionary of spatiotemporal fields.
-    is_masked : SpatialField
-        Spatial field used for masking (`True` means masked, `False` not masked).
     is_spherical_mesh: bool
         Boolean indicating whether the mesh uses spherical coordinates.
     interpolation_method: Literal["nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"]
@@ -66,7 +64,6 @@ class Gridded(eqx.Module):
     dy: Float[Array, "lat-1 lon"]
     cell_area: Float[Array, "lat lon"]
     fields: dict[str, SpatioTemporalField]
-    is_masked: SpatialField
     is_spherical_mesh: bool
     interpolation_method: Literal[
         "nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"
@@ -107,13 +104,10 @@ class Gridded(eqx.Module):
         dict[str, Bool[Array, "Nq ..."] | Float[Array, "Nq ..."] | Int[Array, "Nq ..."]]
             A dict of arrays containing the interpolated values for each field.
         """
-        mask = self.is_masked.interp(**coordinates)
-
         interpolated_fields = {}
         for field_name in fields:
             field = self.fields[field_name]
             interpolated_field = field.interp(**coordinates)
-            interpolated_field = jnp.where(mask, 0, interpolated_field)
             interpolated_fields[field_name] = interpolated_field
 
         return interpolated_fields
@@ -172,11 +166,7 @@ class Gridded(eqx.Module):
                 for field_name in fields
             )
 
-            is_masked_neighborhood = jax.lax.dynamic_slice(
-                self.is_masked.values, (from_lat_i, from_lon_i), (x_width, x_width)
-            )
-
-            return lon_neighborhood, fields_neighborhood, is_masked_neighborhood
+            return lon_neighborhood, fields_neighborhood
 
         def edge_cases():
             dx = jnp.linspace(-(x_width // 2), x_width // 2, x_width) * self.dx[lat_i, lon_i]
@@ -197,13 +187,9 @@ class Gridded(eqx.Module):
                 for field_name in fields
             )
 
-            is_masked_neighborhood = jax.lax.dynamic_slice_in_dim(self.is_masked.values, from_lat_i, x_width)[
-                ..., lon_indices
-            ]
+            return lon_neighborhood, fields_neighborhood
 
-            return lon_neighborhood, fields_neighborhood, is_masked_neighborhood
-
-        lon_neighborhood, fields_neighborhood, is_masked_neighborhood = jax.lax.cond(
+        lon_neighborhood, fields_neighborhood = jax.lax.cond(
             (self.is_spherical_mesh and (self.indices(longitude=self.coordinates["longitude"][-1] + self.dx[-1]) == 0))
             and ((from_lon_i < 0) or (from_lon_i + x_width > self.coordinates["longitude"].values.size)),
             edge_cases,
@@ -215,7 +201,6 @@ class Gridded(eqx.Module):
             t_neighborhood,
             lat_neighborhood,
             lon_neighborhood,
-            is_masked=is_masked_neighborhood,
             interpolation_method=self.interpolation_method,
             is_spherical_mesh=self.is_spherical_mesh,
             use_degrees=self.use_degrees,
@@ -254,7 +239,6 @@ class Gridded(eqx.Module):
         time: Int[Array, "time"],
         latitude: Float[Array, "lat"],
         longitude: Float[Array, "lon"],
-        is_masked: Bool[Array, "lat lon"] | None = None,
         interpolation_method: Literal[
             "nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"
         ] = "linear",
@@ -276,8 +260,6 @@ class Gridded(eqx.Module):
             A 1D array representing the latitude dimension.
         longitude : Float[Array, "lon"]
             A 1D array representing the longitude dimension.
-        is_masked : Bool[Array, "lat lon"], optional
-            2D array used for masking fields (`True` means masked, `False` not masked).
         interpolation_method : Literal["nearest", "linear", "cubic", "cubic2", "catmull-rom", "cardinal", "monotonic", "monotonic-0", "akima"], optional
             String indicating the interpolation method used when interpolating the fields, defaults to `"linear"`.
             For details, see [`interpax` documentation](https://interpax.readthedocs.io/en/latest/index.html).
@@ -337,24 +319,6 @@ class Gridded(eqx.Module):
         cell_dlon = compute_cell_dlatlon(dlon, axis=1)
         cell_area = cell_dlat * cell_dlon
 
-        # compute mask
-        if is_masked is None:
-            is_masked_arr = jnp.zeros((latitude.size, longitude.size), dtype=bool)
-            for field in fields.values():
-                _is_masked = jnp.isnan(field).sum(axis=0, dtype=bool)
-                is_masked_arr = jnp.logical_or(is_masked_arr, _is_masked)
-        else:
-            is_masked_arr = is_masked
-        is_masked_field = SpatialField.from_array(
-            is_masked_arr, latitude_coord.values, longitude_coord.values, interpolation_method="nearest"
-        )
-
-        # apply it
-        for field_name in fields:
-            field = fields[field_name]
-            field = jnp.where(is_masked_arr, 0, field)
-            fields[field_name] = field
-
         # if required, convert uv from m/s to °/s
         if use_degrees and is_uv_mps:
             vu = jnp.stack((fields["v"], fields["u"]), axis=-1)
@@ -392,7 +356,6 @@ class Gridded(eqx.Module):
             dx=dlon,
             dy=dlat,
             fields=fields_,
-            is_masked=is_masked_field,
             is_spherical_mesh=is_spherical_mesh,
             interpolation_method=interpolation_method,
             use_degrees=use_degrees,
