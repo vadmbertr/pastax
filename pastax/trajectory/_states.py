@@ -40,7 +40,7 @@ class Location(State):
     def __init__(
         self,
         value: Float[Any, "... 2"],
-        unit: dict[Unit, int | float] = UNIT["°"],
+        unit: dict[Unit, int | float] = unit_converter(UNIT["°"]),
         **_,
     ):
         """
@@ -54,6 +54,7 @@ class Location(State):
             The [`pastax.utils.Unit`][] of the location, defaults to [`pastax.utils.LatLonDegrees`][].
         """
         if unit == unit_converter(UNIT["°"]):
+            value = jnp.asarray(value)
             value = value.at[..., 1].set(longitude_in_180_180_degrees(value[..., 1]))
 
         super().__init__(value, unit=unit, name="Location in [latitude, longitude]")
