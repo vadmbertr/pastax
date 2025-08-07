@@ -9,7 +9,7 @@ from jaxtyping import Array, ArrayLike, Float, Real
 from ..utils._unit import compose_units, Unit
 
 
-def unit_converter(x: Unit | dict[Unit, int]) -> dict[Unit, int]:
+def unit_converter(x: Unit | dict[Unit, int | float]) -> dict[Unit, int | float]:
     """
     Converts a [`pastax.utils.Unit`][] to a dictionary with [`pastax.utils.Unit`][] as keys and their exponents as
     values.
@@ -21,7 +21,7 @@ def unit_converter(x: Unit | dict[Unit, int]) -> dict[Unit, int]:
 
     Returns
     -------
-    dict[Unit, int]
+    dict[Unit, int | float]
         A dictionary with [`pastax.utils.Unit`][] as keys and their exponents as values.
     """
     if isinstance(x, Unit):
@@ -68,11 +68,9 @@ class Unitful(eqx.Module):
     """
 
     _value: Real[Array, "..."] = eqx.field(converter=lambda x: jnp.asarray(x, dtype=float))
-    _unit: dict[Unit, Real[Any, ""]] = eqx.field(static=True, converter=unit_converter)
+    _unit: dict[Unit, int | float] = eqx.field(static=True, converter=unit_converter)
 
-    def __init__(
-        self, value: Real[Any, "..."] = jnp.asarray(jnp.nan, dtype=float), unit: dict[Unit, Real[Any, "..."]] = {}
-    ):
+    def __init__(self, value: Real[Any, "..."] = jnp.asarray(jnp.nan, dtype=float), unit: dict[Unit, int | float] = {}):
         """
         Initializes the [`pastax.utils.Unitful`][] with given value and unit.
 
@@ -99,7 +97,7 @@ class Unitful(eqx.Module):
         return self._value
 
     @property
-    def unit(self) -> dict[Unit, Real[Any, ""]]:
+    def unit(self) -> dict[Unit, int | float]:
         """
         Returns the unit of the quantity.
 
