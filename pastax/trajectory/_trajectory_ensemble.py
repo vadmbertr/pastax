@@ -298,6 +298,20 @@ class TrajectoryEnsemble(TimeseriesEnsemble):
         steps = self.map(lambda trajectory: trajectory.steps())  # type: ignore
         return TimeseriesEnsemble.from_array(steps.value, self.times.value, unit=steps.unit, name="steps")
 
+    def velocities(self) -> TimeseriesEnsemble:
+        """
+        Returns the velocities of the trajectories.
+
+        Returns
+        -------
+        TimeseriesEnsemble
+            The velocities of the trajectories.
+        """
+        velocities = self.map(lambda trajectory: trajectory.velocities())  # type: ignore
+        return TimeseriesEnsemble.from_array(
+            velocities.value, self.times.value, unit=velocities.unit, name="velocities"
+        )
+
     def to_xarray(self) -> xr.Dataset:
         """
         Converts the [`pastax.trajectory.TrajectoryEnsemble`][] to a `xarray.Dataset`.

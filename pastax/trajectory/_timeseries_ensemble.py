@@ -274,7 +274,7 @@ class TimeseriesEnsemble(Unitful):
             The result of applying the function to each [`pastax.trajectory.Timeseries`][].
         """
         in_axes = eqx.filter(self.members, False)
-        in_axes = eqx.tree_at(lambda x: x.states._value, in_axes, 0, is_leaf=lambda x: x is None)
+        in_axes = eqx.tree_at(lambda x: (x.states._value, x.times._value), in_axes, (0, 0), is_leaf=lambda x: x is None)
         res = eqx.filter_vmap(func, in_axes=(in_axes,))(self.members)
 
         unit = {}
