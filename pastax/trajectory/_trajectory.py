@@ -318,6 +318,24 @@ class Trajectory(Timeseries):
 
         return Timeseries.from_array(steps, self.times.value, UNIT["m"], name="Trajectory steps")
 
+    def velocities(self) -> Timeseries:
+        """
+        Returns the velocities of the trajectory.
+
+        Returns
+        -------
+        Timeseries
+            The velocities of the trajectory.
+        """
+        steps = self.steps()
+
+        times = self.times.value[1:] - self.times.value[:-1]
+        times = jnp.pad(times, (1, 0), constant_values=1e-4)  # adds a 1st small time step to avoid division by zero
+
+        velocities = steps.value / times
+
+        return Timeseries.from_array(velocities, self.times.value, UNIT["m/s"], name="Trajectory velocities")
+
     def to_xarray(self) -> xr.Dataset:
         """
         Converts the [`pastax.trajectory.Trajectory`][] to a `xarray.Dataset`.
