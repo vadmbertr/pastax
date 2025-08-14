@@ -4,7 +4,6 @@ import equinox as eqx
 from jaxtyping import Array, Int, Key, PyTree, Real
 
 from ..trajectory import Location, Trajectory, TrajectoryEnsemble
-from ..utils._unit import UNIT
 
 
 class BaseSimulator(eqx.Module):

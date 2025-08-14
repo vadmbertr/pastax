@@ -113,6 +113,7 @@ class DiffraxSimulator(BaseSimulator):
         stepsize_controller: dfx.AbstractStepSizeController = dfx.ConstantStepSize(),
         adjoint: dfx.AbstractAdjoint = dfx.ForwardMode(),
         max_steps: Int[Any, ""] = 4096,
+        throw: bool = False,
     ) -> Trajectory | TrajectoryEnsemble:
         r"""
         Simulates a [`pastax.trajectory.Trajectory`][] or [`pastax.trajectory.TrajectoryEnsemble`][]
@@ -180,6 +181,8 @@ class DiffraxSimulator(BaseSimulator):
             when computing the gradient in reverse automatic differentiation mode with respect to many (>50) parameters.
         max_steps : Int[Any, ""], optional
             The maximum number of steps to take, defaults to `4096`.
+        throw : bool, optional
+            Whether to raise an exception if the integration fails, defaults to `True`.
 
         Returns
         -------
@@ -220,6 +223,7 @@ class DeterministicSimulator(DiffraxSimulator):
         stepsize_controller: dfx.AbstractStepSizeController = dfx.ConstantStepSize(),
         adjoint: dfx.AbstractAdjoint = dfx.ForwardMode(),
         max_steps: Int[Any, ""] = 4096,
+        throw: bool = True,
     ) -> Trajectory:
         r"""
         Simulates a [`pastax.trajectory.Trajectory`][] following the prescribe drift `dynamics`
@@ -286,6 +290,8 @@ class DeterministicSimulator(DiffraxSimulator):
             when computing the gradient in reverse automatic differentiation mode with respect to many (>50) parameters.
         max_steps : Int[Any, ""], optional
             The maximum number of steps to take, defaults to `4096`.
+        throw : bool, optional
+            Whether to raise an exception if the integration fails, defaults to `True`.
 
         Returns
         -------
@@ -309,6 +315,7 @@ class DeterministicSimulator(DiffraxSimulator):
             stepsize_controller=stepsize_controller,
             adjoint=adjoint,
             max_steps=max_steps,
+            throw=throw,
         ).ys
 
         return Trajectory.from_array(ys, ts, unit=x0.unit)  # type: ignore
@@ -473,6 +480,7 @@ class StochasticSimulator(DiffraxSimulator):
         n_samples: Int[Any, ""] = 100,
         key: Key[Array, ""] = jrd.key(0),
         brownian_motion: Callable[[tuple[int, ...], Key[Array, ""]], dfx.AbstractBrownianPath] | None = None,
+        throw: bool = True,
     ) -> TrajectoryEnsemble:
         r"""
         Simulates a [`pastax.trajectory.TrajectoryEnsemble`][] of `n_samples` [`pastax.trajectory.Trajectory`][]
@@ -556,6 +564,8 @@ class StochasticSimulator(DiffraxSimulator):
             -------
             dfx.AbstractBrownianPath
                 The [`diffrax.AbstractBrownianPath`][] object.
+        throw : bool, optional
+            Whether to raise an exception if the integration fails, defaults to `True`.
 
         Returns
         -------
@@ -589,6 +599,7 @@ class StochasticSimulator(DiffraxSimulator):
                 stepsize_controller=stepsize_controller,
                 adjoint=adjoint,
                 max_steps=max_steps,
+                throw=throw,
             ).ys
 
             return ys  # type: ignore
