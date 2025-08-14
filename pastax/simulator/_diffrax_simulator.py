@@ -86,7 +86,8 @@ class DiffraxSimulator(BaseSimulator):
 
         if ad_mode == "reverse":
             adjoint = dfx.RecursiveCheckpointAdjoint()
-            n_steps = (t1 + dt0 - t0) // dt0
+            if n_steps is None:
+                n_steps = (t1 + dt0 - t0) // dt0
         else:
             adjoint = dfx.ForwardMode()
 
