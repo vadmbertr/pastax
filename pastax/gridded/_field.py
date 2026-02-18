@@ -61,9 +61,8 @@ class SpatialField(Field):
     -------
     interp(**coordinates)
         Interpolates the field at the given coordinates.
-    from_array(values, latitude, longitude, interpolation_method)
-        Creates a [`pastax.gridded.SpatialField`][] instance from the given array of values, latitude, and longitude
-        using the specified interpolation method.
+    from_array(values, latitude, longitude)
+        Creates a [`pastax.gridded.SpatialField`][] instance from the given array of values, latitude, and longitude.
     """
 
     _values: Bool[Array, "lat lon"] | Float[Array, "lat lon"] | Int[Array, "lat lon"]
@@ -83,13 +82,10 @@ class SpatialField(Field):
         Bool[Array, "..."] | Float[Array, "..."] | Int[Array, "..."]
             Interpolated values at the given coordinates.
         """
-        if "latitude" in coordinates and "longitude" in coordinates:
-            return self._interp_spatial(
-                latitude=coordinates["latitude"],
-                longitude=coordinates["longitude"],
-            )
-        else:
-            return self.values
+        longitude = longitude_in_180_180_degrees(coordinates["longitude"])  # force to be in -180 to 180 degrees
+        longitude += 180  # shift back to 0 to 360 degrees
+
+        return self._interp_spatial(latitude=coordinates["latitude"], longitude=longitude)
 
     def _interp_spatial(
         self, latitude: Float[Array, "Nq"], longitude: Float[Array, "Nq"]
@@ -109,9 +105,6 @@ class SpatialField(Field):
         Bool[Array, "Nq ..."] | Float[Array, "Nq ..."] | Int[Array, "Nq ..."]
             Interpolated spatial data array.
         """
-        longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
-        longitude += 180  # shift back to 0 to 360 degrees
-
         return self._fx(latitude, longitude)
 
     @classmethod
@@ -139,7 +132,7 @@ class SpatialField(Field):
         Returns
         -------
         SpatialField
-            A [`pastax.gridded.SpatialField`][] object containing the values and the interpolated spatial field.
+            A [`pastax.gridded.SpatialField`][] object containing the values and an interpolator.
         """
         longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
         longitude += 180  # shift back to 0 to 360 degrees
@@ -188,20 +181,26 @@ class SpatioTemporalField(Field):
             Interpolated values at the given coordinates.
         """
         if "time" in coordinates and "latitude" in coordinates and "longitude" in coordinates:
+            longitude = longitude_in_180_180_degrees(coordinates["longitude"])  # force to be in -180 to 180 degrees
+            longitude += 180  # shift back to 0 to 360 degrees
+
             return self._interp_spatiotemporal(
                 time=coordinates["time"],
                 latitude=coordinates["latitude"],
-                longitude=coordinates["longitude"],
+                longitude=longitude,
             )
         elif "latitude" in coordinates and "longitude" in coordinates:
+            longitude = longitude_in_180_180_degrees(coordinates["longitude"])  # force to be in -180 to 180 degrees
+            longitude += 180  # shift back to 0 to 360 degrees
+
             return self._interp_spatial(
                 latitude=coordinates["latitude"],
-                longitude=coordinates["longitude"],
+                longitude=longitude,
             )
         elif "time" in coordinates:
             return self._interp_temporal(time=coordinates["time"])
         else:
-            return self.values
+            raise ValueError("Invalid coordinates provided for interpolation.")
 
     def _interp_temporal(
         self, time: Float[Array, "Nq"]
@@ -239,9 +238,6 @@ class SpatioTemporalField(Field):
         Bool[Array, "Nq time"] | Float[Array, "Nq time"] | Int[Array, "Nq time"]
             Interpolated values at the given latitude/longitude points.
         """
-        longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
-        longitude += 180  # shift back to 0 to 360 degrees
-
         return self._fx(latitude, longitude)
 
     def _interp_spatiotemporal(
@@ -267,9 +263,6 @@ class SpatioTemporalField(Field):
         Bool[Array, "Nq"] | Float[Array, "Nq"] | Int[Array, "Nq"]
             Interpolated values at the given time/latitude/longitude points.
         """
-        longitude = longitude_in_180_180_degrees(longitude)  # force to be in -180 to 180 degrees
-        longitude += 180  # shift back to 0 to 360 degrees
-
         return self._ftx(time, latitude, longitude)
 
     @classmethod
@@ -326,9 +319,4 @@ class SpatioTemporalField(Field):
             period=(None, None, 360),
         )
 
-        return cls(
-            _values=values,
-            _ft=_ft,
-            _fx=_fx,
-            _ftx=_ftx,
-        )
+        return cls(_values=values, _ft=_ft, _fx=_fx, _ftx=_ftx)

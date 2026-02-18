@@ -1,11 +1,8 @@
-cartopy
-cmocean
-diffrax>=0.7.0
+diffrax
 equinox
 interpax
-jax>=0.5.0
+jax
 jaxtyping
 lineax
-matplotlib
 numpy
 xarray

@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Bool, Float
 
@@ -38,42 +37,50 @@ def spatial_derivative(
     """
 
     def central_finite_difference(
-        field: Float[Array, "(time) lat lon"], axis: int
-    ) -> Float[Array, "(time) lat-2 lon-2"]:
-        def _axis1(dxy: Float[Array, "lat-1 lon"]) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
-            field_start = field[..., :-2, 1:-1]
-            field_end = field[..., 2:, 1:-1]
+        field: Float[Array, "(time) lat lon"],
+    ) -> tuple[Float[Array, "(time) lat lon"], Float[Array, "(time) lat lon"]]:
+        dx_left = jnp.pad(dx, ((0, 0), (1, 0)), mode="edge")
+        dx_right = jnp.pad(dx, ((0, 0), (0, 1)), mode="edge")
+        dy_left = jnp.pad(dy, ((1, 0), (0, 0)), mode="edge")
+        dy_right = jnp.pad(dy, ((0, 1), (0, 0)), mode="edge")
+        dx_cfd = dx_right
+        dx_cfd = dx_cfd.at[..., 1:-1].set((dx_right[..., 1:-1] + dx_right[..., 2:]) / 2)
+        dx_cfd = dx_cfd.at[..., -1].set(dx_left[..., -1])
+        dy_cfd = dy_right
+        dy_cfd = dy_cfd.at[..., 1:-1, :].set((dy_right[..., 1:-1, :] + dy_right[..., 2:, :]) / 2)
+        dy_cfd = dy_cfd.at[..., -1, :].set(dy_left[..., -1, :])
 
-            is_masked_start = is_masked[:-2, 1:-1]
-            is_masked_end = is_masked[2:, 1:-1]
+        f_x, f_y = jnp.gradient(field, axis=(-1, -2))
 
-            dx_start = dxy[:-1, 1:-1]
-            dx_end = dxy[1:, 1:-1]
-
-            return field_start, field_end, is_masked_start, is_masked_end, dx_start, dx_end
-
-        def _axis2(dxy: Float[Array, "lat lon-1"]) -> tuple[Float[Array, "(time) lat-2 lon-2"], ...]:
-            field_start = field[..., 1:-1, :-2]
-            field_end = field[..., 1:-1, 2:]
-
-            is_masked_start = is_masked[1:-1, :-2]
-            is_masked_end = is_masked[1:-1, 2:]
-
-            dx_start = dxy[1:-1, :-1]
-            dx_end = dxy[1:-1, 1:]
-
-            return field_start, field_end, is_masked_start, is_masked_end, dx_start, dx_end
-
-        field_start, field_end, is_masked_start, is_masked_end, dx_start, dx_end = jax.lax.cond(
-            axis == -1, lambda: _axis2(dx), lambda: _axis1(dy)
+        # handle masked values and normalize by grid spacing
+        is_not_right_border_x = jnp.full_like(f_x, True).at[..., -1].set(False).astype(bool)
+        is_not_left_border_x = jnp.full_like(f_x, True).at[..., 0].set(False).astype(bool)
+        f_x = jnp.where(is_masked, jnp.nan, f_x / dx_cfd)
+        f_x = jnp.where(
+            ~is_masked & jnp.isnan(f_x) & is_not_right_border_x,
+            jnp.diff(field, axis=-1, append=field[..., -1:]) / dx_right,
+            f_x,
+        )
+        f_x = jnp.where(
+            ~is_masked & jnp.isnan(f_x) & is_not_left_border_x,
+            -jnp.diff(field[..., ::-1], axis=-1, append=field[..., :1])[..., ::-1] / dx_left,
+            f_x,
+        )
+        is_not_right_border_y = jnp.full_like(f_y, True).at[..., -1, :].set(False).astype(bool)
+        is_not_left_border_y = jnp.full_like(f_y, True).at[..., 0, :].set(False).astype(bool)
+        f_y = jnp.where(is_masked, jnp.nan, f_y / dy_cfd)
+        f_y = jnp.where(
+            ~is_masked & jnp.isnan(f_y) & is_not_right_border_y,
+            jnp.diff(field, axis=-2, append=field[..., -1:, :]) / dy_right,
+            f_y,
+        )
+        f_y = jnp.where(
+            ~is_masked & jnp.isnan(f_y) & is_not_left_border_y,
+            -jnp.diff(field[..., ::-1, :], axis=-2, append=field[..., :1, :])[..., ::-1, :] / dy_left,
+            f_y,
         )
 
-        field_center = field[..., 1:-1, 1:-1]
-        field_start = jnp.where(is_masked_start, field_center, field_start)
-        field_end = jnp.where(is_masked_end, field_center, field_end)
+        return f_x, f_y
 
-        return (field_end - field_start) / (dx_end + dx_start)  # type: ignore
-
-    derivatives = tuple(tuple(central_finite_difference(field, axis) for axis in (-1, -2)) for field in fields)
-
-    return derivatives  # type: ignore
+    derivatives = tuple(central_finite_difference(field) for field in fields)
+    return derivatives

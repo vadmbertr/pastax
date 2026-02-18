@@ -147,18 +147,18 @@ class SmagorinskyDiffusion(eqx.Module):
 
         fields = neighborhood.interp("u", "v", time=t)  # "x_width x_width"
         (dudx, dudy), (dvdx, dvdy) = spatial_derivative(
-            fields["u"], fields["v"], dx=neighborhood.dx, dy=neighborhood.dy, is_masked=neighborhood.is_masked.values
-        )  # "x_width-2 x_width-2"
+            fields["u"], fields["v"], dx=neighborhood.dx, dy=neighborhood.dy, is_masked=jnp.isnan(fields["u"])
+        )  # "x_width x_width"
 
         # computes Smagorinsky coefficients
-        cell_area = neighborhood.cell_area[1:-1, 1:-1]  # "x_width-2 x_width-2"
+        cell_area = neighborhood.cell_area  # "x_width x_width"
         smag_k = self.cs * cell_area * ((dudx**2 + dvdy**2 + 0.5 * (dudy + dvdx) ** 2) ** (1 / 2))
 
         smag_ds = Gridded.from_array(
             {"smag_k": smag_k[None, ...]},
             time=t[None],
-            latitude=neighborhood.coordinates["latitude"][1:-1],
-            longitude=neighborhood.coordinates["longitude"][1:-1],
+            latitude=neighborhood.coordinates["latitude"].values,
+            longitude=neighborhood.coordinates["longitude"].values,
             interpolation_method="linear",
             is_spherical_mesh=neighborhood.is_spherical_mesh,
             use_degrees=neighborhood.use_degrees,
@@ -192,7 +192,7 @@ class SmagorinskyDiffusion(eqx.Module):
         """
         latitude, longitude = y[0], y[1]
 
-        smag_k = jnp.squeeze(smag_ds.fields["smag_k"].values)  # "x_width-2 x_width-2"
+        smag_k = jnp.squeeze(smag_ds.fields["smag_k"].values)  # "x_width x_width"
 
         # $\mathbf{u}(t, \mathbf{X}(t))$ term
         scalar_values = gridded.interp("u", "v", time=t, latitude=latitude, longitude=longitude)
@@ -200,13 +200,13 @@ class SmagorinskyDiffusion(eqx.Module):
 
         # $(\nabla \cdot \mathbf{K})(t, \mathbf{X}(t))$ term
         ((dkdx, dkdy),) = spatial_derivative(
-            smag_k, dx=smag_ds.dx, dy=smag_ds.dy, is_masked=smag_ds.is_masked.values
-        )  # "x_width-4 x_width-4"
+            smag_k, dx=smag_ds.dx, dy=smag_ds.dy, is_masked=jnp.isnan(smag_k)
+        )  # "x_width x_width"
         dkdx = ipx.interp2d(
             latitude,
             longitude,
-            smag_ds.coordinates["latitude"][1:-1],
-            smag_ds.coordinates["longitude"][1:-1],
+            smag_ds.coordinates["latitude"].values,
+            smag_ds.coordinates["longitude"].values,
             dkdx,
             method="linear",
             extrap=True,
@@ -214,8 +214,8 @@ class SmagorinskyDiffusion(eqx.Module):
         dkdy = ipx.interp2d(
             latitude,
             longitude,
-            smag_ds.coordinates["latitude"][1:-1],
-            smag_ds.coordinates["longitude"][1:-1],
+            smag_ds.coordinates["latitude"].values,
+            smag_ds.coordinates["longitude"].values,
             dkdy,
             method="linear",
             extrap=True,
@@ -299,7 +299,7 @@ class StochasticSmagorinskyDiffusion(SmagorinskyDiffusion):
         """
         gridded = args
 
-        smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width-2 x_width-2"
+        smag_ds = self._smagorinsky_diffusion(t, y, gridded)  # "1 x_width x_width"
 
         dlatlon_deter = self._deterministic_dynamics(t, y, gridded, smag_ds)
         dlatlon_stoch = self._stochastic_dynamics(y, smag_ds)
