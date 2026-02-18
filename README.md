@@ -29,6 +29,7 @@ In particular, the following changes are considered:
 - `pastax.gridded`
     - add support for C-grids,
     - maybe some refactoring of the structures,
+    - switch to `Coordax`? (see [Coordax](https://coordax.readthedocs.io/en/latest/)),
 - `pastax.trajectory`
     - use `unxt.Quantity` in place of `Unitful` (see [unxt](https://unxt.readthedocs.io/en/latest/)),
     - remove `__add__` and like methods in favour of registered functions (see [quax](https://docs.kidger.site/quax/)),

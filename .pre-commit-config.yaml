@@ -12,15 +12,14 @@ repos:
     hooks:
     - id: pyright
       additional_dependencies: [
-        "cartopy", 
-        "cmocean", 
+        "cartopy",
         "diffrax", 
         "equinox", 
         "interpax", 
         "jax", 
         "jaxtyping", 
         "lineax", 
-        "matplotlib", 
+        "matplotlib",
         "numpy", 
         "xarray"
       ]

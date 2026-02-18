@@ -30,7 +30,7 @@ site_url: https://pastax.readthedocs.io/en/latest/
 repo_url: https://github.com/vadmbertr/pastax
 repo_name: vadmbertr/pastax
 
-strict: true
+strict: false
 
 extra_javascript:
   - _static/mathjax.js
@@ -42,8 +42,8 @@ extra_css:
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
-  - pymdownx.superfences  # enable syntax highlighting
-  - pymdownx.details  # allow hidden expandable regions denoted by ???
+  - pymdownx.superfences
+  - pymdownx.details
   - admonition
   - codehilite
   - toc:
@@ -51,12 +51,12 @@ markdown_extensions:
       toc_depth: 4
 
 plugins:
-  - autorefs  # cross-links to headings
+  - autorefs
   - include_exclude_files:
       exclude:
         - "_overrides"
   - include-markdown
-  - mknotebooks  # Jupyter notebooks
+  - mknotebooks
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -74,17 +74,17 @@ plugins:
             allow_inspection: true
             docstring_style: numpy
             heading_level: 3
-            inherited_members: false  # allow looking up inherited methods
-            members_order: source  # order methods according to their order of definition in the source code
+            inherited_members: false
+            members_order: source
             show_bases: true
             show_if_no_docstring: false
             show_inheritance_diagram: true
-            show_root_full_path: true  # display "foo.bar" not just "bar"
-            show_root_heading: true  # actually display anything at all...
+            show_root_full_path: true
+            show_root_heading: true
             show_signature_annotations: true
             show_signature_return_annotation: true
             show_signature_parameter_types: true
-  - search  # default search plugin; needs manually re-enabling when using any other plugins
+  - search
 
 nav:
   - "index.md"

@@ -133,7 +133,7 @@ class Trajectory(Timeseries):
 
         Returns
         -------
-        State
+        Location
             The origin of the trajectory.
         """
         return Location(

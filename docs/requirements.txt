@@ -1,15 +1,15 @@
-clouddrift
-cmocean
-mkdocs<=1.6.1
+griffe==1.7.3
+hippogriffe==0.2.2
+mkdocs==1.6.1
 mkdocs-material
 mkdocs-include-markdown-plugin
 mkdocs-pymdownx-material-extras
-mkdocs_include_exclude_files
-mkdocstrings<=0.29.0
-mkdocstrings-python<=1.13.0
+mkdocs_include_exclude_files==0.1.0
+mkdocs-ipynb==0.1.1
+mkdocstrings==0.28.3
+mkdocstrings-python==1.16.8
 mknotebooks @ git+https://github.com/vadmbertr/mknotebooks@master
 nbconvert
-optimistix
 pygments
-pymdown-extensions
+pymdown-extensions==10.14.3
 pytkdocs_tweaks
