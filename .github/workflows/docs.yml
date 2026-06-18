@@ -49,7 +49,7 @@ jobs:
         # rendered HTML loads assets from / and shows the
         # "Site not loading correctly?" overlay.
         env:
-          BASE_URL: /molisanax
+          BASE_URL: /pastax
         run: myst build --html --execute --strict
 
       - name: Upload artifact
