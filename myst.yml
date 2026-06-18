@@ -1,0 +1,32 @@
+# See https://mystmd.org/guide/frontmatter
+version: 1
+project:
+  title: pastax
+  description: Differentiable Lagrangian simulator for ocean surface trajectories (JAX/Equinox).
+  github: https://github.com/vadmbertr/pastax
+  license: Apache-2.0
+  authors:
+    - name: Vadim Bertrand
+      github: vadmbertr
+  toc:
+    - file: README.md
+    - title: Tutorial
+      file: docs/tutorial.ipynb
+    - title: API reference
+      children:
+        - pattern: docs/_sphinx/_build/myst/**.myst.json
+  exclude:
+    - docs/implementation_plan.md
+    - docs/project_plan.md
+    - docs/project_status.md
+    - docs/_sphinx/conf.py
+    - docs/_sphinx/**/*.rst
+    - docs/_static/**
+    - docs/myst-requirements.txt
+site:
+  template: book-theme
+  options:
+    logo: docs/_static/pastax-logo.png
+    favicon: docs/_static/pastax-logo.png
+    style: docs/_static/myst-extra.css
+    outline_maxdepth: 2

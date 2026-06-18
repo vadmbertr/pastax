@@ -1,0 +1,75 @@
+/* mystmd book-theme overrides for the pastax docs site. */
+
+/*
+ * Wrap long Python signatures inside the API reference.
+ *
+ * sphinx-ext-mystmd renders an autodoc signature as a <dt> (definition
+ * term) whose contents are <span class="sphinx-desc-..."> children
+ * (sphinx-desc-name, sphinx-desc-parameterlist, sphinx-desc-sig-name,
+ * etc.) — not <pre>/<code>. By default the styling treats them as
+ * pre-formatted monospace, so a long signature like
+ *
+ *   class pastax.forcing.Field(values: Float[Array, 'time lat lon'],
+ *                                 t_coords: Float[Array, 'time'], ...)
+ *
+ * stays on a single line and the page grows a horizontal scrollbar.
+ *
+ * Force every level of the signature tree to wrap at whitespace (and,
+ * as a fallback, anywhere a long identifier would otherwise overflow),
+ * and make sure the dt and its ancestors can shrink below their content
+ * width — the `min-width: 0` is required when ancestors use flex/grid.
+ */
+
+dl,
+dl > dt,
+dl > dd {
+  max-width: 100%;
+  min-width: 0;
+}
+
+dl > dt {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+[class^="sphinx-desc-"],
+[class*=" sphinx-desc-"] {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Code blocks: also wrap rather than overflow horizontally. */
+pre,
+pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/*
+ * API reference parameter / attribute / return lists.
+ *
+ * Napoleon renders these as field lists whose entries read
+ *   **name** (*type*) -- description
+ * i.e. the name is already <strong>, the type <em>. The book-theme colours
+ * the inline <code> tokens (and the body text) with a muted accent, which
+ * makes the dense type signatures hard to read. Force the whole entry to a
+ * near-black colour and let the inline code read as plain text — bold for the
+ * name, italic for the type, regular for the description — instead of a
+ * coloured code chip.
+ */
+article.content dl dt,
+article.content dl dd,
+article.content dl dd p,
+article.content dl dd li {
+  color: #1a1a1a;
+}
+
+article.content dl dt :not(pre) > code,
+article.content dl dd :not(pre) > code {
+  color: inherit;
+  background: transparent;
+  font-weight: inherit;
+}

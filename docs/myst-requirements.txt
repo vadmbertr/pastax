@@ -1,0 +1,29 @@
+# Python deps for the JB2/mystmd build:
+#   1. sphinx + sphinx-ext-mystmd -> emits *.myst.json AST consumed by mystmd
+#                                    (autodoc/napoleon parse Google docstrings)
+#   2. ipykernel + matplotlib +   -> notebook execution at `myst build --execute`
+#      runtime deps below
+
+# API reference pipeline (Sphinx -> mystmd AST)
+sphinx>=7.3
+sphinx-ext-mystmd
+
+# Runtime imports needed by autodoc2 to introspect the pastax package
+equinox>=0.11.0
+jax>=0.4.30
+jaxtyping>=0.2.30
+netcdf4>=1.6.0
+numpy>=1.26.0
+xarray>=2024.1.0
+zarr>=2.17.0
+
+# Notebook execution
+#   ipykernel registers the Python kernel; jupyter-server is what mystmd
+#   actually launches in the background when --execute is requested
+#   (without it: "Could not load Jupyter session manager to run executable nodes")
+cartopy>=0.22
+cmocean>=4.0
+ipykernel>=6.29
+jupyter-server>=2.14
+matplotlib>=3.8
+optimistix>=0.0.9
