@@ -26,7 +26,7 @@ project:
 site:
   template: book-theme
   options:
-    logo: docs/_static/pastax-logo.png
-    favicon: docs/_static/pastax-logo.png
+    logo: docs/_static/logo.png
+    favicon: docs/_static/fav.png
     style: docs/_static/myst-extra.css
     outline_maxdepth: 2
