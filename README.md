@@ -1,6 +1,14 @@
 # pastax
 
-**P**arameterizable **A**uto-differentiable **S**imulators for ocean surface **T**rajectories in j**AX**.
+<p align="center">
+  <img src="docs/_static/logo.png" alt="pastax" width="320">
+</p>
+
+<div class="readme-center" align="center">
+
+**P**arameterizable **A**uto-differentiable **S**imulators of ocean surface **T**rajectories in j**AX**.
+
+</div>
 
 `pastax` integrates particle trajectories on the ocean surface by solving ODEs and SDEs over user-supplied forcing fields (e.g. surface currents). Every computation is fully differentiable via JAX automatic differentiation — both forward-mode (`jax.jvp`) and reverse-mode (`jax.grad`) are supported (forward-mode requires `solve(..., adjoint="forward")`; the default checkpointed adjoint is reverse-mode only).
 

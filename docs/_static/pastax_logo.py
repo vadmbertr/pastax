@@ -1,12 +1,16 @@
-"""pastax logo — three ensemble trajectories tracing a partial-derivative glyph.
+"""pastax logo — the wordmark "pastax" traced as ensembles of perturbed curves.
 
-Define one reference path (REF_PTS below). The script generates two sibling
-trajectories by offsetting it perpendicular to its tangent ("left of travel"
-and "right of travel"), with small smooth perturbations so the three strands
-look like an ensemble rather than perfect parallels. All three share the
-initial condition exactly.
+Each letter is defined as one or more strokes (ordered (x, y) waypoints in a
+shared coordinate frame where the baseline is y=0 and the x-height is ~100).
+Every stroke is smoothed with a parametric cubic spline and then drawn as a
+small ensemble of sibling curves carrying smooth low-frequency perturbations
+(as for the favicon), so each stroke looks hand-traced rather than perfect.
+
+As in the favicon, the three palette colors are mixed within every glyph: each
+stroke is drawn as three slightly separated color bands (BLUE / GREEN / PURPLE)
+that overlap and blend along the letter.
 """
-from random import choice, shuffle
+from random import choice, shuffle, seed as set_pyseed
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,52 +21,78 @@ from scipy.interpolate import CubicSpline
 BLUE   = "#5e97f6"
 GREEN  = "#02796b"
 PURPLE = "#9c27b0"
+COLORS = [BLUE, GREEN, PURPLE]
 
-# --- Shared initial condition (partial tail tip) -------------------------
-IC = (40, 90)
+# --- Letter definitions --------------------------------------------------
+# Each letter is a list of strokes; each stroke is a list of (x, y) waypoints
+# in the letter's own local frame (baseline y=0, x-height ~100). Letters are
+# advanced left-to-right by ADVANCE[letter] + LETTER_GAP when laid out.
 
-# --- Reference trajectory ------------------------------------------------
-# Ordered (x, y) waypoints. The spline passes through every waypoint.
-# Repeat the bowl-entry waypoint as the final waypoint to close the bowl.
-REF_PTS = [
-    IC,            # tail tip (shared IC)
-    (60, 50),      # tail going up
-    (125, 35),     # arc apex
-    (190, 70),     # tail descending
-    (210, 130),    # bowl entry (upper right)
-    (205, 200),    # bowl right
-    (155, 255),    # bowl bottom-right
-    (80, 250),     # bowl bottom-left
-    (35, 200),     # bowl left
-    (60, 145),     # bowl top-left
-    (140, 125),    # bowl top
-    (200, 150),    # close right 2nd
-    (190, 210),    # close bowl
+LETTERS = {
+    "p": [
+        [(12, -40), (12, 40), (12, 95),                                   # stem (with descender)
+         (46, 99), (78, 75), (78, 35), (46, 10), (12, 32)],               # bowl
+    ],
+    "a": [
+        [(95, 15), (66, 14), (66, 50), (66, 95),                          # right stem + foot
+         (32, 99), (0, 75), (0, 35), (32, 10), (66, 32)],                 # bowl
+    ],
+    "s": [
+        [(81, 75), (47, 99), (20, 87), (20, 65),
+         (76, 45), (76, 22), (47, 10), (0, 34)],                          # single S stroke
+    ],
+    "t": [
+        [(5, 85), (50, 85)],                                              # crossbar
+        [(30, 140), (5, 60), (0, 25), (5, 10), (30, 15), (50, 35)],       # stem + foot
+    ],
+    "x": [
+        [(0, 97), (25, 94), (45, 75), (45, 35), (25, 15), (0, 12)],       # left arc
+        [(95, 97), (70, 94), (50, 75), (50, 35), (70, 15), (95, 12)],     # right arc
+    ],
+}
+
+# The word, with the per-letter color grouping ("pa" / "st" / "ax").
+WORD = [
+    ("p", BLUE),
+    ("a", BLUE),
+    ("s", GREEN),
+    ("t", GREEN),
+    ("a", PURPLE),
+    ("x", PURPLE),
 ]
+GAP = [
+    ("p", 0),
+    ("a", -15),
+    ("s", 0),
+    ("t", -5),
+    ("a", -10),
+    ("x", 0)
+]   # extra space (px) between consecutive letters
 
-# --- Sibling-strand generation ------------------------------------------
-OFFSET       = 10    # perpendicular shift (px) for the side strands
-RAMP         = 0.001   # fraction of curve over which offset ramps up from IC
-NOISE_AMP    = 5     # smooth-noise amplitude (px) per side strand
-N_PER_COLOR  = 50   # number of trajectories drawn per color
-SEED_REF     = 0
-SEED_LEFT    = 1
-SEED_RIGHT   = 2
-
-# Colors assigned to (left-of-travel, reference, right-of-travel)
-LEFT_COLOR  = BLUE
-REF_COLOR   = GREEN
-RIGHT_COLOR = PURPLE
+# --- Ensemble / perturbation options -------------------------------------
+N_PER_STROKE = 18     # number of sibling curves drawn per stroke *per color*
+NOISE_AMP    = 3.5    # smooth-noise translation amplitude (px) per sibling
+SPREAD       = 5      # separation (px) between the three color bands
+N_KNOTS      = 2      # spline knots for the translation noise (low = smooth)
+CLIP_HEAD    = 10     # 1/CLIP_HEAD of the stroke is the start-clip window
+CLIP_TAIL    = 10     # 1/CLIP_TAIL of the stroke is the end-clip window
+SAMPLES      = 50     # spline samples per stroke
+SEED         = 0
 
 # --- Display options -----------------------------------------------------
-SHOW_WAYPOINTS = False 
-SAVE_PATH = "pastax-logo.png"       # e.g. "pastax-logo.png" or "pastax-logo.svg"
+SAVE_PATH = "logo.png"
 LINEWIDTH = 1
+ALPHA     = 0.5
+SHOW_WAYPOINTS = False
 
 
-def smooth(points, n=400):
+def smooth(points, n=SAMPLES):
     """Parametric cubic-spline interpolation through 2D waypoints."""
     pts = np.asarray(points, dtype=float)
+    if len(pts) == 2:                       # straight segment: sample linearly
+        tt = np.linspace(0, 1, n)
+        return (pts[0, 0] + (pts[1, 0] - pts[0, 0]) * tt,
+                pts[0, 1] + (pts[1, 1] - pts[0, 1]) * tt)
     t = np.arange(len(pts))
     cs_x = CubicSpline(t, pts[:, 0], bc_type="natural")
     cs_y = CubicSpline(t, pts[:, 1], bc_type="natural")
@@ -70,81 +100,100 @@ def smooth(points, n=400):
     return cs_x(tt), cs_y(tt)
 
 
-def offset_curve(x, y, dist, ramp=RAMP, noise_amp=NOISE_AMP, seed=0):
-    """Offset (x, y) perpendicular to its tangent by `dist`.
+def perturb(x, y, noise_amp=NOISE_AMP, n_knots=N_KNOTS, seed=0):
+    """Translate the whole strand by a smooth, low-frequency 2D displacement.
 
-    `dist > 0` shifts to the right of the direction of travel; `< 0` shifts
-    left. The shift tapers from 0 over the first `ramp` fraction of the path
-    so all sibling strands share the IC and starting tangent exactly. Adds
-    smooth low-frequency noise (amplitude `noise_amp`) for ensemble flavor.
+    Every point is shifted by a slowly varying (dx, dy) vector drawn from
+    cubic-spline smooth noise. Because the perturbation is a plain translation
+    of the strand — no per-point tangent or normal is computed — the result
+    stays smooth even for very short or straight segments (e.g. the t crossbar)
+    and at the cusps where a stroke reverses direction (e.g. the p stem/bowl).
     """
     n = len(x)
-    dx, dy = np.gradient(x), np.gradient(y)
-    norm = np.hypot(dx, dy) + 1e-12
-    nx, ny = dy / norm, -dx / norm   # right-hand normal
-
     s = np.linspace(0, 1, n)
-    e = np.clip(s / ramp, 0, 1)
-    envelope = 0.5 - 0.5 * np.cos(np.pi * e)
-
     rng = np.random.default_rng(seed)
-    n_knots = max(6, n // 30)
     knots_t = np.linspace(0, 1, n_knots)
-    knots_v = rng.standard_normal(n_knots)
-    noise = CubicSpline(knots_t, knots_v, bc_type="natural")(s) * noise_amp
-
-    d = (dist + noise) * envelope
-    return x + d * nx, y + d * ny
+    dx = CubicSpline(knots_t, rng.standard_normal(n_knots), bc_type="natural")(s)
+    dy = CubicSpline(knots_t, rng.standard_normal(n_knots), bc_type="natural")(s)
+    return x + dx * noise_amp, y + dy * noise_amp
 
 
 def plot():
-    x_ref, y_ref = smooth(REF_PTS)
+    set_pyseed(SEED)
 
-    # One group per color: same base offset, distinct noise seeds so the
-    # N strands of a color start together (offset/noise ramp from 0 at IC)
-    # and then diverge along the path.
-    groups = [
-        (-OFFSET, LEFT_COLOR,  SEED_LEFT),
-        (0,       REF_COLOR,   SEED_REF),
-        (+OFFSET, RIGHT_COLOR, SEED_RIGHT),
-    ]
+    # Lay out the word: build every stroke in absolute coordinates with color.
+    strokes = []   # (x_ref, y_ref, color)
+    for letter, color in WORD:
+        letter_strokes = []
+        for stroke in LETTERS[letter]:
+            pts = [(px, py) for px, py in stroke]
+            x_ref, y_ref = smooth(pts)
+            letter_strokes.append((x_ref, y_ref, color))
+        strokes.append(letter_strokes)
 
+    # Per-color base offset: three small translations 120 degrees apart, so the
+    # blue / green / purple bands are distinguishable yet overlap and blend.
+    angles = np.pi / 2 + 2 * np.pi * np.arange(3) / 3
+    color_off = list(zip(SPREAD * np.cos(angles), SPREAD * np.sin(angles)))
+
+    # Expand each stroke into an ensemble of perturbed siblings, in all three
+    # colors (the colors are mixed within every glyph, as in the favicon).
     strands = []
-    for dist, color, base_seed in groups:
-        for i in range(N_PER_COLOR):
-            x, y = offset_curve(x_ref, y_ref, dist, seed=base_seed * 1000 + i)
-            strands.append((x, y, color))
+    offset = 0
+    for letter_strokes, (_, gap) in zip(strokes, GAP):
+        x_min = 0
+        x_max = 0
+        letter_strands = []
+        for si, (x_ref, y_ref, _) in enumerate(letter_strokes):
+            for ci, color in enumerate(COLORS):
+                ox, oy = color_off[ci]
+                for i in range(N_PER_STROKE):
+                    x, y = perturb(x_ref, y_ref, seed=(si * 3 + ci) * 1000 + i)
+                    x = x + ox
+                    y = y + oy
+                    head = max(1, len(x) // CLIP_HEAD)
+                    tail = max(1, len(x) // CLIP_TAIL)
+                    start = choice(range(0, head))
+                    end = choice(range(len(x) - tail, len(x)))
+                    x = x[start:end]
+                    y = y[start:end]
+                    x_min = min(x_min, float(np.min(x)))
+                    x_max = max(x_max, float(np.max(x)))
+                    x += offset
+                    letter_strands.append((x, y, color))
+        for x, y, color in letter_strands:
+            strands.append((x + np.abs(x_min), y, color))
+        offset += ((x_max - x_min) + gap)
 
     all_x = np.concatenate([s[0] for s in strands])
     all_y = np.concatenate([s[1] for s in strands])
     min_x, max_x = np.min(all_x), np.max(all_x)
     min_y, max_y = np.min(all_y), np.max(all_y)
-    dx = max_x - min_x
-    dy = max_y - min_y
-    dd = max(dx, dy) + LINEWIDTH
-    min_x, max_x = (min_x + max_x) / 2 - dd / 2, (min_x + max_x) / 2 + dd / 2
-    min_y, max_y = (min_y + max_y) / 2 - dd / 2, (min_y + max_y) / 2 + dd / 2
+    pad = 12
+    min_x, max_x = min_x - pad, max_x + pad
+    min_y, max_y = min_y - pad, max_y + pad
 
-    shuffle(strands)
-    fig, ax = plt.subplots(figsize=(4, 5.33))
+    shuffle(strands)   # interleave colors in draw order so the bands blend
+    width = max_x - min_x
+    height = max_y - min_y
+    fig, ax = plt.subplots(figsize=(width / 100, height / 100))
     for x, y, color in strands:
-        start = choice(range(0, len(x) // 3))
-        end = choice(range(2 * len(x) // 3, len(x)))
-        ax.plot(x[start:end], y[start:end], color=color, lw=LINEWIDTH, alpha=0.7,
+        ax.plot(x, y, color=color, lw=LINEWIDTH, alpha=ALPHA,
                 solid_capstyle="round", solid_joinstyle="round")
-        
+
     if SHOW_WAYPOINTS:
-        px, py = zip(*REF_PTS)
-        ax.plot(px, py, "o", color=REF_COLOR, alpha=1, ms=5, zorder=10)
+        for x_ref, y_ref, color in strokes:
+            ax.plot(x_ref, y_ref, color="k", lw=0.5, alpha=0.8, zorder=10)
 
     ax.set_aspect("equal")
     ax.set_xlim(min_x, max_x)
-    ax.set_ylim(max_y, min_y)
+    ax.set_ylim(min_y, max_y)   # y-up (baseline at bottom)
     ax.axis("off")
     fig.tight_layout(pad=0)
 
     if SAVE_PATH:
-        fig.savefig(SAVE_PATH, dpi=100, transparent=True, bbox_inches="tight")
+        fig.savefig(SAVE_PATH, dpi=200, transparent=True, bbox_inches="tight")
+    
     plt.show()
 
 

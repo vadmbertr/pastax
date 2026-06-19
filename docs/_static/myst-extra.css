@@ -1,6 +1,15 @@
 /* mystmd book-theme overrides for the pastax docs site. */
 
 /*
+ * README header tagline: MyST strips the `align` attribute (and `style`) from
+ * raw HTML during sanitization but keeps `class`, so the `align="center"` that
+ * centers the tagline on GitHub is a no-op on the site. Center it here instead.
+ */
+.readme-center {
+  text-align: center;
+}
+
+/*
  * Wrap long Python signatures inside the API reference.
  *
  * sphinx-ext-mystmd renders an autodoc signature as a <dt> (definition
