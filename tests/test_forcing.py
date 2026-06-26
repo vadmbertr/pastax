@@ -461,12 +461,12 @@ class TestDatasetCGrid:
             },
         )
         q = (jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(13.5))
-        vu_current = ds.velocity_interp(*q, u_name="uo",  v_name="vo")
-        vu_wind    = ds.velocity_interp(*q, u_name="u10", v_name="v10")
-        assert float(vu_current[1]) == pytest.approx(1.0)  # U from "current"
-        assert float(vu_current[0]) == pytest.approx(0.0)  # V from "current"
-        assert float(vu_wind[1])    == pytest.approx(2.0)  # U from "wind"
-        assert float(vu_wind[0])    == pytest.approx(3.0)  # V from "wind"
+        uv_current = ds.velocity_interp(*q, u_name="uo",  v_name="vo")
+        uv_wind    = ds.velocity_interp(*q, u_name="u10", v_name="v10")
+        assert float(uv_current[0]) == pytest.approx(1.0)  # U from "current"
+        assert float(uv_current[1]) == pytest.approx(0.0)  # V from "current"
+        assert float(uv_wind[0])    == pytest.approx(2.0)  # U from "wind"
+        assert float(uv_wind[1])    == pytest.approx(3.0)  # V from "wind"
 
     def test_from_xarray_cgrid_matches_from_arrays_cgrid(self):
         t = np.array(["2020-01-01", "2020-01-02", "2020-01-03"], dtype="datetime64[D]")
