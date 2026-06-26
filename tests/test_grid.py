@@ -137,7 +137,7 @@ def test_field_interp_unchanged_for_center_stagger():
     t, lat, lon = _centre_grid()
     values = jnp.arange(3 * 11 * 10, dtype=jnp.float32).reshape((3, 11, 10))
     f = Field.standalone(values=values, t_coords=t, lat_coords=lat, lon_coords=lon)
-    v = f.interp(jnp.asarray(1800.0), jnp.asarray(0.0), jnp.asarray(4.5))
+    v = f.interp(jnp.asarray(1800.0), jnp.asarray(4.5), jnp.asarray(0.0))
     assert jnp.isfinite(v)
 
 
@@ -176,7 +176,7 @@ def test_grid_backed_interp_is_jit_vmap_grad_safe():
 
     @jax.jit
     def sample(lat_q, lon_q):
-        return ds["u"].interp(jnp.asarray(1800.0), lat_q, lon_q)
+        return ds["u"].interp(jnp.asarray(1800.0), lon_q, lat_q)
 
     out = sample(jnp.asarray(0.0), jnp.asarray(4.5))
     assert jnp.isfinite(out)

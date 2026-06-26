@@ -25,7 +25,7 @@ SDE-only solvers (raise on ``ode_step``):
 State
 -----
 The state ``y`` may be any PyTree (a bare array is the single-leaf special
-case, e.g. ``[lat, lon]``). The trajectory returned by :func:`solve` has the
+case, e.g. ``[lon, lat]``). The trajectory returned by :func:`solve` has the
 same PyTree structure as ``y0`` with a leading ``n_save + 1`` axis on every
 leaf. A PyTree state makes second-order dynamics natural — carry ``(x, v)`` and
 let the term return ``(dx, dv) = (v, f(x, t))`` (see :func:`solve`).
@@ -34,7 +34,7 @@ Term API
 --------
 ODE term: ``f(t, y, args[, ctrl]) -> dy`` returns the time derivative ``dy`` as
 a PyTree with the **same structure as** ``y`` (for a flat state, the velocity
-``[dlat/dt, dlon/dt]`` in degrees/second).
+``[dlon/dt, dlat/dt]`` in degrees/second).
 
 SDE term: ``f(t, y, args[, ctrl]) -> (drift, diffusion)``. ``drift`` is a PyTree
 matching ``y``; ``diffusion`` maps the Wiener increment to a ``y``-shaped tangent
@@ -178,13 +178,13 @@ class AbstractSolver(eqx.Module):
             term: Drift callable ``f(t, y, args) -> Float[Array, "2"]`` returning
                 velocity in degrees per second.
             t: Current time, in seconds.
-            y: Current state ``[lat, lon]`` in degrees.
+            y: Current state ``[lon, lat]`` in degrees.
             dt: Step size in seconds.
             args: Arbitrary fixed Pytree forwarded to ``term``.
             ctrl: Arbitrary time-varying Pytree forwarded to ``term``.
 
         Returns:
-            Updated state ``[lat, lon]`` in degrees after one step.
+            Updated state ``[lon, lat]`` in degrees after one step.
         """
         ...
 
@@ -208,7 +208,7 @@ class AbstractSolver(eqx.Module):
                 (diagonal) or ``(2, 2)`` (full matrix). The term never sees
                 ``z``; the Wiener increment is applied by the solver.
             t: Current time, in seconds.
-            y: Current state ``[lat, lon]`` in degrees.
+            y: Current state ``[lon, lat]`` in degrees.
             dt: Step size in seconds.
             args: Arbitrary fixed Pytree forwarded to ``term``.
             ctrl: Arbitrary time-varying Pytree forwarded to ``term``.
@@ -216,7 +216,7 @@ class AbstractSolver(eqx.Module):
                 increment used by the solver is :math:`dW = \sqrt{|dt|}\,z`.
 
         Returns:
-            Updated state ``[lat, lon]`` in degrees after one step.
+            Updated state ``[lon, lat]`` in degrees after one step.
         """
         ...
 
@@ -839,7 +839,7 @@ def solve(
             (PyTree matching ``y``). SDE: returns ``(drift, diffusion)`` where
             ``diffusion`` is a PyTree matching the noise (diagonal), a 2-D array
             ``(state, n_noise)`` (matrix), or a ``lineax`` linear operator.
-        y0: Initial state. Any PyTree; a bare array (e.g. ``[lat, lon]``, shape
+        y0: Initial state. Any PyTree; a bare array (e.g. ``[lon, lat]``, shape
             ``(2,)``) is the single-leaf case. Defines the output structure.
         t0: Start time in seconds. JAX scalar — can change between calls without
             recompilation. The implicit end time is ``t0 + n_save * save_dt``.

@@ -35,21 +35,21 @@ def make_field(n=5, values_fill=1.0):
 class TestField:
     def test_interp_returns_scalar(self):
         field = make_field()
-        v = field.interp(jnp.array(43200.0), jnp.array(1.0), jnp.array(11.0))
+        v = field.interp(jnp.array(43200.0), jnp.array(11.0), jnp.array(1.0))
         assert v.shape == ()
         assert float(v) == pytest.approx(1.0)
 
     def test_neighborhood_shape_default(self):
         field = make_field(n=7)
         patch = field.neighborhood(
-            jnp.array(3 * 86400.0), jnp.array(2.0), jnp.array(12.0)
+            jnp.array(3 * 86400.0), jnp.array(12.0), jnp.array(2.0)
         )
         assert patch.shape == (3, 3, 3)  # 2*1+1 in each dim
 
     def test_neighborhood_shape_custom(self):
         field = make_field(n=9)
         patch = field.neighborhood(
-            jnp.array(0.0), jnp.array(0.0), jnp.array(10.0),
+            jnp.array(0.0), jnp.array(10.0), jnp.array(0.0),
             t_window=2, lat_window=1, lon_window=3,
         )
         assert patch.shape == (5, 3, 7)
@@ -57,7 +57,7 @@ class TestField:
     def test_neighborhood_values_uniform_field(self):
         field = make_field(n=7, values_fill=3.14)
         patch = field.neighborhood(
-            jnp.array(3 * 86400.0), jnp.array(2.0), jnp.array(12.0)
+            jnp.array(3 * 86400.0), jnp.array(12.0), jnp.array(2.0)
         )
         assert jnp.allclose(patch, jnp.full_like(patch, 3.14))
 
@@ -65,7 +65,7 @@ class TestField:
         # Query at the very start — window should still have the right shape
         field = make_field(n=7)
         patch = field.neighborhood(
-            jnp.array(0.0), jnp.array(0.0), jnp.array(10.0)
+            jnp.array(0.0), jnp.array(10.0), jnp.array(0.0)
         )
         assert patch.shape == (3, 3, 3)
 
@@ -91,7 +91,7 @@ class TestFieldLonPeriodic:
 
     def test_interp_wraps(self):
         field = self._periodic_field()
-        v = field.interp(jnp.array(0.5), jnp.array(0.0), jnp.array(315.0))
+        v = field.interp(jnp.array(0.5), jnp.array(315.0), jnp.array(0.0))
         # midpoint between lon-index 3 and lon-index 0
         assert float(v) == pytest.approx(1.5)
 
@@ -109,7 +109,7 @@ class TestFieldLonPeriodic:
         field = self._periodic_field()
         # Centre on lon=270° (index 3), window=1 → indices [2, 3, 0]
         patch = field.neighborhood(
-            jnp.array(0.0), jnp.array(0.0), jnp.array(270.0),
+            jnp.array(0.0), jnp.array(270.0), jnp.array(0.0),
             t_window=0, lat_window=0, lon_window=1,
         )
         assert jnp.allclose(patch[0, 0], jnp.array([2.0, 3.0, 0.0]))
@@ -118,7 +118,7 @@ class TestFieldLonPeriodic:
         field = self._periodic_field()
         # -90° == 270° (index 3); window=1 → indices [2, 3, 0]
         patch = field.neighborhood(
-            jnp.array(0.0), jnp.array(0.0), jnp.array(-90.0),
+            jnp.array(0.0), jnp.array(-90.0), jnp.array(0.0),
             t_window=0, lat_window=0, lon_window=1,
         )
         assert jnp.allclose(patch[0, 0], jnp.array([2.0, 3.0, 0.0]))
@@ -149,7 +149,7 @@ class TestFieldLonPeriodic:
         @jax.jit
         def f(lon):
             return field.neighborhood(
-                jnp.array(0.0), jnp.array(0.0), lon,
+                jnp.array(0.0), lon, jnp.array(0.0),
                 t_window=0, lat_window=0, lon_window=1,
             )
 
@@ -177,7 +177,7 @@ class TestDataset:
         )
         field = dataset["u"]
         t_s = float(np.datetime64("2020-01-01T12:00:00", "s").astype(np.int64))
-        v = field.interp(jnp.array(t_s, dtype=jnp.float32), jnp.array(1.0), jnp.array(11.0))
+        v = field.interp(jnp.array(t_s, dtype=jnp.float32), jnp.array(11.0), jnp.array(1.0))
         assert float(v) == pytest.approx(1.0, abs=1e-5)
 
     def test_getitem(self):
@@ -199,8 +199,8 @@ class TestDataset:
         # Use a large-enough grid: ds has 3 points per axis, window=1 → need 3 points → OK
         patches = dataset.neighborhood(
             jnp.array(float(np.datetime64("2020-01-02", "s").astype(np.int64)), dtype=jnp.float32),
-            jnp.array(1.0),
             jnp.array(11.0),
+            jnp.array(1.0),
         )
         assert set(patches.keys()) == {"u", "v"}
         assert patches["u"].shape == (3, 3, 3)
@@ -224,7 +224,7 @@ class TestDatasetFromArrays:
         t, lat, lon = self._coords()
         u = np.ones((4, 4, 4), dtype=np.float32)
         dataset = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
-        v = dataset["u"].interp(jnp.array(1800.0), jnp.array(1.5), jnp.array(11.5))
+        v = dataset["u"].interp(jnp.array(1800.0), jnp.array(11.5), jnp.array(1.5))
         assert float(v) == pytest.approx(1.0, abs=1e-5)
 
     def test_accepts_jax_arrays(self):
@@ -245,7 +245,7 @@ class TestDatasetFromArrays:
             {"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0,
         )
         assert dataset["u"].lon_period == 360.0
-        v = dataset["u"].interp(jnp.array(0.0), jnp.array(0.0), jnp.array(315.0))
+        v = dataset["u"].interp(jnp.array(0.0), jnp.array(315.0), jnp.array(0.0))
         assert float(v) == pytest.approx(1.5)
 
     def test_from_arrays_accepts_datetime64(self):
@@ -460,7 +460,7 @@ class TestDatasetCGrid:
                 "wind":    {"u": ("u10", u_wind), "v": ("v10", v_wind)},
             },
         )
-        q = (jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(13.5))
+        q = (jnp.asarray(0.0), jnp.asarray(13.5), jnp.asarray(0.0))
         uv_current = ds.velocity_interp(*q, u_name="uo",  v_name="vo")
         uv_wind    = ds.velocity_interp(*q, u_name="u10", v_name="v10")
         assert float(uv_current[0]) == pytest.approx(1.0)  # U from "current"
@@ -589,14 +589,14 @@ class TestDatasetCGrid:
             ds = args
             u = ds["u"].interp(t_, y[0], y[1])
             v = ds["v"].interp(t_, y[0], y[1])
-            return jnp.array([v, u])  # [dlat/dt, dlon/dt]
+            return jnp.array([u, v])  # [dlon/dt, dlat/dt]
 
         n_save = 500
         dt = T / n_save
         y0 = jnp.array([2.0, 2.0], dtype=jnp.float32)
         traj = solve(term, y0, jnp.array(0.0), n_save, dt, dt, solver=Heun(), args=dataset)
 
-        lat_final = float(traj[-1, 0])
-        lon_final = float(traj[-1, 1])
+        lat_final = float(traj[-1, 1])
+        lon_final = float(traj[-1, 0])
         assert lat_final == pytest.approx(2.0 * float(np.exp(beta  * T)), rel=1e-3)
         assert lon_final == pytest.approx(2.0 * float(np.exp(alpha * T)), rel=1e-3)

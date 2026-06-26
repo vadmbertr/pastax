@@ -1,17 +1,11 @@
 """Tests for the optional land-mask plumbing on Field and the loaders.
 
-PR 1 of the coastal-robustness iteration. No interpolation behaviour is
-changed by this PR; these tests verify only:
-
 - ``Field.mask`` defaults to ``None`` (backwards-compatible PyTree).
 - All four loaders accept a ``masks`` kwarg.
 - When the source contains NaN, a mask is auto-inferred and NaN is
   replaced with 0 in the stored ``values``.
 - When the source is NaN-free and no user mask is supplied, the
-  resulting ``Field.mask`` stays ``None`` (preserving the legacy path).
-- ``Field.interp`` with ``mask=None`` produces the same output as before
-  (verified by the existing 137 tests + an explicit equality check
-  against a NaN-free input here).
+  resulting ``Field.mask`` stays ``None``.
 """
 
 import jax.numpy as jnp
@@ -298,8 +292,7 @@ class TestFromXarrayCGridMask:
 
 
 def test_interp_unchanged_when_mask_none():
-    """For NaN-free input the mask path is fully skipped and Field.interp
-    produces the same output as before this PR."""
+    """For NaN-free input the mask path is fully skipped."""
     t = np.linspace(0.0, 3600.0, 3)
     lat = np.linspace(0.0, 4.0, 5)
     lon = np.linspace(0.0, 5.0, 6)
@@ -308,7 +301,7 @@ def test_interp_unchanged_when_mask_none():
 
     ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
     assert ds["u"].mask is None
-    val = float(ds["u"].interp(jnp.asarray(1800.0), jnp.asarray(2.3), jnp.asarray(3.1)))
+    val = float(ds["u"].interp(jnp.asarray(1800.0), jnp.asarray(3.1), jnp.asarray(2.3)))
     # Build a Field directly without going through the loader — should match.
     f_direct = Field.standalone(
         values=jnp.asarray(u),
@@ -317,7 +310,7 @@ def test_interp_unchanged_when_mask_none():
         lon_coords=jnp.asarray(lon, dtype=jnp.float32),
     )
     val_direct = float(
-        f_direct.interp(jnp.asarray(1800.0), jnp.asarray(2.3), jnp.asarray(3.1))
+        f_direct.interp(jnp.asarray(1800.0), jnp.asarray(3.1), jnp.asarray(2.3))
     )
     assert val == pytest.approx(val_direct, abs=1e-6)
 
@@ -353,8 +346,8 @@ class TestMaskedBilinear:
             lon_coords=jnp.linspace(0.0, 2.0, 3, dtype=jnp.float32),
         )
         for lat_q, lon_q in [(0.3, 0.7), (1.5, 1.5), (1.9, 0.1)]:
-            v_m = float(f_masked.interp(jnp.asarray(0.5), jnp.asarray(lat_q), jnp.asarray(lon_q)))
-            v_n = float(f_naive.interp(jnp.asarray(0.5), jnp.asarray(lat_q), jnp.asarray(lon_q)))
+            v_m = float(f_masked.interp(jnp.asarray(0.5), jnp.asarray(lon_q), jnp.asarray(lat_q)))
+            v_n = float(f_naive.interp(jnp.asarray(0.5), jnp.asarray(lon_q), jnp.asarray(lat_q)))
             assert v_m == pytest.approx(v_n, abs=1e-6)
 
     def test_all_land_cell_returns_zero(self):
@@ -405,7 +398,7 @@ class TestMaskedBilinear:
         values = np.stack([slab, slab])
         mask = np.array([[False, False], [True, False]], dtype=bool)
         f = self._field(values, mask)
-        v = float(f.interp(jnp.asarray(0.0), jnp.asarray(1.0), jnp.asarray(0.0)))
+        v = float(f.interp(jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(1.0)))
         assert np.isfinite(v)
 
 
@@ -431,7 +424,7 @@ class TestMaskedInterpGradientSafety:
         f = self._setup()
         g = jax.grad(
             lambda p: f.interp(jnp.asarray(0.5), p[0], p[1])
-        )(jnp.asarray([0.3, 0.7], dtype=jnp.float32))
+        )(jnp.asarray([0.7, 0.3], dtype=jnp.float32))
         assert jnp.all(jnp.isfinite(g))
 
     def test_grad_finite_at_ocean_corner(self):
@@ -447,7 +440,7 @@ class TestMaskedInterpGradientSafety:
         f = self._setup()
         g = jax.grad(
             lambda p: f.interp(jnp.asarray(0.5), p[0], p[1])
-        )(jnp.asarray([1.0, 0.0], dtype=jnp.float32))
+        )(jnp.asarray([0.0, 1.0], dtype=jnp.float32))
         assert jnp.all(jnp.isfinite(g))
 
     def test_grad_finite_in_all_land_cell(self):
@@ -504,30 +497,30 @@ class TestAlongshoreJetNoStuckParticle:
             ds = args
             u = ds["u"].interp(t, y[0], y[1])
             v = ds["v"].interp(t, y[0], y[1])
-            return jnp.array([v, u])
+            return jnp.array([u, v])
         return term
 
     def test_unmasked_particle_gets_stuck_near_coast(self):
         from pastax import Heun, solve
         ds = self._dataset(with_mask=False)
-        y0 = jnp.array([0.1, 0.5], dtype=jnp.float32)  # just above coast
+        y0 = jnp.array([0.5, 0.1], dtype=jnp.float32)  # [lon, lat], just above coast
         traj = solve(self._term(), y0, jnp.array(0.0), 10, 0.5, 0.5, solver=Heun(), args=ds)  # 5 seconds
         # With naive bilinear, the lat=0 land row pulls U down: at lat=0.1
         # (close to coast) U≈0.1*0.1≈0.01 deg/s, so dlon ≈ 0.05 over 5 s.
-        dlon_unmasked = float(traj[-1, 1] - traj[0, 1])
+        dlon_unmasked = float(traj[-1, 0] - traj[0, 0])
         assert dlon_unmasked < 0.10  # well under the full 0.5 deg eastward
 
     def test_masked_particle_slides_along_coast(self):
         from pastax import Heun, solve
         ds = self._dataset(with_mask=True)
-        y0 = jnp.array([0.1, 0.5], dtype=jnp.float32)
+        y0 = jnp.array([0.5, 0.1], dtype=jnp.float32)  # [lon, lat]
         traj = solve(self._term(), y0, jnp.array(0.0), 10, 0.5, 0.5, solver=Heun(), args=ds)
         # With the mask + invdist, the land row is dropped: the particle
         # sees the ocean U=0.1 unattenuated. Over 5 s → 0.5 deg east.
-        dlon_masked = float(traj[-1, 1] - traj[0, 1])
+        dlon_masked = float(traj[-1, 0] - traj[0, 0])
         assert dlon_masked == pytest.approx(0.5, rel=0.05)
         # And lat should not drift (V=0 everywhere).
-        assert float(traj[-1, 0]) == pytest.approx(0.1, abs=1e-3)
+        assert float(traj[-1, 1]) == pytest.approx(0.1, abs=1e-3)
 
 
 class TestClosedBay:
@@ -553,8 +546,8 @@ class TestClosedBay:
         def term(t, y, args):
             ds_ = args
             return jnp.array(
-                [ds_["v"].interp(t, y[0], y[1]),
-                 ds_["u"].interp(t, y[0], y[1])]
+                [ds_["u"].interp(t, y[0], y[1]),
+                 ds_["v"].interp(t, y[0], y[1])]
             )
 
         y0 = jnp.array([2.0, 2.0], dtype=jnp.float32)  # dead centre of the bay

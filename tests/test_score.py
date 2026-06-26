@@ -89,7 +89,7 @@ class TestSquaredError:
         assert float(squared_error(f, o)[0]) == pytest.approx(8.0)
 
     def test_haversine_kernel_zero(self):
-        traj = jnp.array([[48.0, 2.0], [49.0, 3.0]])
+        traj = jnp.array([[2.0, 48.0], [3.0, 49.0]])
         f = jnp.broadcast_to(traj, (3, 2, 2))
         s = squared_error(f, traj, kernel=haversine)
         assert jnp.allclose(s, jnp.zeros(2), atol=1e-3)
@@ -247,7 +247,7 @@ class TestEnergyScore:
         assert float(energy_score(f, o, alpha=2.0)[0]) == pytest.approx(25.0)
 
     def test_haversine_kernel_zero(self):
-        traj = jnp.array([[48.0, 2.0], [49.0, 3.0]])
+        traj = jnp.array([[2.0, 48.0], [3.0, 49.0]])
         f = jnp.broadcast_to(traj, (4, 2, 2))
         s = energy_score(f, traj, kernel=haversine)
         assert jnp.allclose(s, jnp.zeros(2), atol=1e-3)
