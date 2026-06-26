@@ -1,5 +1,5 @@
 """Tests for ``Dataset.velocity_interp`` — joint (U, V) interpolation with
-optional partial-slip wall correction. Part of Group 3 PR 3."""
+optional partial-slip wall correction."""
 
 import jax
 import jax.numpy as jnp
@@ -37,11 +37,11 @@ class TestDefaultScheme:
     def test_default_matches_field_interp_composition(self):
         ds = _agrid_dataset(u_const=0.3, v_const=-0.1, with_mask=False, land_row=False)
         t, lat, lon = jnp.asarray(0.0), jnp.asarray(2.0), jnp.asarray(4.5)
-        v, u = ds.velocity_interp(t, lat, lon)
-        v_expected = ds["v"].interp(t, lat, lon)
+        u, v = ds.velocity_interp(t, lat, lon)
         u_expected = ds["u"].interp(t, lat, lon)
-        assert float(v) == pytest.approx(float(v_expected), abs=1e-6)
+        v_expected = ds["v"].interp(t, lat, lon)
         assert float(u) == pytest.approx(float(u_expected), abs=1e-6)
+        assert float(v) == pytest.approx(float(v_expected), abs=1e-6)
 
     def test_default_returns_v_u_order(self):
         """Returned vector is ``[v, u]`` so it slots into a solver term as
@@ -49,14 +49,14 @@ class TestDefaultScheme:
         ds = _agrid_dataset(u_const=1.0, v_const=2.0, with_mask=False, land_row=False)
         result = ds.velocity_interp(jnp.asarray(0.0), jnp.asarray(2.0), jnp.asarray(4.5))
         assert result.shape == (2,)
-        assert float(result[0]) == pytest.approx(2.0, abs=1e-6)  # v first
-        assert float(result[1]) == pytest.approx(1.0, abs=1e-6)  # u second
+        assert float(result[0]) == pytest.approx(1.0, abs=1e-6)  # u first
+        assert float(result[1]) == pytest.approx(2.0, abs=1e-6)  # v second
 
     def test_default_with_mask_uses_invdist(self):
         """With a mask present, default scheme uses each Field's invdist."""
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
         # Near the coast (lat=0.1): invdist drops the land row entirely.
-        v, u = ds.velocity_interp(jnp.asarray(0.0), jnp.asarray(0.1), jnp.asarray(4.5))
+        u, _ = ds.velocity_interp(jnp.asarray(0.0), jnp.asarray(0.1), jnp.asarray(4.5))
         assert float(u) == pytest.approx(0.1, rel=1e-2)  # full ocean velocity
 
 
@@ -67,7 +67,7 @@ class TestPartialSlipScheme:
         """At wl=0 (exactly on coast), partial-slip with a=b=0.5 should
         give 0.5 * U_ocean (the ``slip_a`` value)."""
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
-        v, u = ds.velocity_interp(
+        u, v = ds.velocity_interp(
             jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(4.5),
             scheme="partialslip",
         )
@@ -80,7 +80,7 @@ class TestPartialSlipScheme:
         """``slip_a=1, slip_b=0`` gives full free-slip — particle sees
         full ocean velocity even at the coast."""
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
-        v, u = ds.velocity_interp(
+        u, _ = ds.velocity_interp(
             jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(4.5),
             scheme="partialslip", slip_a=1.0, slip_b=0.0,
         )
@@ -91,7 +91,7 @@ class TestPartialSlipScheme:
         the naive bilinear (since U_along_S = 0 on the land row)."""
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
         # Just above coast — wl=0.25.
-        v, u = ds.velocity_interp(
+        u, _ = ds.velocity_interp(
             jnp.asarray(0.0), jnp.asarray(0.25), jnp.asarray(4.5),
             scheme="partialslip", slip_a=0.0, slip_b=1.0,
         )
@@ -104,7 +104,8 @@ class TestPartialSlipScheme:
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
 
         def term(t, y, args):
-            return args.velocity_interp(t, y[0], y[1], scheme="partialslip")
+            uv = args.velocity_interp(t, y[0], y[1], scheme="partialslip")
+            return uv[::-1]  # swap to [dlat/dt, dlon/dt] for solver
 
         # Particle starts at lat=0.1 above a coast (dlat=1 between rows
         # → wl=0.1). Partial-slip factor = 0.5 + 0.5*0.1 = 0.55.
@@ -137,7 +138,7 @@ class TestPartialSlipScheme:
         # No edge is fully land → partial-slip returns naive bilinear:
         #   U = 0.25*0 + 0.25*1 + 0.25*1 + 0.25*1 = 0.75
         #   V = 1.5 similarly
-        v_, u_ = ds.velocity_interp(
+        u_, v_ = ds.velocity_interp(
             jnp.asarray(0.0), jnp.asarray(0.5), jnp.asarray(0.5),
             scheme="partialslip",
         )

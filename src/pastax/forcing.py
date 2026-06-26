@@ -325,7 +325,7 @@ class Dataset(eqx.Module):
     ) -> Float[Array, "2"]:
         r"""Interpolate the ``(U, V)`` velocity vector at a single point.
 
-        Returns ``[v_value, u_value]`` so the result can be used directly
+        Returns ``[u_value, v_value]`` so the result as to swapped to be used
         as the :math:`[\mathrm{d}lat/\mathrm{d}t,\ \mathrm{d}lon/\mathrm{d}t]`
         part of a solver term (after the usual metres-to-degrees conversion if
         applicable).
@@ -361,15 +361,15 @@ class Dataset(eqx.Module):
             slip_b: Wall slip gradient coefficient (partial-slip only).
 
         Returns:
-            ``[v, u]`` velocity vector of shape ``(2,)``.
+            ``[u, v]`` velocity vector of shape ``(2,)``.
         """
         u_field = self.fields[u_name]
         v_field = self.fields[v_name]
 
         if scheme == "default":
-            v = v_field.interp(t, lat, lon)
             u = u_field.interp(t, lat, lon)
-            return jnp.stack([v, u])
+            v = v_field.interp(t, lat, lon)
+            return jnp.stack([u, v])
 
         if scheme == "partialslip":
             if self.grid is not None and self.grid.stagger_type == "C":
@@ -392,7 +392,7 @@ class Dataset(eqx.Module):
                 slip_a=slip_a, slip_b=slip_b,
                 lon_period=u_field.lon_period,
             )
-            return jnp.stack([v, u])
+            return jnp.stack([u, v])
 
         raise ValueError(
             f"Unknown velocity_interp scheme {scheme!r}; "
