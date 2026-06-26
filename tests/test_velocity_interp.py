@@ -37,17 +37,17 @@ class TestDefaultScheme:
     def test_default_matches_field_interp_composition(self):
         ds = _agrid_dataset(u_const=0.3, v_const=-0.1, with_mask=False, land_row=False)
         t, lat, lon = jnp.asarray(0.0), jnp.asarray(2.0), jnp.asarray(4.5)
-        u, v = ds.velocity_interp(t, lat, lon)
-        u_expected = ds["u"].interp(t, lat, lon)
-        v_expected = ds["v"].interp(t, lat, lon)
+        u, v = ds.velocity_interp(t, lon, lat)
+        u_expected = ds["u"].interp(t, lon, lat)
+        v_expected = ds["v"].interp(t, lon, lat)
         assert float(u) == pytest.approx(float(u_expected), abs=1e-6)
         assert float(v) == pytest.approx(float(v_expected), abs=1e-6)
 
-    def test_default_returns_v_u_order(self):
-        """Returned vector is ``[v, u]`` so it slots into a solver term as
-        ``[dlat/dt, dlon/dt]``."""
+    def test_default_returns_u_v_order(self):
+        """Returned vector is ``[u, v]`` so it slots into a ``[lon, lat]`` solver
+        term as ``[dlon/dt, dlat/dt]``."""
         ds = _agrid_dataset(u_const=1.0, v_const=2.0, with_mask=False, land_row=False)
-        result = ds.velocity_interp(jnp.asarray(0.0), jnp.asarray(2.0), jnp.asarray(4.5))
+        result = ds.velocity_interp(jnp.asarray(0.0), jnp.asarray(4.5), jnp.asarray(2.0))
         assert result.shape == (2,)
         assert float(result[0]) == pytest.approx(1.0, abs=1e-6)  # u first
         assert float(result[1]) == pytest.approx(2.0, abs=1e-6)  # v second
@@ -56,7 +56,7 @@ class TestDefaultScheme:
         """With a mask present, default scheme uses each Field's invdist."""
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
         # Near the coast (lat=0.1): invdist drops the land row entirely.
-        u, _ = ds.velocity_interp(jnp.asarray(0.0), jnp.asarray(0.1), jnp.asarray(4.5))
+        u, _ = ds.velocity_interp(jnp.asarray(0.0), jnp.asarray(4.5), jnp.asarray(0.1))
         assert float(u) == pytest.approx(0.1, rel=1e-2)  # full ocean velocity
 
 
@@ -68,7 +68,7 @@ class TestPartialSlipScheme:
         give 0.5 * U_ocean (the ``slip_a`` value)."""
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
         u, v = ds.velocity_interp(
-            jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(4.5),
+            jnp.asarray(0.0), jnp.asarray(4.5), jnp.asarray(0.0),
             scheme="partialslip",
         )
         # U at coast = (a + b*0) * U_along_N = 0.5 * 0.1
@@ -81,7 +81,7 @@ class TestPartialSlipScheme:
         full ocean velocity even at the coast."""
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
         u, _ = ds.velocity_interp(
-            jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(4.5),
+            jnp.asarray(0.0), jnp.asarray(4.5), jnp.asarray(0.0),
             scheme="partialslip", slip_a=1.0, slip_b=0.0,
         )
         assert float(u) == pytest.approx(0.1, abs=1e-4)
@@ -92,7 +92,7 @@ class TestPartialSlipScheme:
         ds = _agrid_dataset(u_const=0.1, v_const=0.0, with_mask=True, land_row=True)
         # Just above coast — wl=0.25.
         u, _ = ds.velocity_interp(
-            jnp.asarray(0.0), jnp.asarray(0.25), jnp.asarray(4.5),
+            jnp.asarray(0.0), jnp.asarray(4.5), jnp.asarray(0.25),
             scheme="partialslip", slip_a=0.0, slip_b=1.0,
         )
         # Naive U = wl * 0.1 = 0.025 (the land row pulls down).
@@ -105,16 +105,16 @@ class TestPartialSlipScheme:
 
         def term(t, y, args):
             uv = args.velocity_interp(t, y[0], y[1], scheme="partialslip")
-            return uv[::-1]  # swap to [dlat/dt, dlon/dt] for solver
+            return uv  # [u, v] = [dlon/dt, dlat/dt] for a [lon, lat] solver
 
         # Particle starts at lat=0.1 above a coast (dlat=1 between rows
         # → wl=0.1). Partial-slip factor = 0.5 + 0.5*0.1 = 0.55.
-        y0 = jnp.array([0.1, 0.5], dtype=jnp.float32)
+        y0 = jnp.array([0.5, 0.1], dtype=jnp.float32)  # [lon, lat]
         traj = solve(term, y0, jnp.array(0.0), 10, 0.5, 0.5, solver=Heun(), args=ds)
-        dlon = float(traj[-1, 1] - traj[0, 1])
+        dlon = float(traj[-1, 0] - traj[0, 0])
         # Expected ≈ 0.55 * 0.1 deg/s * 5 s = 0.275 deg
         assert dlon == pytest.approx(0.275, rel=0.10)
-        assert float(traj[-1, 0]) == pytest.approx(0.1, abs=1e-3)  # v stays 0
+        assert float(traj[-1, 1]) == pytest.approx(0.1, abs=1e-3)  # lat (v) stays 0
 
     def test_no_edge_fully_land_falls_back_to_naive(self):
         """When no edge is fully land (only a corner is), partial-slip
@@ -159,7 +159,7 @@ class TestPartialSlipGradientSafety:
             lambda p: ds.velocity_interp(
                 jnp.asarray(0.0), p[0], p[1], scheme="partialslip"
             ).sum()
-        )(jnp.asarray([0.0, 4.5], dtype=jnp.float32))
+        )(jnp.asarray([4.5, 0.0], dtype=jnp.float32))  # [lon, lat] on the coast
         assert jnp.all(jnp.isfinite(g))
 
     def test_grad_finite_mid_cell(self):
@@ -168,7 +168,7 @@ class TestPartialSlipGradientSafety:
             lambda p: ds.velocity_interp(
                 jnp.asarray(0.0), p[0], p[1], scheme="partialslip"
             ).sum()
-        )(jnp.asarray([0.5, 4.5], dtype=jnp.float32))
+        )(jnp.asarray([4.5, 0.5], dtype=jnp.float32))  # [lon, lat]
         assert jnp.all(jnp.isfinite(g))
 
     def test_grad_finite_far_from_coast(self):
@@ -177,7 +177,7 @@ class TestPartialSlipGradientSafety:
             lambda p: ds.velocity_interp(
                 jnp.asarray(0.0), p[0], p[1], scheme="partialslip"
             ).sum()
-        )(jnp.asarray([3.5, 4.5], dtype=jnp.float32))
+        )(jnp.asarray([4.5, 3.5], dtype=jnp.float32))  # [lon, lat]
         assert jnp.all(jnp.isfinite(g))
 
 
@@ -195,7 +195,7 @@ class TestPartialSlipErrors:
         )
         with pytest.raises(NotImplementedError, match="C-grid"):
             ds.velocity_interp(
-                jnp.asarray(0.0), jnp.asarray(2.0), jnp.asarray(2.5),
+                jnp.asarray(0.0), jnp.asarray(2.5), jnp.asarray(2.0),
                 scheme="partialslip",
             )
 
@@ -203,7 +203,7 @@ class TestPartialSlipErrors:
         ds = _agrid_dataset(with_mask=False, land_row=False)
         with pytest.raises(ValueError, match="land mask"):
             ds.velocity_interp(
-                jnp.asarray(0.0), jnp.asarray(2.0), jnp.asarray(4.5),
+                jnp.asarray(0.0), jnp.asarray(4.5), jnp.asarray(2.0),
                 scheme="partialslip",
             )
 
@@ -211,6 +211,6 @@ class TestPartialSlipErrors:
         ds = _agrid_dataset()
         with pytest.raises(ValueError, match="Unknown velocity_interp scheme"):
             ds.velocity_interp(
-                jnp.asarray(0.0), jnp.asarray(2.0), jnp.asarray(4.5),
+                jnp.asarray(0.0), jnp.asarray(4.5), jnp.asarray(2.0),
                 scheme="freeslip",  # type: ignore[arg-type]
             )

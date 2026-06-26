@@ -18,29 +18,29 @@ def test_earth_radius():
 
 class TestHaversine:
     def test_same_point_is_zero(self):
-        y = jnp.array([48.0, 2.0])
+        y = jnp.array([2.0, 48.0])
         assert float(haversine(y, y)) == pytest.approx(0.0, abs=1e-3)
 
     def test_north_pole_to_equator(self):
-        north = jnp.array([90.0, 0.0])
+        north = jnp.array([0.0, 90.0])
         equator = jnp.array([0.0, 0.0])
         expected = EARTH_RADIUS * jnp.pi / 2
         assert float(haversine(north, equator)) == pytest.approx(expected, rel=1e-4)
 
     def test_equator_one_degree_lon(self):
         y1 = jnp.array([0.0, 0.0])
-        y2 = jnp.array([0.0, 1.0])
+        y2 = jnp.array([1.0, 0.0])
         expected = EARTH_RADIUS * jnp.pi / 180
         assert float(haversine(y1, y2)) == pytest.approx(expected, rel=1e-4)
 
     def test_grad_finite_at_non_coincident_points(self):
-        y1 = jnp.array([48.0, 2.0])
-        y2 = jnp.array([49.0, 3.0])
+        y1 = jnp.array([2.0, 48.0])
+        y2 = jnp.array([3.0, 49.0])
         g = jax.grad(lambda a: haversine(a, y2))(y1)
         assert jnp.all(jnp.isfinite(g))
 
     def test_grad_finite_at_coincident_points(self):
-        y = jnp.array([48.0, 2.0])
+        y = jnp.array([2.0, 48.0])
         g = jax.grad(lambda a: haversine(a, y))(y)
         assert jnp.all(jnp.isfinite(g))
 
@@ -75,4 +75,4 @@ class TestUnitConversions:
         lat = jnp.array(60.0)
         one_deg = jnp.array([1.0, 1.0])
         m = degrees_to_meters(one_deg, lat)
-        assert m[1] == pytest.approx(m[0] * 0.5, rel=1e-3)
+        assert m[0] == pytest.approx(m[1] * 0.5, rel=1e-3)

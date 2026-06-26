@@ -166,15 +166,15 @@ class Field(eqx.Module):
     def interp(
         self,
         t: Float[Array, ""],
-        lat: Float[Array, ""],
         lon: Float[Array, ""],
+        lat: Float[Array, ""],
     ) -> Float[Array, ""]:
         """Trilinearly interpolate the field at a single ``(t, lat, lon)`` point.
 
         Args:
             t: Query time in seconds.
-            lat: Query latitude in degrees.
             lon: Query longitude in degrees.
+            lat: Query latitude in degrees.
 
         Returns:
             Interpolated scalar value at the query point. Outside the grid the
@@ -195,8 +195,8 @@ class Field(eqx.Module):
     def neighborhood(
         self,
         t: Float[Array, ""],
-        lat: Float[Array, ""],
         lon: Float[Array, ""],
+        lat: Float[Array, ""],
         t_window: int = 1,
         lat_window: int = 1,
         lon_window: int = 1,
@@ -205,8 +205,8 @@ class Field(eqx.Module):
 
         Args:
             t: Query time in seconds.
-            lat: Query latitude in degrees.
             lon: Query longitude in degrees.
+            lat: Query latitude in degrees.
             t_window: Half-width along the time axis (window size = 2*t_window+1).
             lat_window: Half-width along the latitude axis.
             lon_window: Half-width along the longitude axis.
@@ -282,8 +282,8 @@ class Dataset(eqx.Module):
     def neighborhood(
         self,
         t: Float[Array, ""],
-        lat: Float[Array, ""],
         lon: Float[Array, ""],
+        lat: Float[Array, ""],
         t_window: int = 1,
         lat_window: int = 1,
         lon_window: int = 1,
@@ -296,8 +296,8 @@ class Dataset(eqx.Module):
 
         Args:
             t: Query time in seconds.
-            lat: Query latitude in degrees.
             lon: Query longitude in degrees.
+            lat: Query latitude in degrees.
             t_window: Half-width along the time axis (window size = ``2*t_window+1``).
             lat_window: Half-width along the latitude axis.
             lon_window: Half-width along the longitude axis.
@@ -307,15 +307,15 @@ class Dataset(eqx.Module):
             ``(2*t_window+1, 2*lat_window+1, 2*lon_window+1)``.
         """
         return {
-            name: field.neighborhood(t, lat, lon, t_window, lat_window, lon_window)
+            name: field.neighborhood(t, lon, lat, t_window, lat_window, lon_window)
             for name, field in self.fields.items()
         }
 
     def velocity_interp(
         self,
         t: Float[Array, ""],
-        lat: Float[Array, ""],
         lon: Float[Array, ""],
+        lat: Float[Array, ""],
         *,
         scheme: Literal["default", "partialslip"] = "default",
         u_name: str = "u",
@@ -325,15 +325,15 @@ class Dataset(eqx.Module):
     ) -> Float[Array, "2"]:
         r"""Interpolate the ``(U, V)`` velocity vector at a single point.
 
-        Returns ``[u_value, v_value]`` so the result as to swapped to be used
-        as the :math:`[\mathrm{d}lat/\mathrm{d}t,\ \mathrm{d}lon/\mathrm{d}t]`
-        part of a solver term (after the usual metres-to-degrees conversion if
-        applicable).
+        Returns ``[u_value, v_value]``, which already matches the
+        :math:`[\mathrm{d}lon/\mathrm{d}t,\ \mathrm{d}lat/\mathrm{d}t]` ordering
+        of a ``[lon, lat]`` solver term — feed it straight through the usual
+        metres-to-degrees conversion with no component swap.
 
         Args:
             t: Query time in seconds.
-            lat: Query latitude in degrees.
             lon: Query longitude in degrees.
+            lat: Query latitude in degrees.
             scheme: Coastal interpolation scheme.
 
                 * ``"default"`` (default) — composes per-field
@@ -367,8 +367,8 @@ class Dataset(eqx.Module):
         v_field = self.fields[v_name]
 
         if scheme == "default":
-            u = u_field.interp(t, lat, lon)
-            v = v_field.interp(t, lat, lon)
+            u = u_field.interp(t, lon, lat)
+            v = v_field.interp(t, lon, lat)
             return jnp.stack([u, v])
 
         if scheme == "partialslip":
@@ -428,8 +428,7 @@ class Dataset(eqx.Module):
                 in ``masks``, that mask is used. Otherwise a mask is inferred
                 from NaN locations in the values array (collapsed across the
                 time axis). Fields with neither user-supplied nor inferred
-                NaN entries carry ``mask=None`` — interp behaviour is then
-                bit-exact identical to the legacy mask-less path. NaN values
+                NaN entries carry ``mask=None``. NaN values
                 in the input are always replaced with 0 in the stored
                 ``values`` so no NaN can leak into interpolation.
 

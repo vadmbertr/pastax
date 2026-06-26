@@ -23,8 +23,7 @@ def _index_and_weight(
         i = clip(floor((x - x0) / dx), 0, n-2)
         w = (x - x0) / dx - i          (= fractional position within cell [i, i+1])
 
-    w is in [0, 1) for in-range x; outside that range it extrapolates linearly
-    (same behaviour as the previous searchsorted implementation).
+    w is in [0, 1) for in-range x; outside that range it extrapolates linearly.
     """
     x0 = coords[0]
     dx = coords[1] - coords[0]

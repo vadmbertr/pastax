@@ -76,9 +76,9 @@ def ode_term(t, y, args):
     dataset = args
     u = dataset["u"].interp(t, y[0], y[1])
     v = dataset["v"].interp(t, y[0], y[1])
-    return meters_to_degrees(jnp.array([v, u]), y[0])   # deg/s
+    return meters_to_degrees(jnp.array([u, v]), y[1])   # deg/s
 
-y0 = jnp.array([48.0, -4.0])   # [lat, lon]
+y0 = jnp.array([-4.0, 48.0])   # [lon, lat]
 t0 = jnp.array(0.0)            # start time, seconds
 traj = solve(ode_term, y0, t0, n_save=120, int_dt=3600., save_dt=3600., args=dataset)
 # shape (121, 2)
@@ -99,7 +99,7 @@ def sde_term(t, y, args):
     dataset = args
     u = dataset["u"].interp(t, y[0], y[1])
     v = dataset["v"].interp(t, y[0], y[1])
-    drift = meters_to_degrees(jnp.array([v, u]), y[0])
+    drift = meters_to_degrees(jnp.array([u, v]), y[1])
     g     = jnp.full(2, 1e-5)   # diagonal diffusion, deg / sqrt(s)
     return drift, g             # z ~ N(0, I_2) is drawn internally
 
@@ -130,8 +130,8 @@ import jax.random as jr
 from pastax import solve, EulerHeun
 
 class State(NamedTuple):
-    x: jnp.ndarray   # position [lat, lon]    (deg)
-    v: jnp.ndarray   # velocity [v_lat, v_lon] (deg/s)
+    x: jnp.ndarray   # position [lon, lat]    (deg)
+    v: jnp.ndarray   # velocity [v_lon, v_lat] (deg/s)
 
 def sde_term(t, y):
     accel = -(y.v - u_current(t, y.x)) / tau          # your f(x, t[, v]); deg/s^2
@@ -139,7 +139,7 @@ def sde_term(t, y):
     diff  = State(x=jnp.zeros(2), v=jnp.full(2, 1e-5)) # diagonal noise on velocity only
     return drift, diff
 
-y0   = State(x=jnp.array([48.0, -4.0]), v=jnp.zeros(2))
+y0   = State(x=jnp.array([-4.0, 48.0]), v=jnp.zeros(2))
 traj = solve(sde_term, y0, jnp.array(0.0), 120, 3600., 3600., EulerHeun(), key=jr.key(0))
 # traj.x, traj.v each have shape (121, 2)   — underdamped Langevin: dx=v dt, dv=accel dt + g dW
 ```
@@ -281,7 +281,7 @@ interpolate `(U, V)` jointly with an opt-in partial-slip correction:
 def my_term(t, y, args):
     dataset = args
     vel = dataset.velocity_interp(t, y[0], y[1], scheme="partialslip")
-    return meters_to_degrees(vel, y[0])   # vel is [v, u] = [dlat/dt, dlon/dt]
+    return meters_to_degrees(vel, y[1])   # vel is [u, v] = [dlon/dt, dlat/dt]
 ```
 
 `scheme="default"` (the default) composes per-field `Field.interp`
@@ -305,11 +305,11 @@ bilinear) are gradient-safe under `jax.grad` and `jax.jvp`.
 
 ```python
 # Extract a 5×5×5 patch of raw grid values around a query point
-patch = dataset["u"].neighborhood(t, lat, lon, t_window=2, lat_window=2, lon_window=2)
+patch = dataset["u"].neighborhood(t, lon, lat, t_window=2, lat_window=2, lon_window=2)
 # shape (5, 5, 5)
 
 # Or for all fields at once
-patches = dataset.neighborhood(t, lat, lon, lat_window=1, lon_window=1)
+patches = dataset.neighborhood(t, lon, lat, lat_window=1, lon_window=1)
 # dict[str, Array] with shape (3, 3, 3) per field
 ```
 
@@ -318,9 +318,9 @@ patches = dataset.neighborhood(t, lat, lon, lat_window=1, lon_window=1)
 ```python
 from pastax import meters_to_degrees, degrees_to_meters
 
-disp_m = jnp.array([1000.0, 500.0])  # [north, east] metres
+disp_m = jnp.array([500.0, 1000.0])  # [east, north] metres
 lat_ref = jnp.array(45.0)
-disp_deg = meters_to_degrees(disp_m, lat_ref)   # [dlat, dlon] degrees
+disp_deg = meters_to_degrees(disp_m, lat_ref)   # [dlon, dlat] degrees
 ```
 
 ### Backwards-in-time integration
@@ -329,7 +329,7 @@ Pass negative `int_dt` and `save_dt` to integrate backwards. All solvers handle
 this transparently:
 
 ```python
-y0_end = jnp.array([48.0, -4.0])
+y0_end = jnp.array([-4.0, 48.0])
 backtrack = solve(my_term, y0_end,
                   t0=jnp.array(86400.0 * 5), n_save=120, int_dt=-3600., save_dt=-3600.,
                   solver=RK4(),
