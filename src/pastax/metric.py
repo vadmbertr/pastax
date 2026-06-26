@@ -56,6 +56,7 @@ def separation_distance(
 def normalized_separation_distance(
     y: Float[Array, "*batch time 2"],
     y_ref: Float[Array, "*#batch time 2"],
+    min_length: float = 0,
 ) -> Float[Array, "*batch time"]:
     r"""Instantaneous separation normalised by cumulative reference arc length.
 
@@ -70,16 +71,19 @@ def normalized_separation_distance(
     Args:
         y: Predicted trajectory/-ies, shape ``(..., T, 2)``.
         y_ref: Reference trajectory, shape ``(..., T, 2)``; broadcasts against ``y``.
+        min_length: Minimum length added to the denominator to avoid division by zero, 
+            or to soften the metric for very short trajectories.
 
     Returns:
         Dimensionless normalised separation, shape ``(..., T)``.
     """
-    return safe_divide(haversine(y, y_ref), _cumulative_reference_length(y_ref))
+    return safe_divide(haversine(y, y_ref), _cumulative_reference_length(y_ref) + min_length)
 
 
 def liu_index(
     y: Float[Array, "*batch time 2"],
     y_ref: Float[Array, "*#batch time 2"],
+    min_length: float = 0,
 ) -> Float[Array, "*batch time"]:
     r"""Liu & Weisberg (2011) normalised cumulative Lagrangian separation.
 
@@ -98,10 +102,12 @@ def liu_index(
     Args:
         y: Predicted trajectory/-ies, shape ``(..., T, 2)``.
         y_ref: Reference trajectory, shape ``(..., T, 2)``; broadcasts against ``y``.
+        min_length: Minimum length added to the denominator to avoid division by zero, 
+            or to soften the metric for very short trajectories.
 
     Returns:
         Dimensionless Liu Index, shape ``(..., T)``.
     """
     cumulative_separation = jnp.cumsum(haversine(y, y_ref), axis=-1)
     cumulative_length = jnp.cumsum(_cumulative_reference_length(y_ref), axis=-1)
-    return safe_divide(cumulative_separation, cumulative_length)
+    return safe_divide(cumulative_separation, cumulative_length + min_length)
