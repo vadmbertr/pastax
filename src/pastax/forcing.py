@@ -19,22 +19,34 @@ if TYPE_CHECKING:
 __all__ = ["Field", "Dataset"]
 
 
-def _coerce_time_to_seconds(t: Array) -> Array:
-    """Convert a datetime64 time coordinate to int seconds; pass-through otherwise.
+def _coerce_time_to_seconds(t: Array) -> tuple[Array, float]:
+    """Convert a datetime64 time coordinate to relative seconds; pass-through otherwise.
 
     Both ``Dataset.from_arrays`` and ``Dataset.from_xarray`` route through this
     helper, so users may pass NumPy ``datetime64`` arrays (any unit) directly:
-    they are reinterpreted as seconds since the Unix epoch. Plain numeric arrays
-    are returned unchanged and are treated as "seconds since some reference"
-    (only differences matter to the solver).
+    they are converted to **seconds since the first timestamp** and the first
+    timestamp itself (as seconds since the Unix epoch) is returned separately
+    as ``t_origin``. Rebasing keeps the stored coordinates small — epoch-scale
+    values (~1.7e9 s) are unrepresentable in float32 beyond a 128 s
+    granularity, which would silently quantize interpolation weights.
+
+    Plain numeric arrays are returned unchanged with ``t_origin = 0.0`` and are
+    treated as "seconds since some user-chosen reference" (the user owns the
+    frame; pick a reference near the data, not the Unix epoch, when running in
+    float32).
 
     JAX arrays (concrete or traced) are passed straight through: JAX has no
     ``datetime64`` dtype, so there is nothing to coerce, and this keeps the
     helper safe to call under ``jax.vmap`` / ``jax.jit`` when ``t`` is a tracer
     (``np.asarray`` on a tracer would raise).
+
+    Returns:
+        ``(t_seconds, t_origin)`` where ``t_seconds`` is the (possibly rebased)
+        time coordinate array and ``t_origin`` is the epoch offset in seconds
+        (``0.0`` unless the input was ``datetime64``).
     """
     if isinstance(t, jax.Array):
-        return t
+        return t, 0.0
 
     # The ``Array`` annotation aliases ``jax.Array``, so type checkers flag the
     # lines below as unreachable. They are not: at runtime ``t`` is often a
@@ -44,8 +56,10 @@ def _coerce_time_to_seconds(t: Array) -> Array:
 
     t_arr = np.asarray(t)
     if t_arr.dtype.kind == "M":
-        return t_arr.astype("datetime64[s]").astype(np.int64)
-    return t_arr
+        secs = t_arr.astype("datetime64[s]").astype(np.int64)
+        origin = int(secs[0]) if secs.size else 0
+        return secs - origin, float(origin)
+    return t_arr, 0.0
 
 
 def _nearest_idx(coords: Float[Array, "n"], x: Float[Array, ""], n: int) -> Array:
@@ -427,8 +441,13 @@ class Dataset(eqx.Module):
             fields: Mapping {field_name: array of shape (time, lat, lon)}.
             t: 1-D time coordinate array. Either equally-spaced numeric values
                 (seconds since an arbitrary reference) or a NumPy ``datetime64``
-                array (any unit); the latter is auto-converted to int seconds
-                since the Unix epoch.
+                array (any unit); the latter is auto-converted to seconds
+                **relative to the first timestamp**, with the first timestamp
+                stored as ``Grid.t_origin`` (seconds since the Unix epoch).
+                Rebasing keeps float32 time coordinates precise — raw
+                epoch-scale seconds (~1.7e9) have a 128 s float32 granularity.
+                Numeric input is used as-is: choose a reference near the data
+                rather than the Unix epoch when running in float32.
             lat: 1-D latitude coordinate array (degrees), equally spaced.
             lon: 1-D longitude coordinate array (degrees), equally spaced.
             dtype: JAX dtype for all arrays (default float32).
@@ -447,7 +466,7 @@ class Dataset(eqx.Module):
         Returns:
             Dataset with all fields on the given grid.
         """
-        t = _coerce_time_to_seconds(t)
+        t, t_origin = _coerce_time_to_seconds(t)
         t_arr   = jnp.asarray(t,   dtype=dtype)
         lat_arr = jnp.asarray(lat, dtype=dtype)
         lon_arr = jnp.asarray(lon, dtype=dtype)
@@ -462,6 +481,7 @@ class Dataset(eqx.Module):
             grid_type="rectilinear",
             stagger_type="A",
             lon_period=lon_period,
+            t_origin=t_origin,
         )
         masks = masks or {}
         unknown = set(masks) - set(fields)
@@ -519,6 +539,9 @@ class Dataset(eqx.Module):
 
         Returns:
             Dataset with all fields loaded into host memory as JAX arrays.
+            ``datetime64`` time coordinates are rebased to seconds since the
+            first timestamp (kept as ``Grid.t_origin``); solver times must use
+            the same rebased frame (see :meth:`from_arrays`).
         """
         field_arrays = {
             internal: ds[xr_name].values for internal, xr_name in fields.items()
@@ -565,6 +588,9 @@ class Dataset(eqx.Module):
 
         Args:
             t: 1-D time coordinates (seconds or NumPy ``datetime64``).
+                ``datetime64`` input is rebased to seconds since the first
+                timestamp, stored as ``Grid.t_origin`` (see
+                :meth:`from_arrays`).
             center_lat: 1-D centre latitudes (degrees), equally spaced.
             center_lon: 1-D centre longitudes (degrees), equally spaced.
             vectors: Mapping ``{group_name: {"u": (field_name, u_array),
@@ -621,7 +647,7 @@ class Dataset(eqx.Module):
                 "an empty 'vectors' mapping."
             )
 
-        t = _coerce_time_to_seconds(t)
+        t, t_origin = _coerce_time_to_seconds(t)
         t_arr   = jnp.asarray(t,           dtype=dtype)
         lat_arr = jnp.asarray(center_lat,  dtype=dtype)
         lon_arr = jnp.asarray(center_lon,  dtype=dtype)
@@ -638,6 +664,7 @@ class Dataset(eqx.Module):
             grid_type="rectilinear",
             stagger_type="C",
             lon_period=lon_period,
+            t_origin=t_origin,
         )
         derived_u_lat, derived_u_lon = centre_grid.u_face_coords()
         derived_v_lat, derived_v_lon = centre_grid.v_face_coords()
@@ -660,6 +687,7 @@ class Dataset(eqx.Module):
             grid_type="rectilinear",
             stagger_type="C",
             lon_period=lon_period,
+            t_origin=t_origin,
             u_lat_coords=u_lat_arr,
             u_lon_coords=u_lon_arr,
             v_lat_coords=v_lat_arr,

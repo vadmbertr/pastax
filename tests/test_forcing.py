@@ -176,8 +176,9 @@ class TestDataset:
             coordinates={"time": "time", "lat": "lat", "lon": "lon"},
         )
         field = dataset["u"]
-        t_s = float(np.datetime64("2020-01-01T12:00:00", "s").astype(np.int64))
-        v = field.interp(jnp.array(t_s, dtype=jnp.float32), jnp.array(11.0), jnp.array(1.0))
+        # datetime64 time is rebased to seconds since the first timestamp:
+        # 2020-01-01T12:00:00 is 43200 s after the first stamp.
+        v = field.interp(jnp.array(43200.0), jnp.array(11.0), jnp.array(1.0))
         assert float(v) == pytest.approx(1.0, abs=1e-5)
 
     def test_getitem(self):
@@ -198,7 +199,7 @@ class TestDataset:
         )
         # Use a large-enough grid: ds has 3 points per axis, window=1 → need 3 points → OK
         patches = dataset.neighborhood(
-            jnp.array(float(np.datetime64("2020-01-02", "s").astype(np.int64)), dtype=jnp.float32),
+            jnp.array(86400.0),  # 2020-01-02, rebased to the first timestamp
             jnp.array(11.0),
             jnp.array(1.0),
         )
@@ -249,17 +250,54 @@ class TestDatasetFromArrays:
         assert float(v) == pytest.approx(1.5)
 
     def test_from_arrays_accepts_datetime64(self):
-        """Passing a numpy datetime64 time array to from_arrays auto-converts to seconds."""
+        """datetime64 time is rebased to seconds since the first timestamp."""
         t_dt = np.array(["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"],
                         dtype="datetime64[D]")
         _, lat, lon = self._coords()
         u = np.ones((4, 4, 4), dtype=np.float32)
         dataset = Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
-        expected = t_dt.astype("datetime64[s]").astype(np.int64)
+        epoch = t_dt.astype("datetime64[s]").astype(np.int64)
+        expected = epoch - epoch[0]
         assert jnp.allclose(
             dataset["u"].t_coords,
             jnp.asarray(expected, dtype=dataset["u"].t_coords.dtype),
         )
+        assert dataset.grid.t_origin == float(epoch[0])
+
+    def test_datetime64_rebasing_preserves_float32_precision(self):
+        """Hourly datetime64 coords at a 2026 epoch stay exact in float32.
+
+        Raw epoch seconds (~1.77e9) have a 128 s float32 granularity, so
+        without rebasing hourly steps cannot be represented and interpolation
+        weights are quantized. After rebasing, coords are small integers and
+        a mid-cell time query interpolates exactly.
+        """
+        t_dt = np.arange(
+            np.datetime64("2026-07-01T00:00:00"),
+            np.datetime64("2026-07-01T04:00:00"),
+            np.timedelta64(1, "h"),
+        )
+        lat = np.linspace(0.0, 3.0, 4)
+        lon = np.linspace(10.0, 13.0, 4)
+        # Field value equals the hour index at every grid point.
+        u = np.broadcast_to(
+            np.arange(4, dtype=np.float32)[:, None, None], (4, 4, 4)
+        )
+        dataset = Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
+        assert jnp.array_equal(
+            dataset["u"].t_coords, jnp.array([0.0, 3600.0, 7200.0, 10800.0])
+        )
+        # Mid-cell query: exactly half-way between hours 1 and 2.
+        v = dataset["u"].interp(jnp.array(5400.0), jnp.array(11.0), jnp.array(1.0))
+        assert float(v) == pytest.approx(1.5, abs=1e-6)
+
+    def test_numeric_time_passes_through_unrebased(self):
+        """Plain numeric time input keeps its frame and t_origin stays 0."""
+        t, lat, lon = self._coords()
+        u = np.ones((4, 4, 4), dtype=np.float32)
+        dataset = Dataset.from_arrays({"u": u}, t=t + 123.0, lat=lat, lon=lon)
+        assert dataset.grid.t_origin == 0.0
+        assert float(dataset["u"].t_coords[0]) == pytest.approx(123.0)
 
     def test_from_arrays_datetime64_matches_from_xarray(self):
         """from_arrays with datetime64 and from_xarray must yield identical t_coords."""
@@ -495,6 +533,11 @@ class TestDatasetCGrid:
         assert jnp.allclose(from_xr["v"].values, from_arr["v"].values)
         assert jnp.allclose(from_xr["u"].lon_coords, from_arr["u"].lon_coords)
         assert jnp.allclose(from_xr["v"].lat_coords, from_arr["v"].lat_coords)
+        # datetime64 time is rebased identically on both paths.
+        epoch0 = float(t.astype("datetime64[s]").astype(np.int64)[0])
+        assert from_xr.grid.t_origin == epoch0
+        assert from_arr.grid.t_origin == epoch0
+        assert float(from_xr.grid.t_coords[0]) == 0.0
 
     def test_from_xarray_cgrid_with_explicit_staggered_coords(self):
         t = np.linspace(0.0, 7200.0, 3)
