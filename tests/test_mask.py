@@ -61,8 +61,9 @@ class TestFromArraysMask:
         t, lat, lon = self._coords()
         u = np.ones((3, 4, 5), dtype=np.float32)
         u[:, 0, 0] = np.nan       # one land cell
-        u[1, 2, 3] = np.nan       # NaN at one timestep only — still land
-        ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
+        u[1, 2, 3] = np.nan       # NaN at one timestep only — masked, with a warning
+        with pytest.warns(UserWarning, match="some but not all time steps"):
+            ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
 
         assert ds["u"].mask is not None
         assert ds["u"].mask.shape == (4, 5)
@@ -557,3 +558,49 @@ class TestClosedBay:
         assert float(traj[-1, 1]) == pytest.approx(2.0, abs=1e-5)
         # And no NaN anywhere.
         assert bool(jnp.all(jnp.isfinite(traj))) is True
+
+
+class TestTransientNaNWarning:
+    """NaN at some-but-not-all time steps looks like missing data, not land."""
+
+    def _coords(self):
+        t = np.linspace(0.0, 3600.0, 3)
+        lat = np.linspace(0.0, 2.0, 3)
+        lon = np.linspace(10.0, 13.0, 4)
+        return t, lat, lon
+
+    def test_transient_nan_warns(self):
+        t, lat, lon = self._coords()
+        u = np.ones((3, 3, 4), dtype=np.float32)
+        u[1, 0, 0] = np.nan  # NaN at one time step only: a gap, not land
+        with pytest.warns(UserWarning, match="some but not all time steps"):
+            ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
+        # The cell is still masked (conservative) and zero-filled.
+        assert bool(ds["u"].mask[0, 0]) is True
+        assert not bool(jnp.isnan(ds["u"].values).any())
+
+    def test_time_invariant_nan_does_not_warn(self):
+        import warnings as _warnings
+
+        t, lat, lon = self._coords()
+        u = np.ones((3, 3, 4), dtype=np.float32)
+        u[:, 0, 0] = np.nan  # land: NaN at every time step
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")
+            ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
+        assert bool(ds["u"].mask[0, 0]) is True
+
+    def test_explicit_mask_silences_warning(self):
+        import warnings as _warnings
+
+        t, lat, lon = self._coords()
+        u = np.ones((3, 3, 4), dtype=np.float32)
+        u[1, 0, 0] = np.nan
+        mask = np.zeros((3, 4), dtype=bool)
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")
+            ds = Dataset.from_arrays(
+                {"u": u}, t=t, lat=lat, lon=lon, masks={"u": mask}
+            )
+        assert ds["u"].mask is not None
+        assert not bool(ds["u"].mask.any())
