@@ -439,6 +439,7 @@ class Dataset(eqx.Module):
         t_arr   = jnp.asarray(t,   dtype=dtype)
         lat_arr = jnp.asarray(lat, dtype=dtype)
         lon_arr = jnp.asarray(lon, dtype=dtype)
+        _check_periodic_lon_ascending(lon_arr, lon_period)
         nlat = int(lat_arr.shape[0])
         nlon = int(lon_arr.shape[0])
         grid = Grid(
@@ -594,6 +595,7 @@ class Dataset(eqx.Module):
         t_arr   = jnp.asarray(t,           dtype=dtype)
         lat_arr = jnp.asarray(center_lat,  dtype=dtype)
         lon_arr = jnp.asarray(center_lon,  dtype=dtype)
+        _check_periodic_lon_ascending(lon_arr, lon_period)
 
         nt   = int(t_arr.shape[0])
         nlat = int(lat_arr.shape[0])
@@ -779,6 +781,26 @@ class Dataset(eqx.Module):
             dtype=dtype,
             lon_period=lon_period,
             masks=masks,
+        )
+
+
+def _check_periodic_lon_ascending(
+    lon_arr: Float[Array, "lon"], lon_period: float | None
+) -> None:
+    """Reject descending longitudes when periodic wrapping is requested.
+
+    The periodic index arithmetic folds queries with ``% lon_period`` above
+    ``lon_coords[0]``, which assumes an ascending axis; a descending axis
+    silently produces wrong indices and weights. (Without ``lon_period``,
+    descending coordinates work — the spacing sign cancels.)
+    """
+    if lon_period is None:
+        return
+    if not bool(jnp.all(jnp.diff(lon_arr) > 0)):
+        raise ValueError(
+            "lon_period requires strictly ascending longitude coordinates; "
+            "the periodic wrap arithmetic is undefined on a descending axis. "
+            "Flip the longitude axis (and the field values) before loading."
         )
 
 
