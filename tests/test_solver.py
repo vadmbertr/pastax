@@ -805,3 +805,41 @@ class TestLineaxDiffusion:
                      key=jax.random.key(4), brownian_structure=noise_proto)
         assert traj.shape == (11, 2)
         assert jnp.all(jnp.isfinite(traj))
+
+
+class TestMilsteinSingleJacobian:
+    """The diffusion Jacobian must be evaluated once per Milstein step."""
+
+    def _count_term_calls(self, solver_cls):
+        calls = {"n": 0}
+
+        def term(t, y, args, ctrl):
+            calls["n"] += 1
+            return jnp.zeros(2), 0.1 * y  # linear diagonal diffusion
+
+        y = jnp.array([1.0, 2.0])
+        solver_cls().sde_step(term, jnp.array(0.0), y, 0.5, None, None, jnp.ones(2))
+        return calls["n"]
+
+    def test_ito_milstein_two_term_evaluations(self):
+        # One evaluation for (f, g) plus one traced through jacfwd.
+        assert self._count_term_calls(ItoMilstein) == 2
+
+    def test_stratonovich_milstein_two_term_evaluations(self):
+        assert self._count_term_calls(StratonovichMilstein) == 2
+
+    def test_ito_milstein_step_matches_closed_form(self):
+        # g(y) = a * y (diagonal) -> dg_i/dy_i = a, so the Ito Milstein update is
+        # y + f dt + g dW + 0.5 * g * a * (dW^2 - dt).
+        a, dt = 0.3, 0.5
+        f = jnp.array([0.01, -0.02])
+        y = jnp.array([1.0, 2.0])
+        z = jnp.array([0.7, -1.1])
+
+        def term(t, y_, args, ctrl):
+            return f, a * y_
+
+        dW = jnp.sqrt(dt) * z
+        expected = y + f * dt + a * y * dW + 0.5 * (a * y) * a * (dW ** 2 - dt)
+        got = ItoMilstein().sde_step(term, jnp.array(0.0), y, dt, None, None, z)
+        assert jnp.allclose(got, expected, rtol=1e-6)

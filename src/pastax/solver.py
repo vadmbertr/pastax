@@ -528,28 +528,25 @@ class EulerHeun(AbstractSolver):
         return _add(y, _scale(dt, f0), _scale(0.5, _add(diff0, diff1)))
 
 
-def _milstein_correction(
+def _diffusion_jac_diag(
     term: Callable,
     t: Float[Array, ""],
     y: Float[Array, "2"],
     args: PyTree,
     ctrl: PyTree,
-    g: Float[Array, "2"],
-    dW: Float[Array, "n_noise"],
 ) -> Float[Array, "2"]:
-    r"""Diagonal-noise Milstein cross-term :math:`\tfrac12\,g\,(\partial g_i/\partial y_i)\,dW^2`.
+    r"""Diagonal :math:`\partial g_i/\partial y_i` of a diagonal diffusion coefficient.
 
-    Returns the :math:`\tfrac12\,g\,(\partial g_i/\partial y_i)\,dW^2` vector
-    (Stratonovich form). Itô subtracts
-    :math:`\tfrac12\,g\,(\partial g_i/\partial y_i)\,dt` on top.
+    Computed once per step via ``jax.jacfwd`` and shared between the Milstein
+    cross-term :math:`\tfrac12\,g\,(\partial g_i/\partial y_i)\,dW^2` and the
+    Itô drift correction :math:`-\tfrac12\,g\,(\partial g_i/\partial y_i)\,dt`.
     """
     def g_fn(y_):
         _, g_out = term(t, y_, args, ctrl)
         return g_out
 
     dgdy = jax.jacfwd(g_fn)(y)            # (2, 2)
-    dgdy_diag = jnp.diag(dgdy)
-    return 0.5 * g * dgdy_diag * dW ** 2
+    return jnp.diag(dgdy)
 
 
 class ItoMilstein(AbstractSolver):
@@ -596,13 +593,8 @@ class ItoMilstein(AbstractSolver):
                 f"got g.shape == {g.shape}. Use EulerHeun for matrix diffusion."
             )
         dW = jnp.sqrt(jnp.abs(dt)) * z
-        cross = _milstein_correction(term, t, y, args, ctrl, g, dW)
-        def g_fn(y_):
-            _, g_out = term(t, y_, args, ctrl)
-            return g_out
-        dgdy_diag = jnp.diag(jax.jacfwd(g_fn)(y))
-        ito_drift = -0.5 * g * dgdy_diag * dt
-        return y + f * dt + g * dW + cross + ito_drift
+        dgdy_diag = _diffusion_jac_diag(term, t, y, args, ctrl)
+        return y + f * dt + g * dW + 0.5 * g * dgdy_diag * (dW ** 2 - dt)
 
 
 class StratonovichMilstein(AbstractSolver):
@@ -650,8 +642,8 @@ class StratonovichMilstein(AbstractSolver):
                 f"got g.shape == {g.shape}. Use EulerHeun for matrix diffusion."
             )
         dW = jnp.sqrt(jnp.abs(dt)) * z
-        cross = _milstein_correction(term, t, y, args, ctrl, g, dW)
-        return y + f * dt + g * dW + cross
+        dgdy_diag = _diffusion_jac_diag(term, t, y, args, ctrl)
+        return y + f * dt + g * dW + 0.5 * g * dgdy_diag * dW ** 2
 
 
 def _sample_noise(
