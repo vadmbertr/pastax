@@ -901,6 +901,17 @@ def solve(
             f"save_dt ({save_dt}) must be an integer multiple of int_dt ({int_dt})."
         )
     n_fine = n_save * n_substeps
+
+    if controls is not None:
+        for leaf in jax.tree.leaves(controls):
+            if jnp.ndim(leaf) < 1 or leaf.shape[0] != n_fine:
+                raise ValueError(
+                    "Every controls leaf needs a leading axis of length "
+                    f"n_fine = n_save * round(save_dt / int_dt) = {n_fine}; "
+                    f"got a leaf of shape {jnp.shape(leaf)}. The solver slices "
+                    "controls[i] at each of the n_fine integration steps."
+                )
+
     ts_fine = t0 + jnp.arange(n_fine + 1) * int_dt
 
     if key is not None:
