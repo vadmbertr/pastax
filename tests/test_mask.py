@@ -98,7 +98,8 @@ class TestFromArraysMask:
         t, lat, lon = self._coords()
         u = np.ones((3, 4, 5), dtype=np.float32)
         v = np.ones((3, 4, 5), dtype=np.float32)
-        u_mask = np.zeros((4, 5), dtype=bool); u_mask[0, 0] = True
+        u_mask = np.zeros((4, 5), dtype=bool)
+        u_mask[0, 0] = True
         ds = Dataset.from_arrays(
             {"u": u, "v": v}, t=t, lat=lat, lon=lon, masks={"u": u_mask},
         )
@@ -504,7 +505,8 @@ class TestAlongshoreJetNoStuckParticle:
         from pastax import Heun, solve
         ds = self._dataset(with_mask=False)
         y0 = jnp.array([0.5, 0.1], dtype=jnp.float32)  # [lon, lat], just above coast
-        traj = solve(self._term(), y0, jnp.array(0.0), 10, 0.5, 0.5, solver=Heun(), args=ds)  # 5 seconds
+        traj = solve(self._term(), y0, jnp.array(0.0), 10, 0.5, 0.5,
+                     solver=Heun(), args=ds)  # 5 seconds
         # With naive bilinear, the lat=0 land row pulls U down: at lat=0.1
         # (close to coast) U≈0.1*0.1≈0.01 deg/s, so dlon ≈ 0.05 over 5 s.
         dlon_unmasked = float(traj[-1, 0] - traj[0, 0])
@@ -528,8 +530,7 @@ class TestClosedBay:
     zero velocity (not NaN) and stay put."""
 
     def test_closed_bay_zero_velocity(self):
-        from pastax import Heun, solve
-        from pastax import Dataset
+        from pastax import Dataset, Heun, solve
         nlat, nlon, nt = 5, 5, 2
         lat = np.linspace(0.0, 4.0, nlat).astype(np.float32)
         lon = np.linspace(0.0, 4.0, nlon).astype(np.float32)

@@ -59,6 +59,10 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+# jaxtyping shape annotations (e.g. Float[Array, "time lat lon"]) are string
+# subscripts, not forward references; F722/F821/UP037 all misfire on them.
+# See https://docs.kidger.site/jaxtyping/faq/
+ignore = ["F722", "F821", "UP037"]
 
 [tool.pyright]
 pythonVersion = "3.11"

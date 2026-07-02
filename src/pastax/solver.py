@@ -75,7 +75,7 @@ solver sign-abs-normalises the :math:`\sqrt{dt}` factor.
 from __future__ import annotations
 
 import abc
-from typing import Callable
+from collections.abc import Callable
 
 import equinox as eqx
 import equinox.internal as eqxi  # pyright: ignore[reportMissingImports]  # checkpointed scan
@@ -395,12 +395,15 @@ class Tsit5(AbstractSolver):
         """One Tsit5 step (5th-order weights only)."""
         k1 = term(t, y, args, ctrl)
         k2 = term(t + _TSIT5_C2 * dt, _rk_stage(y, dt, (_TSIT5_A21,), (k1,)), args, ctrl)
-        k3 = term(t + _TSIT5_C3 * dt, _rk_stage(y, dt, (_TSIT5_A31, _TSIT5_A32), (k1, k2)), args, ctrl)
+        k3 = term(t + _TSIT5_C3 * dt,
+                  _rk_stage(y, dt, (_TSIT5_A31, _TSIT5_A32), (k1, k2)),
+                  args, ctrl)
         k4 = term(t + _TSIT5_C4 * dt,
                   _rk_stage(y, dt, (_TSIT5_A41, _TSIT5_A42, _TSIT5_A43), (k1, k2, k3)),
                   args, ctrl)
         k5 = term(t + _TSIT5_C5 * dt,
-                  _rk_stage(y, dt, (_TSIT5_A51, _TSIT5_A52, _TSIT5_A53, _TSIT5_A54), (k1, k2, k3, k4)),
+                  _rk_stage(y, dt, (_TSIT5_A51, _TSIT5_A52, _TSIT5_A53, _TSIT5_A54),
+                            (k1, k2, k3, k4)),
                   args, ctrl)
         k6 = term(t + _TSIT5_C6 * dt,
                   _rk_stage(y, dt, (_TSIT5_A61, _TSIT5_A62, _TSIT5_A63, _TSIT5_A64, _TSIT5_A65),
@@ -583,7 +586,10 @@ class ItoMilstein(AbstractSolver):
         ctrl: PyTree,
         z: Float[Array, "n_noise"],
     ) -> Float[Array, "2"]:
-        r"""One Itô Milstein step: :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,(dW^2 - dt)`."""
+        r"""One Itô Milstein step.
+
+        :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,(dW^2 - dt)`
+        """
         if not _is_bare_array(y):
             raise NotImplementedError(
                 "ItoMilstein requires a flat array state; PyTree states are not "
@@ -637,7 +643,10 @@ class StratonovichMilstein(AbstractSolver):
         ctrl: PyTree,
         z: Float[Array, "n_noise"],
     ) -> Float[Array, "2"]:
-        r"""One Stratonovich Milstein step: :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,dW^2`."""
+        r"""One Stratonovich Milstein step.
+
+        :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,dW^2`
+        """
         if not _is_bare_array(y):
             raise NotImplementedError(
                 "StratonovichMilstein requires a flat array state; PyTree states are "
@@ -716,24 +725,28 @@ def _run_ode(
 
     if args is None and controls is None:
         def body(y: Float[Array, "2"], t: Float[Array, ""]) -> tuple:
-            term_fn = lambda t_, y_, a_, c_: term(t_, y_)
+            def term_fn(t_, y_, a_, c_):
+                return term(t_, y_)
             y_new = solver.ode_step(term_fn, t, y, dt, None, None)
             return y_new, y_new
     elif args is not None and controls is None:
         def body(y: Float[Array, "2"], t: Float[Array, ""]) -> tuple:
-            term_fn = lambda t_, y_, a_, c_: term(t_, y_, a_)
+            def term_fn(t_, y_, a_, c_):
+                return term(t_, y_, a_)
             y_new = solver.ode_step(term_fn, t, y, dt, args, None)
             return y_new, y_new
     elif args is None and controls is not None:
         def body(y: Float[Array, "2"], inputs: tuple) -> tuple:
             t, ctrl = inputs
-            bound = lambda t_, y_, a_, c_: term(t_, y_, c_)
+            def bound(t_, y_, a_, c_):
+                return term(t_, y_, c_)
             y_new = solver.ode_step(bound, t, y, dt, None, ctrl)
             return y_new, y_new
     else:
         def body(y: Float[Array, "2"], inputs: tuple) -> tuple:
             t, ctrl = inputs
-            bound = lambda t_, y_, a_, c_: term(t_, y_, a_, c_)
+            def bound(t_, y_, a_, c_):
+                return term(t_, y_, a_, c_)
             y_new = solver.ode_step(bound, t, y, dt, args, ctrl)
             return y_new, y_new
         
@@ -763,25 +776,29 @@ def _run_sde(
     if args is None and controls is None:
         def body(y: Float[Array, "2"], inputs: Float[Array, ""]) -> tuple:
             t, z = inputs
-            term_fn = lambda t_, y_, a_, c_: term(t_, y_)
+            def term_fn(t_, y_, a_, c_):
+                return term(t_, y_)
             y_new = solver.sde_step(term_fn, t, y, dt, None, None, z)
             return y_new, y_new
     elif args is not None and controls is None:
         def body(y: Float[Array, "2"], inputs: Float[Array, ""]) -> tuple:
             t, z = inputs
-            term_fn = lambda t_, y_, a_, c_: term(t_, y_, a_)
+            def term_fn(t_, y_, a_, c_):
+                return term(t_, y_, a_)
             y_new = solver.sde_step(term_fn, t, y, dt, args, None, z)
             return y_new, y_new
     elif args is None and controls is not None:
         def body(y: Float[Array, "2"], inputs: tuple) -> tuple:
             t, z, ctrl = inputs
-            bound = lambda t_, y_, a_, c_: term(t_, y_, c_)
+            def bound(t_, y_, a_, c_):
+                return term(t_, y_, c_)
             y_new = solver.sde_step(bound, t, y, dt, None, ctrl, z)
             return y_new, y_new
     else:
         def body(y: Float[Array, "2"], inputs: tuple) -> tuple:
             t, z, ctrl = inputs
-            bound = lambda t_, y_, a_, c_: term(t_, y_, a_, c_)
+            def bound(t_, y_, a_, c_):
+                return term(t_, y_, a_, c_)
             y_new = solver.sde_step(bound, t, y, dt, args, ctrl, z)
             return y_new, y_new
         
@@ -907,13 +924,15 @@ def solve(
         noise_proto = y0 if brownian_structure is None else brownian_structure
         if n_samples == 1:
             z = _sample_noise(key, n_fine, noise_proto)
-            result = _run_sde(term, y0, ts_fine, solver, z, args, controls, adjoint, checkpoints)
+            result = _run_sde(term, y0, ts_fine, solver, z, args, controls,
+                              adjoint, checkpoints)
             return _subsample(result, n_substeps)
         else:
             keys = jr.split(key, n_samples)
             z = jax.vmap(lambda k: _sample_noise(k, n_fine, noise_proto))(keys)
             result = jax.vmap(
-                lambda z_: _run_sde(term, y0, ts_fine, solver, z_, args, controls, adjoint, checkpoints)
+                lambda z_: _run_sde(term, y0, ts_fine, solver, z_, args, controls,
+                                    adjoint, checkpoints)
             )(z)
             return _subsample(result, n_substeps, axis=1)
     else:

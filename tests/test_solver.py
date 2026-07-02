@@ -38,13 +38,15 @@ class TestSolverStep:
     def test_euler_ode_step_constant_field(self):
         solver = Euler()
         y0 = jnp.array([0.0, 0.0])
-        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0, jnp.array(1.0), None, None)
+        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0,
+                             jnp.array(1.0), None, None)
         assert jnp.allclose(y1, jnp.array([0.1, 0.2]))
 
     def test_heun_ode_step_constant_field(self):
         solver = Heun()
         y0 = jnp.array([0.0, 0.0])
-        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0, jnp.array(1.0), None, None)
+        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0,
+                             jnp.array(1.0), None, None)
         assert jnp.allclose(y1, jnp.array([0.1, 0.2]))
 
     def test_euler_sde_step_zero_noise(self):
@@ -74,7 +76,8 @@ class TestSolverStep:
     def test_rk4_ode_step_constant_field(self):
         solver = RK4()
         y0 = jnp.array([0.0, 0.0])
-        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0, jnp.array(1.0), None, None)
+        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0,
+                             jnp.array(1.0), None, None)
         assert jnp.allclose(y1, jnp.array([0.1, 0.2]))
 
     def test_rk4_sde_step_zero_noise(self):
@@ -102,7 +105,8 @@ class TestSolveODE:
         y0 = jnp.array([10.0, 20.0])
         n_save, int_dt = 100, 10.0
         T = n_save * int_dt
-        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0), n_save, int_dt, int_dt, Euler())
+        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0),
+                     n_save, int_dt, int_dt, Euler())
         assert traj.shape == (n_save + 1, 2)
         assert float(traj[-1, 0]) == pytest.approx(float(y0[0]) + dlat * T, rel=1e-4)
         assert float(traj[-1, 1]) == pytest.approx(float(y0[1]) + dlon * T, rel=1e-4)
@@ -112,7 +116,8 @@ class TestSolveODE:
         y0 = jnp.array([10.0, 20.0])
         n_save, int_dt = 100, 10.0
         T = n_save * int_dt
-        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0), n_save, int_dt, int_dt, Heun())
+        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0),
+                     n_save, int_dt, int_dt, Heun())
         assert float(traj[-1, 0]) == pytest.approx(float(y0[0]) + dlat * T, rel=1e-5)
 
     def test_first_point_equals_y0(self):
@@ -203,7 +208,8 @@ class TestSolveODE:
         y0 = jnp.array([10.0, 20.0])
         n_save, int_dt = 100, 10.0
         T = n_save * int_dt
-        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0), n_save, int_dt, int_dt, RK4())
+        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0),
+                     n_save, int_dt, int_dt, RK4())
         assert traj.shape == (n_save + 1, 2)
         assert float(traj[-1, 0]) == pytest.approx(float(y0[0]) + dlat * T, rel=1e-4)
         assert float(traj[-1, 1]) == pytest.approx(float(y0[1]) + dlon * T, rel=1e-4)
@@ -254,7 +260,8 @@ class TestSolveODE:
         y0 = jnp.array([10.0, 20.0])
         n_save, int_dt = 100, -1.0
         T = abs(n_save * int_dt)
-        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(100.0), n_save, int_dt, int_dt, Heun())
+        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(100.0),
+                     n_save, int_dt, int_dt, Heun())
         assert traj.shape == (n_save + 1, 2)
         assert float(traj[-1, 0]) == pytest.approx(float(y0[0]) - dlat * T, rel=1e-5)
         assert float(traj[-1, 1]) == pytest.approx(float(y0[1]) - dlon * T, rel=1e-5)
@@ -425,7 +432,8 @@ class TestTsit5:
     def test_constant_field_step(self):
         solver = Tsit5()
         y0 = jnp.array([0.0, 0.0])
-        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0, jnp.array(1.0), None, None)
+        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0,
+                             jnp.array(1.0), None, None)
         assert jnp.allclose(y1, jnp.array([0.1, 0.2]))
 
     def test_uniform_field_solve(self):
@@ -433,7 +441,8 @@ class TestTsit5:
         y0 = jnp.array([10.0, 20.0])
         n_save, int_dt = 100, 10.0
         T = n_save * int_dt
-        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0), n_save, int_dt, int_dt, Tsit5())
+        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0),
+                     n_save, int_dt, int_dt, Tsit5())
         assert traj.shape == (n_save + 1, 2)
         assert float(traj[-1, 0]) == pytest.approx(float(y0[0]) + dlat * T, rel=1e-4)
 
@@ -459,7 +468,8 @@ class TestDopri5:
     def test_constant_field_step(self):
         solver = Dopri5()
         y0 = jnp.array([0.0, 0.0])
-        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0, jnp.array(1.0), None, None)
+        y1 = solver.ode_step(uniform_ode_term(0.1, 0.2), jnp.array(0.0), y0,
+                             jnp.array(1.0), None, None)
         assert jnp.allclose(y1, jnp.array([0.1, 0.2]))
 
     def test_uniform_field_solve(self):
@@ -467,7 +477,8 @@ class TestDopri5:
         y0 = jnp.array([10.0, 20.0])
         n_save, int_dt = 100, 10.0
         T = n_save * int_dt
-        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0), n_save, int_dt, int_dt, Dopri5())
+        traj = solve(uniform_ode_term(dlat, dlon), y0, jnp.array(0.0),
+                     n_save, int_dt, int_dt, Dopri5())
         assert traj.shape == (n_save + 1, 2)
         assert float(traj[-1, 0]) == pytest.approx(float(y0[0]) + dlat * T, rel=1e-4)
 
