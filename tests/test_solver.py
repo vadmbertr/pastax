@@ -805,3 +805,37 @@ class TestLineaxDiffusion:
                      key=jax.random.key(4), brownian_structure=noise_proto)
         assert traj.shape == (11, 2)
         assert jnp.all(jnp.isfinite(traj))
+
+
+class TestExactStepSize:
+    """The integration step must be int_dt exactly, not ts[1] - ts[0]."""
+
+    def test_large_t0_does_not_quantize_dt(self):
+        # At t0 ~ 1.75e9 (epoch-scale seconds) float32 spacing is 128 s, so a
+        # step recovered as ts[1] - ts[0] would be a multiple of 128 (e.g.
+        # 3584) instead of 3600. With a constant velocity the endpoint is
+        # exactly y0 + v * n * int_dt when the exact step is used.
+        v = jnp.array([1e-5, -2e-5])
+
+        def term(t, y):
+            return v
+
+        y0 = jnp.array([-4.0, 48.0])
+        t0 = jnp.array(1.75e9)
+        n_save, dt = 4, 3600.0
+        traj = solve(term, y0, t0, n_save, dt, dt, Euler())
+        expected = y0 + v * n_save * dt
+        assert jnp.allclose(traj[-1], expected, rtol=1e-6, atol=0.0)
+
+    def test_large_t0_sde_drift_uses_exact_dt(self):
+        drift = jnp.array([1e-5, 0.0])
+
+        def term(t, y):
+            return drift, jnp.zeros(2)  # zero diffusion: deterministic drift
+
+        y0 = jnp.zeros(2)
+        t0 = jnp.array(1.75e9)
+        n_save, dt = 4, 3600.0
+        traj = solve(term, y0, t0, n_save, dt, dt, Euler(), key=jax.random.key(0))
+        expected = y0 + drift * n_save * dt
+        assert jnp.allclose(traj[-1], expected, rtol=1e-6, atol=0.0)
