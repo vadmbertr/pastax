@@ -600,3 +600,35 @@ class TestDatasetCGrid:
         lon_final = float(traj[-1, 0])
         assert lat_final == pytest.approx(2.0 * float(np.exp(beta  * T)), rel=1e-3)
         assert lon_final == pytest.approx(2.0 * float(np.exp(alpha * T)), rel=1e-3)
+
+
+class TestFromArraysShapeValidation:
+    def _coords(self):
+        t   = np.linspace(0.0, 3 * 3600.0, 4)
+        lat = np.linspace(0.0, 2.0, 3)
+        lon = np.linspace(10.0, 14.0, 5)
+        return t, lat, lon
+
+    def test_matching_shape_passes(self):
+        t, lat, lon = self._coords()
+        u = np.ones((4, 3, 5), dtype=np.float32)
+        dataset = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
+        assert dataset["u"].values.shape == (4, 3, 5)
+
+    def test_transposed_lat_lon_raises(self):
+        t, lat, lon = self._coords()
+        u = np.ones((4, 5, 3), dtype=np.float32)  # (time, lon, lat) by mistake
+        with pytest.raises(ValueError, match=r"fields\['u'\].*expected shape"):
+            Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
+
+    def test_wrong_time_length_raises(self):
+        t, lat, lon = self._coords()
+        u = np.ones((3, 3, 5), dtype=np.float32)
+        with pytest.raises(ValueError, match="expected shape"):
+            Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
+
+    def test_2d_field_raises(self):
+        t, lat, lon = self._coords()
+        u = np.ones((3, 5), dtype=np.float32)
+        with pytest.raises(ValueError, match="expected shape"):
+            Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
