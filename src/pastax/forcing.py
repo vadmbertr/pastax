@@ -355,6 +355,17 @@ class Dataset(eqx.Module):
                   raises ``ValueError`` otherwise. Raises
                   ``NotImplementedError`` on Arakawa C-grid datasets.
 
+                  The joint mask is the **AND** of the U and V masks: a
+                  corner counts as land only when *both* components are
+                  masked there. If the two masks differ, a corner masked
+                  in just one component is treated as ocean and that
+                  component's stored value — ``0`` after NaN filling —
+                  is blended into the interpolation, biasing the
+                  velocity toward zero. On A-grid data U and V normally
+                  share one land mask, which makes the AND exact; supply
+                  identical masks (or fix the discrepancy upstream) when
+                  they differ.
+
             u_name: Name of the U-component Field in ``self.fields``.
             v_name: Name of the V-component Field in ``self.fields``.
             slip_a: Wall slip coefficient (partial-slip only).
