@@ -450,6 +450,12 @@ class Dataset(eqx.Module):
             lon_period=lon_period,
         )
         masks = masks or {}
+        unknown = set(masks) - set(fields)
+        if unknown:
+            raise ValueError(
+                f"masks contains keys {sorted(unknown)!r} that match no field; "
+                f"known fields are {sorted(fields)!r}."
+            )
         loaded: dict[str, Field] = {}
         for name, v in fields.items():
             v_arr = jnp.asarray(v, dtype=dtype)
@@ -698,6 +704,13 @@ class Dataset(eqx.Module):
                 loaded[name] = Field(
                     values=tr_clean, grid=grid, stagger="center", mask=tr_mask,
                 )
+
+        unknown = set(masks) - set(loaded)
+        if unknown:
+            raise ValueError(
+                f"masks contains keys {sorted(unknown)!r} that match no field; "
+                f"known fields are {sorted(loaded)!r}."
+            )
         return Dataset(fields=loaded, grid=grid)
 
     @staticmethod
