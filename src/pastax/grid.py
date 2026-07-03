@@ -22,8 +22,9 @@ from typing import Literal
 
 import equinox as eqx
 import jax.numpy as jnp
+import numpy as np
 
-from ._types import Array, Float
+from ._types import Array, Float, Int
 
 __all__ = ["Grid"]
 
@@ -46,6 +47,21 @@ class Grid(eqx.Module):
         lon_period: If set (e.g. ``360.0``), longitude is treated as periodic
             with that period. The centre grid is assumed to span exactly one
             period.
+        t_origin: Epoch offset of the time axis, in seconds since the Unix
+            epoch, stored as a 0-d ``int64`` array. ``t_coords`` are relative
+            to this instant, i.e. the absolute time of ``t_coords[i]`` is
+            ``t_origin + t_coords[i]``. Loaders set it when converting
+            ``datetime64`` input (which is rebased to the first timestamp so
+            the stored float32 coordinates stay small and precise); it is
+            ``0`` for plain numeric time input. Solver times (``t0`` and
+            interpolation queries) live in the same rebased frame.
+
+            ``t_origin`` is a pytree *leaf*, not static metadata: swapping
+            forcing datasets with different origins does not retrigger jit
+            compilation. Integer seconds are exact in int64; read the value
+            host-side with ``int(grid.t_origin)``. Inside ``jax.jit`` (without
+            ``jax_enable_x64``) the leaf is canonicalized to int32, which
+            remains exact for epoch seconds until 2038.
         u_lat_coords, u_lon_coords: U-face coordinates (NEMO C-grid). Populated
             by the C-grid loaders (derived from the centre grid via
             :meth:`u_face_coords` or supplied explicitly); ``None`` on A-grids.
@@ -62,6 +78,9 @@ class Grid(eqx.Module):
     )
     stagger_type: Literal["A", "C"] = eqx.field(static=True, default="A")
     lon_period: float | None = eqx.field(static=True, default=None)
+    t_origin: Int[Array, ""] = eqx.field(
+        default_factory=lambda: np.array(0, dtype=np.int64)
+    )
     u_lat_coords: Float[Array, "..."] | None = None
     u_lon_coords: Float[Array, "..."] | None = None
     v_lat_coords: Float[Array, "..."] | None = None
