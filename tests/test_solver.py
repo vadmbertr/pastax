@@ -805,3 +805,124 @@ class TestLineaxDiffusion:
                      key=jax.random.key(4), brownian_structure=noise_proto)
         assert traj.shape == (11, 2)
         assert jnp.all(jnp.isfinite(traj))
+
+
+class TestControlsLengthValidation:
+    """controls leaves must have a leading axis of exactly n_fine."""
+
+    @staticmethod
+    def _term(t, y, ctrl):
+        return jnp.zeros(2) + ctrl
+
+    def test_wrong_length_raises(self):
+        # n_save rows while sub-stepping needs n_fine = n_save * 2.
+        ctrl = jnp.zeros((5, 2))
+        with pytest.raises(ValueError, match="n_fine = "):
+            solve(self._term, jnp.zeros(2), jnp.array(0.0), 5, 0.5, 1.0,
+                  controls=ctrl)
+
+    def test_scalar_leaf_raises(self):
+        with pytest.raises(ValueError, match="leading axis"):
+            solve(self._term, jnp.zeros(2), jnp.array(0.0), 5, 1.0, 1.0,
+                  controls=jnp.array(1.0))
+
+    def test_correct_length_passes(self):
+        ctrl = jnp.zeros((10, 2))
+        traj = solve(self._term, jnp.zeros(2), jnp.array(0.0), 5, 0.5, 1.0,
+                     controls=ctrl)
+        assert traj.shape == (6, 2)
+
+    def test_pytree_controls_validated_per_leaf(self):
+        good = jnp.zeros((10, 2))
+        bad = jnp.zeros((6, 2))
+        with pytest.raises(ValueError, match="n_fine = "):
+            solve(lambda t, y, c: jnp.zeros(2), jnp.zeros(2), jnp.array(0.0),
+                  5, 0.5, 1.0, controls={"a": good, "b": bad})
+            
+            
+class TestMilsteinSingleJacobian:
+    """The diffusion Jacobian must be evaluated once per Milstein step."""
+
+    def _count_term_calls(self, solver_cls):
+        calls = {"n": 0}
+
+        def term(t, y, args, ctrl):
+            calls["n"] += 1
+            return jnp.zeros(2), 0.1 * y  # linear diagonal diffusion
+
+        y = jnp.array([1.0, 2.0])
+        solver_cls().sde_step(term, jnp.array(0.0), y, 0.5, None, None, jnp.ones(2))
+        return calls["n"]
+
+    def test_ito_milstein_two_term_evaluations(self):
+        # One evaluation for (f, g) plus one traced through jacfwd.
+        assert self._count_term_calls(ItoMilstein) == 2
+
+    def test_stratonovich_milstein_two_term_evaluations(self):
+        assert self._count_term_calls(StratonovichMilstein) == 2
+
+    def test_ito_milstein_step_matches_closed_form(self):
+        # g(y) = a * y (diagonal) -> dg_i/dy_i = a, so the Ito Milstein update is
+        # y + f dt + g dW + 0.5 * g * a * (dW^2 - dt).
+        a, dt = 0.3, 0.5
+        f = jnp.array([0.01, -0.02])
+        y = jnp.array([1.0, 2.0])
+        z = jnp.array([0.7, -1.1])
+
+        def term(t, y_, args, ctrl):
+            return f, a * y_
+
+        dW = jnp.sqrt(dt) * z
+        expected = y + f * dt + a * y * dW + 0.5 * (a * y) * a * (dW ** 2 - dt)
+        got = ItoMilstein().sde_step(term, jnp.array(0.0), y, dt, None, None, z)
+        assert jnp.allclose(got, expected, rtol=1e-6)
+        
+        
+class TestNSaveValidation:
+    def test_n_save_zero_raises(self):
+        def term(t, y):
+            return jnp.zeros(2)
+
+        with pytest.raises(ValueError, match="n_save must be >= 1"):
+            solve(term, jnp.zeros(2), jnp.array(0.0), 0, 1.0, 1.0)
+
+    def test_n_save_negative_raises(self):
+        def term(t, y):
+            return jnp.zeros(2)
+
+        with pytest.raises(ValueError, match="n_save must be >= 1"):
+            solve(term, jnp.zeros(2), jnp.array(0.0), -3, 1.0, 1.0)
+
+
+class TestExactStepSize:
+    """The integration step must be int_dt exactly, not ts[1] - ts[0]."""
+
+    def test_large_t0_does_not_quantize_dt(self):
+        # At t0 ~ 1.75e9 (epoch-scale seconds) float32 spacing is 128 s, so a
+        # step recovered as ts[1] - ts[0] would be a multiple of 128 (e.g.
+        # 3584) instead of 3600. With a constant velocity the endpoint is
+        # exactly y0 + v * n * int_dt when the exact step is used.
+        v = jnp.array([1e-5, -2e-5])
+
+        def term(t, y):
+            return v
+
+        y0 = jnp.array([-4.0, 48.0])
+        t0 = jnp.array(1.75e9)
+        n_save, dt = 4, 3600.0
+        traj = solve(term, y0, t0, n_save, dt, dt, Euler())
+        expected = y0 + v * n_save * dt
+        assert jnp.allclose(traj[-1], expected, rtol=1e-6, atol=0.0)
+
+    def test_large_t0_sde_drift_uses_exact_dt(self):
+        drift = jnp.array([1e-5, 0.0])
+
+        def term(t, y):
+            return drift, jnp.zeros(2)  # zero diffusion: deterministic drift
+
+        y0 = jnp.zeros(2)
+        t0 = jnp.array(1.75e9)
+        n_save, dt = 4, 3600.0
+        traj = solve(term, y0, t0, n_save, dt, dt, Euler(), key=jax.random.key(0))
+        expected = y0 + drift * n_save * dt
+        assert jnp.allclose(traj[-1], expected, rtol=1e-6, atol=0.0)

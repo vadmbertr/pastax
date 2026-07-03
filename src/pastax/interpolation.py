@@ -42,6 +42,12 @@ def _periodic_index_and_weight(
     ``coords[n] == coords[0] + period``, with ``coords[n]`` not stored. The
     returned index ``i`` is in ``[0, n-1]``; the right neighbour is
     ``(i + 1) % n``.
+
+    ``coords`` must be **ascending** (``dx > 0``): the ``% period`` fold maps
+    the query into ``[0, period)`` above ``coords[0]``, which is inconsistent
+    with a negative ``dx``. (The non-periodic :func:`_index_and_weight`
+    handles descending coordinates fine — the sign cancels in ``(x - x0)/dx``.)
+    The loaders enforce this when ``lon_period`` is set.
     """
     x0 = coords[0]
     dx = coords[1] - coords[0]
@@ -94,8 +100,10 @@ def bilinear_interp_2d(
             as periodic with that period; the grid is assumed to span exactly
             one period (``n_lon * dlon == lon_period``) and the cell at
             ``lon_coords[-1] + dlon`` is identified with ``lon_coords[0]``.
-            ``None`` (default) reproduces the non-wrapping behaviour with
-            linear extrapolation past the boundary.
+            Periodic longitudes must be **ascending** (see
+            :func:`_periodic_index_and_weight`). ``None`` (default) reproduces
+            the non-wrapping behaviour with linear extrapolation past the
+            boundary.
         mask: Optional 2-D boolean land mask, same shape as ``values``.
             ``True`` marks a land cell. Behaviour by mixed-corner count:
 
@@ -108,6 +116,12 @@ def bilinear_interp_2d(
               the cell axes); land corners are dropped.
             * All four corners land → returns ``0`` (zero velocity for
               fully-grounded cells).
+
+            The all-land ``0`` is the physically right answer for velocity
+            components (a grounded particle does not move) but is an
+            arbitrary fill for tracers — an SST of ``0`` °C over land is a
+            value, not a gap. When interpolating masked tracers, treat
+            results in all-land cells as fill values, not data.
 
             The :math:`\varepsilon` floor and :func:`safe_divide` keep both
             forward and backward passes finite for queries on or near a corner.
