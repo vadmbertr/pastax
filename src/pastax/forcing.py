@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 __all__ = ["Field", "Dataset"]
 
 
-def _coerce_time_to_seconds(t: Array) -> tuple[Array, float]:
+def _coerce_time_to_seconds(t: Array) -> tuple[Array, Array]:
     """Convert a datetime64 time coordinate to relative seconds; pass-through otherwise.
 
     Both ``Dataset.from_arrays`` and ``Dataset.from_xarray`` route through this
@@ -30,7 +30,7 @@ def _coerce_time_to_seconds(t: Array) -> tuple[Array, float]:
     values (~1.7e9 s) are unrepresentable in float32 beyond a 128 s
     granularity, which would silently quantize interpolation weights.
 
-    Plain numeric arrays are returned unchanged with ``t_origin = 0.0`` and are
+    Plain numeric arrays are returned unchanged with ``t_origin = 0`` and are
     treated as "seconds since some user-chosen reference" (the user owns the
     frame; pick a reference near the data, not the Unix epoch, when running in
     float32).
@@ -42,24 +42,27 @@ def _coerce_time_to_seconds(t: Array) -> tuple[Array, float]:
 
     Returns:
         ``(t_seconds, t_origin)`` where ``t_seconds`` is the (possibly rebased)
-        time coordinate array and ``t_origin`` is the epoch offset in seconds
-        (``0.0`` unless the input was ``datetime64``).
+        time coordinate array and ``t_origin`` is the epoch offset as a 0-d
+        NumPy ``int64`` array (``0`` unless the input was ``datetime64``).
+        Integer seconds are exact in int64, and the value is a pytree *leaf*
+        on :class:`Grid` — not static metadata — so datasets differing only
+        in ``t_origin`` do not retrigger jit compilation.
     """
+    import numpy as np
+
     if isinstance(t, jax.Array):
-        return t, 0.0
+        return t, np.array(0, dtype=np.int64)
 
     # The ``Array`` annotation aliases ``jax.Array``, so type checkers flag the
     # lines below as unreachable. They are not: at runtime ``t`` is often a
     # NumPy ``datetime64`` / numeric array (e.g. from ``from_xarray``), which is
     # exactly what this NumPy path handles.
-    import numpy as np
-
     t_arr = np.asarray(t)
     if t_arr.dtype.kind == "M":
         secs = t_arr.astype("datetime64[s]").astype(np.int64)
         origin = int(secs[0]) if secs.size else 0
-        return secs - origin, float(origin)
-    return t_arr, 0.0
+        return secs - origin, np.array(origin, dtype=np.int64)
+    return t_arr, np.array(0, dtype=np.int64)
 
 
 def _nearest_idx(coords: Float[Array, "n"], x: Float[Array, ""], n: int) -> Array:
@@ -443,7 +446,9 @@ class Dataset(eqx.Module):
                 (seconds since an arbitrary reference) or a NumPy ``datetime64``
                 array (any unit); the latter is auto-converted to seconds
                 **relative to the first timestamp**, with the first timestamp
-                stored as ``Grid.t_origin`` (seconds since the Unix epoch).
+                stored as ``Grid.t_origin`` (a 0-d int64 array of seconds
+                since the Unix epoch — a pytree leaf, so changing forcing
+                origins does not retrigger jit compilation).
                 Rebasing keeps float32 time coordinates precise — raw
                 epoch-scale seconds (~1.7e9) have a 128 s float32 granularity.
                 Numeric input is used as-is: choose a reference near the data

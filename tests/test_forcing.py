@@ -262,7 +262,8 @@ class TestDatasetFromArrays:
             dataset["u"].t_coords,
             jnp.asarray(expected, dtype=dataset["u"].t_coords.dtype),
         )
-        assert dataset.grid.t_origin == float(epoch[0])
+        assert int(dataset.grid.t_origin) == int(epoch[0])
+        assert dataset.grid.t_origin.dtype == np.int64
 
     def test_datetime64_rebasing_preserves_float32_precision(self):
         """Hourly datetime64 coords at a 2026 epoch stay exact in float32.
@@ -291,12 +292,38 @@ class TestDatasetFromArrays:
         v = dataset["u"].interp(jnp.array(5400.0), jnp.array(11.0), jnp.array(1.0))
         assert float(v) == pytest.approx(1.5, abs=1e-6)
 
+    def test_different_t_origin_does_not_retrace_jit(self):
+        """t_origin is a pytree leaf: swapping forcing origins must not recompile."""
+
+        def build(day):
+            t_dt = np.arange(
+                np.datetime64(day),
+                np.datetime64(day) + np.timedelta64(4, "h"),
+                np.timedelta64(1, "h"),
+            )
+            lat = np.linspace(0.0, 3.0, 4)
+            lon = np.linspace(10.0, 13.0, 4)
+            u = np.ones((4, 4, 4), dtype=np.float32)
+            return Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
+
+        traces = {"n": 0}
+
+        @jax.jit
+        def f(ds):
+            traces["n"] += 1  # runs at trace time only
+            return ds["u"].interp(jnp.array(1800.0), jnp.array(11.0), jnp.array(1.0))
+
+        v1 = f(build("2026-07-01T00:00"))
+        v2 = f(build("2026-09-01T00:00"))  # same shapes, different t_origin
+        assert traces["n"] == 1
+        assert float(v1) == pytest.approx(float(v2))
+
     def test_numeric_time_passes_through_unrebased(self):
         """Plain numeric time input keeps its frame and t_origin stays 0."""
         t, lat, lon = self._coords()
         u = np.ones((4, 4, 4), dtype=np.float32)
         dataset = Dataset.from_arrays({"u": u}, t=t + 123.0, lat=lat, lon=lon)
-        assert dataset.grid.t_origin == 0.0
+        assert int(dataset.grid.t_origin) == 0
         assert float(dataset["u"].t_coords[0]) == pytest.approx(123.0)
 
     def test_from_arrays_datetime64_matches_from_xarray(self):
@@ -534,9 +561,9 @@ class TestDatasetCGrid:
         assert jnp.allclose(from_xr["u"].lon_coords, from_arr["u"].lon_coords)
         assert jnp.allclose(from_xr["v"].lat_coords, from_arr["v"].lat_coords)
         # datetime64 time is rebased identically on both paths.
-        epoch0 = float(t.astype("datetime64[s]").astype(np.int64)[0])
-        assert from_xr.grid.t_origin == epoch0
-        assert from_arr.grid.t_origin == epoch0
+        epoch0 = int(t.astype("datetime64[s]").astype(np.int64)[0])
+        assert int(from_xr.grid.t_origin) == epoch0
+        assert int(from_arr.grid.t_origin) == epoch0
         assert float(from_xr.grid.t_coords[0]) == 0.0
 
     def test_from_xarray_cgrid_with_explicit_staggered_coords(self):
