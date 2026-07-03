@@ -318,6 +318,64 @@ class TestDatasetFromArrays:
         assert traces["n"] == 1
         assert float(v1) == pytest.approx(float(v2))
 
+    def test_t_origin_traces_through_solve_without_recompiling(self):
+        """t_origin flows into the solver term as a traced value, not a constant.
+
+        The absolute epoch time ``t + grid.t_origin`` (the month-of-year use
+        case) is recovered inside the term and drives a seasonal signal. A
+        single jitted program must:
+
+        * trace exactly once across datasets with different ``t_origin`` and a
+          changed ``t0`` (no recompilation), and
+        * still produce *different* trajectories for different origins —
+          proving ``t_origin`` is a runtime input threaded all the way into
+          the term, not baked into the trace as a constant.
+        """
+        from pastax import Euler
+
+        def build(day):
+            t_dt = np.arange(
+                np.datetime64(day),
+                np.datetime64(day) + np.timedelta64(6, "h"),
+                np.timedelta64(1, "h"),
+            )
+            lat = np.linspace(0.0, 3.0, 4)
+            lon = np.linspace(10.0, 13.0, 4)
+            u = np.ones((6, 4, 4), dtype=np.float32)
+            v = np.zeros((6, 4, 4), dtype=np.float32)
+            return Dataset.from_arrays({"u": u, "v": v}, t=t_dt, lat=lat, lon=lon)
+
+        year = 365.25 * 86400.0
+
+        def term(t, y, args):
+            ds = args
+            abs_t = t + ds.grid.t_origin  # absolute epoch seconds (traced leaf)
+            season = jnp.sin(2.0 * jnp.pi * abs_t / year)
+            u = ds["u"].interp(t, y[0], y[1])
+            v = ds["v"].interp(t, y[0], y[1])
+            return jnp.array([u, v]) + 1e-3 * season
+
+        traces = {"n": 0}
+
+        @jax.jit
+        def run(ds, t0):
+            traces["n"] += 1  # trace-time only
+            return solve(
+                term, jnp.array([11.0, 1.0]), t0,
+                n_save=3, int_dt=3600.0, save_dt=3600.0,
+                solver=Euler(), args=ds,
+            )
+
+        r_jul = run(build("2026-07-01T00:00"), jnp.array(0.0))
+        r_sep = run(build("2026-09-01T00:00"), jnp.array(0.0))  # different origin
+        _ = run(build("2026-07-01T00:00"), jnp.array(3600.0))   # different t0
+
+        assert traces["n"] == 1  # no recompilation
+        assert jnp.all(jnp.isfinite(r_jul)) and jnp.all(jnp.isfinite(r_sep))
+        # Different origins → different seasonal phase → different trajectory,
+        # so t_origin genuinely reached the term as a runtime value.
+        assert not jnp.allclose(r_jul, r_sep)
+
     def test_numeric_time_passes_through_unrebased(self):
         """Plain numeric time input keeps its frame and t_origin stays 0."""
         t, lat, lon = self._coords()
