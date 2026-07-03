@@ -602,6 +602,41 @@ class TestDatasetCGrid:
         assert lon_final == pytest.approx(2.0 * float(np.exp(alpha * T)), rel=1e-3)
 
 
+class TestPeriodicLonAscending:
+    """lon_period demands ascending longitudes; descending ones must raise."""
+
+    def test_descending_lon_with_period_raises(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.array([0.0, 1.0])
+        lon = np.array([270.0, 180.0, 90.0, 0.0])  # descending
+        u = np.ones((2, 2, 4), dtype=np.float32)
+        with pytest.raises(ValueError, match="strictly ascending longitude"):
+            Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
+
+    def test_descending_lon_without_period_still_works(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.array([0.0, 1.0])
+        lon = np.array([13.0, 12.0, 11.0, 10.0])  # descending, non-periodic
+        u = np.broadcast_to(np.array([3.0, 2.0, 1.0, 0.0], dtype=np.float32), (2, 2, 4))
+        ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon)
+        # values encode lon - 10, so interp at lon=11.5 must give 1.5
+        v = ds["u"].interp(jnp.array(0.0), jnp.array(11.5), jnp.array(0.5))
+        assert float(v) == pytest.approx(1.5, abs=1e-6)
+
+    def test_cgrid_descending_lon_with_period_raises(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.linspace(0.0, 4.0, 5)
+        lon = np.array([300.0, 240.0, 180.0, 120.0, 60.0, 0.0])  # descending
+        u = np.ones((2, 5, 5), dtype=np.float32)
+        v = np.ones((2, 4, 6), dtype=np.float32)
+        with pytest.raises(ValueError, match="strictly ascending longitude"):
+            Dataset.from_arrays_cgrid(
+                t, lat, lon,
+                vectors={"current": {"u": ("uo", u), "v": ("vo", v)}},
+                lon_period=360.0,
+            )
+            
+            
 class TestFromArraysShapeValidation:
     def _coords(self):
         t   = np.linspace(0.0, 3 * 3600.0, 4)
