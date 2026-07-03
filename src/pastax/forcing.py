@@ -597,7 +597,11 @@ class Dataset(eqx.Module):
                 as periodic in longitude. Tracer fields receive
                 ``lon_period``; U/V faces do not (their coordinate arrays
                 no longer span a full period, so periodic wrapping would be
-                ill-defined at first order).
+                ill-defined at first order). In particular the seam U face
+                between ``lon[-1]`` and ``lon[0] + lon_period`` is not
+                represented, and U/V fields extrapolate instead of wrapping
+                across the seam — see :meth:`pastax.Grid.period_for` for the
+                implications and workarounds.
             masks: Optional land masks keyed by the field names declared in
                 ``vectors`` and ``tracers``. Each mask is a 2-D bool array;
                 the expected shape per field is ``(nlat, nlon - 1)`` for a
