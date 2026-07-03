@@ -557,3 +557,39 @@ class TestClosedBay:
         assert float(traj[-1, 1]) == pytest.approx(2.0, abs=1e-5)
         # And no NaN anywhere.
         assert bool(jnp.all(jnp.isfinite(traj))) is True
+
+
+class TestUnknownMaskKeys:
+    """A typo'd masks key must raise instead of silently falling back to NaN inference."""
+
+    def test_from_arrays_unknown_key_raises(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.linspace(0.0, 2.0, 3)
+        lon = np.linspace(10.0, 13.0, 4)
+        u = np.ones((2, 3, 4), dtype=np.float32)
+        mask = np.zeros((3, 4), dtype=bool)
+        with pytest.raises(ValueError, match=r"masks contains keys \['U'\]"):
+            Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, masks={"U": mask})
+
+    def test_from_arrays_cgrid_unknown_key_raises(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.linspace(0.0, 4.0, 5)
+        lon = np.linspace(0.0, 5.0, 6)
+        u = np.ones((2, 5, 5), dtype=np.float32)
+        v = np.ones((2, 4, 6), dtype=np.float32)
+        mask = np.zeros((5, 5), dtype=bool)
+        with pytest.raises(ValueError, match=r"masks contains keys \['uo_typo'\]"):
+            Dataset.from_arrays_cgrid(
+                t, lat, lon,
+                vectors={"current": {"u": ("uo", u), "v": ("vo", v)}},
+                masks={"uo_typo": mask},
+            )
+
+    def test_from_arrays_known_key_still_works(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.linspace(0.0, 2.0, 3)
+        lon = np.linspace(10.0, 13.0, 4)
+        u = np.ones((2, 3, 4), dtype=np.float32)
+        mask = np.zeros((3, 4), dtype=bool)
+        ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, masks={"u": mask})
+        assert ds["u"].mask is not None
