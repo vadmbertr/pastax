@@ -167,24 +167,26 @@ class AbstractSolver(eqx.Module):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         """Advance the ODE state by one step of size ``dt``.
 
         Args:
-            term: Drift callable ``f(t, y, args) -> Float[Array, "2"]`` returning
-                velocity in degrees per second.
+            term: Drift callable ``f(t, y, args, ctrl) -> dy`` returning the
+                time derivative as a PyTree matching ``y`` (for a flat
+                ``[lon, lat]`` state, the velocity in degrees per second).
             t: Current time, in seconds.
-            y: Current state ``[lon, lat]`` in degrees.
+            y: Current state PyTree (a flat array like ``[lon, lat]`` in
+                degrees is the single-leaf case).
             dt: Step size in seconds.
             args: Arbitrary fixed Pytree forwarded to ``term``.
             ctrl: Arbitrary time-varying Pytree forwarded to ``term``.
 
         Returns:
-            Updated state ``[lon, lat]`` in degrees after one step.
+            Updated state (same PyTree structure as ``y``) after one step.
         """
         ...
 
@@ -193,12 +195,12 @@ class AbstractSolver(eqx.Module):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         r"""Advance the SDE state by one step using a pre-sampled ``z``.
 
         Args:
@@ -208,7 +210,8 @@ class AbstractSolver(eqx.Module):
                 (diagonal) or ``(2, 2)`` (full matrix). The term never sees
                 ``z``; the Wiener increment is applied by the solver.
             t: Current time, in seconds.
-            y: Current state ``[lon, lat]`` in degrees.
+            y: Current state PyTree (a flat array like ``[lon, lat]`` in
+                degrees is the single-leaf case).
             dt: Step size in seconds.
             args: Arbitrary fixed Pytree forwarded to ``term``.
             ctrl: Arbitrary time-varying Pytree forwarded to ``term``.
@@ -216,7 +219,7 @@ class AbstractSolver(eqx.Module):
                 increment used by the solver is :math:`dW = \sqrt{|dt|}\,z`.
 
         Returns:
-            Updated state ``[lon, lat]`` in degrees after one step.
+            Updated state (same PyTree structure as ``y``) after one step.
         """
         ...
 
@@ -228,11 +231,11 @@ class Euler(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         """One Euler step: ``y_new = y + term(t, y, args) * dt``."""
         return _axpy(dt, term(t, y, args, ctrl), y)
 
@@ -240,12 +243,12 @@ class Euler(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         r"""One Euler–Maruyama step: :math:`y + \mathrm{drift}\,dt + g\,dW`."""
         f, g = term(t, y, args, ctrl)
         dW = _scale(jnp.sqrt(jnp.abs(dt)), z)
@@ -263,11 +266,11 @@ class Heun(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         """One Heun (trapezoidal) step."""
         k1 = term(t, y, args, ctrl)
         k2 = term(t + dt, _axpy(dt, k1, y), args, ctrl)
@@ -277,12 +280,12 @@ class Heun(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         """One Stratonovich Heun step (same ``dW`` in predictor and corrector)."""
         f0, g0 = term(t, y, args, ctrl)
         dW = _scale(jnp.sqrt(jnp.abs(dt)), z)
@@ -304,11 +307,11 @@ class RK4(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         """One classical RK4 step."""
         half = dt * 0.5
         k1 = term(t, y, args, ctrl)
@@ -321,12 +324,12 @@ class RK4(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         """One stochastic RK4 step (Stratonovich, single ``dW`` across stages)."""
         half = dt * 0.5
         dW = _scale(jnp.sqrt(jnp.abs(dt)), z)
@@ -387,11 +390,11 @@ class Tsit5(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         """One Tsit5 step (5th-order weights only)."""
         k1 = term(t, y, args, ctrl)
         k2 = term(t + _TSIT5_C2 * dt, _rk_stage(y, dt, (_TSIT5_A21,), (k1,)), args, ctrl)
@@ -416,12 +419,12 @@ class Tsit5(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         raise NotImplementedError(
             "Tsit5 is an ODE-only solver; use Euler, Heun, RK4, EulerHeun, "
             "ItoMilstein, or StratonovichMilstein for SDEs."
@@ -439,11 +442,11 @@ class Dopri5(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         """One Dopri5 step (5th-order weights only)."""
         k1 = term(t, y, args, ctrl)
         k2 = term(t + dt * (1.0 / 5.0), _rk_stage(y, dt, (1.0 / 5.0,), (k1,)), args, ctrl)
@@ -474,12 +477,12 @@ class Dopri5(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         raise NotImplementedError(
             "Dopri5 is an ODE-only solver; use Euler, Heun, RK4, EulerHeun, "
             "ItoMilstein, or StratonovichMilstein for SDEs."
@@ -498,11 +501,11 @@ class EulerHeun(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         raise NotImplementedError(
             "EulerHeun is an SDE-only solver; use Euler, Heun, RK4, Tsit5, "
             "or Dopri5 for ODEs."
@@ -512,12 +515,12 @@ class EulerHeun(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         """One stochastic Euler–Heun step."""
         f0, g0 = term(t, y, args, ctrl)
         dW = _scale(jnp.sqrt(jnp.abs(dt)), z)
@@ -560,11 +563,11 @@ class ItoMilstein(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         raise NotImplementedError(
             "ItoMilstein is an SDE-only solver; use Euler, Heun, RK4, Tsit5, "
             "or Dopri5 for ODEs."
@@ -574,12 +577,12 @@ class ItoMilstein(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         r"""One Itô Milstein step: :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,(dW^2 - dt)`."""
         if not _is_bare_array(y):
             raise NotImplementedError(
@@ -609,11 +612,11 @@ class StratonovichMilstein(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-    ) -> Float[Array, "2"]:
+    ) -> PyTree:
         raise NotImplementedError(
             "StratonovichMilstein is an SDE-only solver; use Euler, Heun, RK4, "
             "Tsit5, or Dopri5 for ODEs."
@@ -623,12 +626,12 @@ class StratonovichMilstein(AbstractSolver):
         self,
         term: Callable,
         t: Float[Array, ""],
-        y: Float[Array, "2"],
+        y: PyTree,
         dt: Float[Array, ""],
         args: PyTree,
         ctrl: PyTree,
-        z: Float[Array, "n_noise"],
-    ) -> Float[Array, "2"]:
+        z: PyTree,
+    ) -> PyTree:
         r"""One Stratonovich Milstein step: :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,dW^2`."""
         if not _is_bare_array(y):
             raise NotImplementedError(
@@ -696,7 +699,7 @@ def _scan(body, init, xs, adjoint, checkpoints):
 
 def _run_ode(
     term: Callable,
-    y0: Float[Array, "2"],
+    y0: PyTree,
     ts: Float[Array, " time"],
     dt: float,
     solver: AbstractSolver,
@@ -704,25 +707,25 @@ def _run_ode(
     controls: PyTree | None = None,
     adjoint: str = "checkpointed",
     checkpoints: int | str | None = None,
-) -> Float[Array, "time 2"]:
+) -> PyTree:
     if args is None and controls is None:
-        def body(y: Float[Array, "2"], t: Float[Array, ""]) -> tuple:
+        def body(y: PyTree, t: Float[Array, ""]) -> tuple:
             term_fn = lambda t_, y_, a_, c_: term(t_, y_)
             y_new = solver.ode_step(term_fn, t, y, dt, None, None)
             return y_new, y_new
     elif args is not None and controls is None:
-        def body(y: Float[Array, "2"], t: Float[Array, ""]) -> tuple:
+        def body(y: PyTree, t: Float[Array, ""]) -> tuple:
             term_fn = lambda t_, y_, a_, c_: term(t_, y_, a_)
             y_new = solver.ode_step(term_fn, t, y, dt, args, None)
             return y_new, y_new
     elif args is None and controls is not None:
-        def body(y: Float[Array, "2"], inputs: tuple) -> tuple:
+        def body(y: PyTree, inputs: tuple) -> tuple:
             t, ctrl = inputs
             bound = lambda t_, y_, a_, c_: term(t_, y_, c_)
             y_new = solver.ode_step(bound, t, y, dt, None, ctrl)
             return y_new, y_new
     else:
-        def body(y: Float[Array, "2"], inputs: tuple) -> tuple:
+        def body(y: PyTree, inputs: tuple) -> tuple:
             t, ctrl = inputs
             bound = lambda t_, y_, a_, c_: term(t_, y_, a_, c_)
             y_new = solver.ode_step(bound, t, y, dt, args, ctrl)
@@ -740,36 +743,36 @@ def _run_ode(
 
 def _run_sde(
     term: Callable,
-    y0: Float[Array, "2"],
+    y0: PyTree,
     ts: Float[Array, " time"],
     dt: float,
     solver: AbstractSolver,
-    z_seq: Float[Array, "steps 2"],
+    z_seq: PyTree,
     args: PyTree | None = None,
     controls: PyTree | None = None,
     adjoint: str = "checkpointed",
     checkpoints: int | str | None = None,
-) -> Float[Array, "time 2"]:
+) -> PyTree:
     if args is None and controls is None:
-        def body(y: Float[Array, "2"], inputs: Float[Array, ""]) -> tuple:
+        def body(y: PyTree, inputs: tuple) -> tuple:
             t, z = inputs
             term_fn = lambda t_, y_, a_, c_: term(t_, y_)
             y_new = solver.sde_step(term_fn, t, y, dt, None, None, z)
             return y_new, y_new
     elif args is not None and controls is None:
-        def body(y: Float[Array, "2"], inputs: Float[Array, ""]) -> tuple:
+        def body(y: PyTree, inputs: tuple) -> tuple:
             t, z = inputs
             term_fn = lambda t_, y_, a_, c_: term(t_, y_, a_)
             y_new = solver.sde_step(term_fn, t, y, dt, args, None, z)
             return y_new, y_new
     elif args is None and controls is not None:
-        def body(y: Float[Array, "2"], inputs: tuple) -> tuple:
+        def body(y: PyTree, inputs: tuple) -> tuple:
             t, z, ctrl = inputs
             bound = lambda t_, y_, a_, c_: term(t_, y_, c_)
             y_new = solver.sde_step(bound, t, y, dt, None, ctrl, z)
             return y_new, y_new
     else:
-        def body(y: Float[Array, "2"], inputs: tuple) -> tuple:
+        def body(y: PyTree, inputs: tuple) -> tuple:
             t, z, ctrl = inputs
             bound = lambda t_, y_, a_, c_: term(t_, y_, a_, c_)
             y_new = solver.sde_step(bound, t, y, dt, args, ctrl, z)
@@ -787,7 +790,7 @@ def _run_sde(
 
 def solve(
     term: Callable,
-    y0: Float[Array, "2"],
+    y0: PyTree,
     t0: Float[Array, ""],
     n_save: int,
     int_dt: float,
@@ -800,7 +803,7 @@ def solve(
     brownian_structure: PyTree | None = None,
     adjoint: str = "checkpointed",
     checkpoints: int | str | None = None,
-) -> Array:
+) -> PyTree:
     r"""Integrate a trajectory for ``n_save`` output intervals starting at ``t0``.
 
     ODE mode (default, no ``key``): ``term(t, y[, args, ctrl])`` returns ``dy``, the
