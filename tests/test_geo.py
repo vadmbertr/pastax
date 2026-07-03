@@ -64,12 +64,14 @@ class TestUnitConversions:
     def test_round_trip_at_equator(self):
         disp_m = jnp.array([1000.0, 1000.0])
         lat = jnp.array(0.0)
-        assert jnp.allclose(degrees_to_meters(meters_to_degrees(disp_m, lat), lat), disp_m, rtol=1e-5)
+        assert jnp.allclose(degrees_to_meters(meters_to_degrees(disp_m, lat), lat),
+                            disp_m, rtol=1e-5)
 
     def test_round_trip_at_45deg(self):
         disp_m = jnp.array([5000.0, 5000.0])
         lat = jnp.array(45.0)
-        assert jnp.allclose(degrees_to_meters(meters_to_degrees(disp_m, lat), lat), disp_m, rtol=1e-5)
+        assert jnp.allclose(degrees_to_meters(meters_to_degrees(disp_m, lat), lat),
+                            disp_m, rtol=1e-5)
 
     def test_longitude_scaling_at_60deg(self):
         lat = jnp.array(60.0)

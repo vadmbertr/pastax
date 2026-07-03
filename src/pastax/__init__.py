@@ -2,13 +2,13 @@
 
 from ._safe_math import safe_divide, safe_log, safe_sqrt
 from .forcing import Dataset, Field
-from .grid import Grid
 from .geo import (
     EARTH_RADIUS,
     degrees_to_meters,
     haversine,
     meters_to_degrees,
 )
+from .grid import Grid
 from .interpolation import bilinear_interp_2d, linear_interp_1d, spatiotemporal_interp
 from .metric import liu_index, normalized_separation_distance, separation_distance
 from .score import (

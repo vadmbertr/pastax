@@ -13,7 +13,6 @@ from .grid import Grid
 from .interpolation import spatiotemporal_interp, spatiotemporal_velocity_partialslip
 
 if TYPE_CHECKING:
-    import numpy as np
     import xarray as xr
     from jax import DTypeLike
 
