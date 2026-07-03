@@ -807,6 +807,39 @@ class TestLineaxDiffusion:
         assert jnp.all(jnp.isfinite(traj))
 
 
+class TestControlsLengthValidation:
+    """controls leaves must have a leading axis of exactly n_fine."""
+
+    @staticmethod
+    def _term(t, y, ctrl):
+        return jnp.zeros(2) + ctrl
+
+    def test_wrong_length_raises(self):
+        # n_save rows while sub-stepping needs n_fine = n_save * 2.
+        ctrl = jnp.zeros((5, 2))
+        with pytest.raises(ValueError, match="n_fine = "):
+            solve(self._term, jnp.zeros(2), jnp.array(0.0), 5, 0.5, 1.0,
+                  controls=ctrl)
+
+    def test_scalar_leaf_raises(self):
+        with pytest.raises(ValueError, match="leading axis"):
+            solve(self._term, jnp.zeros(2), jnp.array(0.0), 5, 1.0, 1.0,
+                  controls=jnp.array(1.0))
+
+    def test_correct_length_passes(self):
+        ctrl = jnp.zeros((10, 2))
+        traj = solve(self._term, jnp.zeros(2), jnp.array(0.0), 5, 0.5, 1.0,
+                     controls=ctrl)
+        assert traj.shape == (6, 2)
+
+    def test_pytree_controls_validated_per_leaf(self):
+        good = jnp.zeros((10, 2))
+        bad = jnp.zeros((6, 2))
+        with pytest.raises(ValueError, match="n_fine = "):
+            solve(lambda t, y, c: jnp.zeros(2), jnp.zeros(2), jnp.array(0.0),
+                  5, 0.5, 1.0, controls={"a": good, "b": bad})
+            
+            
 class TestMilsteinSingleJacobian:
     """The diffusion Jacobian must be evaluated once per Milstein step."""
 
