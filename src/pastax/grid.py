@@ -150,6 +150,14 @@ class Grid(eqx.Module):
         Centre (tracer) fields inherit :attr:`lon_period`. U/V faces always get
         ``None``: their coordinate arrays no longer span a full period, so
         periodic wrapping would be ill-defined at first order.
+
+        Consequence for global (periodic) C-grids: the U face between
+        ``lon_c[-1]`` and ``lon_c[0] + lon_period`` — the seam face — is not
+        represented (there are ``nlon - 1`` U faces, not ``nlon``), and face
+        fields *extrapolate* rather than wrap across the seam. Queries near
+        the seam meridian therefore lose the C-grid's coastal guarantees; if
+        trajectories cross the seam, prefer A-grid forcing or rotate the grid
+        so the seam sits over land.
         """
         return self.lon_period if stagger == "center" else None
 
