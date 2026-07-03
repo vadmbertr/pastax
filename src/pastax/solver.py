@@ -841,8 +841,8 @@ def solve(
             ``(2,)``) is the single-leaf case. Defines the output structure.
         t0: Start time in seconds. JAX scalar — can change between calls without
             recompilation. The implicit end time is ``t0 + n_save * save_dt``.
-        n_save: Number of output intervals (static). Each output leaf has a leading
-            ``n_save + 1`` axis including the initial state.
+        n_save: Number of output intervals (static, ``>= 1``). Each output leaf
+            has a leading ``n_save + 1`` axis including the initial state.
         int_dt: Integration step size in seconds (static). Use a negative value
             for backward-in-time integration.
         save_dt: Output interval in seconds (static). Must be an integer multiple
@@ -887,6 +887,9 @@ def solve(
 
     if adjoint not in ("checkpointed", "forward"):
         raise ValueError(f'adjoint must be "checkpointed" or "forward", got {adjoint!r}.')
+
+    if n_save < 1:
+        raise ValueError(f"n_save must be >= 1, got {n_save}.")
 
     n_substeps = round(save_dt / int_dt)
     if n_substeps < 1:

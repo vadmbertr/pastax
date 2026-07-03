@@ -807,6 +807,22 @@ class TestLineaxDiffusion:
         assert jnp.all(jnp.isfinite(traj))
 
 
+class TestNSaveValidation:
+    def test_n_save_zero_raises(self):
+        def term(t, y):
+            return jnp.zeros(2)
+
+        with pytest.raises(ValueError, match="n_save must be >= 1"):
+            solve(term, jnp.zeros(2), jnp.array(0.0), 0, 1.0, 1.0)
+
+    def test_n_save_negative_raises(self):
+        def term(t, y):
+            return jnp.zeros(2)
+
+        with pytest.raises(ValueError, match="n_save must be >= 1"):
+            solve(term, jnp.zeros(2), jnp.array(0.0), -3, 1.0, 1.0)
+
+
 class TestExactStepSize:
     """The integration step must be int_dt exactly, not ts[1] - ts[0]."""
 
