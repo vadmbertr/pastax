@@ -586,7 +586,10 @@ class ItoMilstein(AbstractSolver):
         ctrl: PyTree,
         z: PyTree,
     ) -> PyTree:
-        r"""One Itô Milstein step: :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,(dW^2 - dt)`."""
+        r"""One Itô Milstein step:
+        
+        :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,(dW^2 - dt)`.
+        """
         if not _is_bare_array(y):
             raise NotImplementedError(
                 "ItoMilstein requires a flat array state; PyTree states are not "
@@ -635,7 +638,10 @@ class StratonovichMilstein(AbstractSolver):
         ctrl: PyTree,
         z: PyTree,
     ) -> PyTree:
-        r"""One Stratonovich Milstein step: :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,dW^2`."""
+        r"""One Stratonovich Milstein step:
+        
+        :math:`y + f\,dt + g\,dW + \tfrac12\,g\,(\partial g/\partial y)\,dW^2`.
+        """
         if not _is_bare_array(y):
             raise NotImplementedError(
                 "StratonovichMilstein requires a flat array state; PyTree states are "
