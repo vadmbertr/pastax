@@ -706,14 +706,13 @@ def _run_ode(
     term: Callable,
     y0: Float[Array, "2"],
     ts: Float[Array, " time"],
+    dt: float,
     solver: AbstractSolver,
     args: PyTree | None = None,
     controls: PyTree | None = None,
     adjoint: str = "checkpointed",
     checkpoints: int | str | None = None,
 ) -> Float[Array, "time 2"]:
-    dt = ts[1] - ts[0]
-
     if args is None and controls is None:
         def body(y: Float[Array, "2"], t: Float[Array, ""]) -> tuple:
             term_fn = lambda t_, y_, a_, c_: term(t_, y_)
@@ -751,6 +750,7 @@ def _run_sde(
     term: Callable,
     y0: Float[Array, "2"],
     ts: Float[Array, " time"],
+    dt: float,
     solver: AbstractSolver,
     z_seq: Float[Array, "steps 2"],
     args: PyTree | None = None,
@@ -758,8 +758,6 @@ def _run_sde(
     adjoint: str = "checkpointed",
     checkpoints: int | str | None = None,
 ) -> Float[Array, "time 2"]:
-    dt = ts[1] - ts[0]
-
     if args is None and controls is None:
         def body(y: Float[Array, "2"], inputs: Float[Array, ""]) -> tuple:
             t, z = inputs
@@ -910,15 +908,15 @@ def solve(
         noise_proto = y0 if brownian_structure is None else brownian_structure
         if n_samples == 1:
             z = _sample_noise(key, n_fine, noise_proto)
-            result = _run_sde(term, y0, ts_fine, solver, z, args, controls, adjoint, checkpoints)
+            result = _run_sde(term, y0, ts_fine, int_dt, solver, z, args, controls, adjoint, checkpoints)
             return _subsample(result, n_substeps)
         else:
             keys = jr.split(key, n_samples)
             z = jax.vmap(lambda k: _sample_noise(k, n_fine, noise_proto))(keys)
             result = jax.vmap(
-                lambda z_: _run_sde(term, y0, ts_fine, solver, z_, args, controls, adjoint, checkpoints)
+                lambda z_: _run_sde(term, y0, ts_fine, int_dt, solver, z_, args, controls, adjoint, checkpoints)
             )(z)
             return _subsample(result, n_substeps, axis=1)
     else:
-        result = _run_ode(term, y0, ts_fine, solver, args, controls, adjoint, checkpoints)
+        result = _run_ode(term, y0, ts_fine, int_dt, solver, args, controls, adjoint, checkpoints)
         return _subsample(result, n_substeps)
