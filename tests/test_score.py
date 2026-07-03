@@ -363,3 +363,24 @@ def test_reduce_invalid_value_raises():
     o = jnp.zeros((2, 2))
     with pytest.raises(ValueError, match="reduce"):
         squared_error(f, o, reduce="mean")  # type: ignore[arg-type]
+
+
+class TestEnsembleSizeValidation:
+    """Degenerate ensembles must raise instead of returning inf/NaN."""
+
+    def test_energy_score_single_member_raises(self):
+        forecast = jnp.zeros((1, 5, 2))
+        obs = jnp.zeros((5, 2))
+        with pytest.raises(ValueError, match="S >= 2"):
+            energy_score(forecast, obs)
+
+    def test_energy_score_two_members_ok(self):
+        forecast = jnp.stack([jnp.zeros((5, 2)), jnp.ones((5, 2))])
+        obs = jnp.zeros((5, 2))
+        assert jnp.all(jnp.isfinite(energy_score(forecast, obs)))
+
+    def test_dawid_sebastiani_two_members_raises(self):
+        forecast = jnp.zeros((2, 5, 2))
+        obs = jnp.zeros((5, 2))
+        with pytest.raises(ValueError, match="S >= 3"):
+            dawid_sebastiani(forecast, obs)

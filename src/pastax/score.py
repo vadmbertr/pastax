@@ -137,6 +137,12 @@ def dawid_sebastiani(
         Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
     """
 
+    if forecast.shape[0] < 3:
+        raise ValueError(
+            "dawid_sebastiani requires an ensemble of size S >= 3 (the ddof=1 "
+            f"sample covariance is singular below that); got S = {forecast.shape[0]}."
+        )
+
     def _one_t(fcst_t: Float[Array, "S 2"], obs_t: Float[Array, "2"]) -> Float[Array, ""]:
         s = fcst_t.shape[0]
         mu = fcst_t.mean(axis=0)
@@ -184,6 +190,11 @@ def energy_score(
         Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
     """
     s = forecast.shape[0]
+    if s < 2:
+        raise ValueError(
+            "energy_score requires an ensemble of size S >= 2 (the unbiased "
+            f"pairwise term divides by S - 1); got S = {s}."
+        )
 
     bias_per_t = jnp.mean(kernel(forecast, obs) ** alpha, axis=0)
 
