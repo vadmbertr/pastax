@@ -183,7 +183,9 @@ class Field(eqx.Module):
             instead of extrapolating. When ``self.mask`` is set, coastal
             cells use inverse-distance partial-cell weighting and fully
             land-bound cells return ``0`` (see
-            :func:`pastax.interpolation.bilinear_interp_2d`).
+            :func:`pastax.interpolation.bilinear_interp_2d`) — the right
+            answer for velocities, but an arbitrary fill value for masked
+            tracers (an SST of ``0`` over land is a value, not a gap).
         """
         lat_coords, lon_coords = self.grid.coords_for(self.stagger)
         return spatiotemporal_interp(

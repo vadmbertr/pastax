@@ -117,6 +117,12 @@ def bilinear_interp_2d(
             * All four corners land → returns ``0`` (zero velocity for
               fully-grounded cells).
 
+            The all-land ``0`` is the physically right answer for velocity
+            components (a grounded particle does not move) but is an
+            arbitrary fill for tracers — an SST of ``0`` °C over land is a
+            value, not a gap. When interpolating masked tracers, treat
+            results in all-land cells as fill values, not data.
+
             The :math:`\varepsilon` floor and :func:`safe_divide` keep both
             forward and backward passes finite for queries on or near a corner.
 
