@@ -850,7 +850,12 @@ def _resolve_mask(
        ``expected_mask_shape`` and used as-is. Time-varying (3-D) masks are
        rejected.
     3. Otherwise, if NaN was present in ``values``, infer a 2-D mask from
-       ``isnan(values).any(axis=0)``.
+       ``isnan(values).any(axis=0)``. Cells that are NaN at *some but not
+       all* time steps are almost certainly missing data (sensor gaps)
+       rather than land — land is time-invariant. Such cells still end up
+       masked (and zero-filled), but a ``UserWarning`` is emitted so the
+       gap does not silently become a permanent wall; pass an explicit
+       mask to silence it.
     4. If no user mask and no NaN, return ``mask=None`` — the resulting
        Field is bit-exact identical (PyTree structure included) to one
        built before the mask feature was added.
@@ -874,6 +879,20 @@ def _resolve_mask(
 
     if bool(nan_locs.any()):
         inferred = nan_locs.any(axis=0)
+        transient = inferred & ~nan_locs.all(axis=0)
+        if bool(transient.any()):
+            import warnings
+
+            warnings.warn(
+                f"Field {field_name!r}: {int(transient.sum())} cell(s) are NaN "
+                "at some but not all time steps. Land is time-invariant, so "
+                "these look like missing data (sensor gaps), yet they will be "
+                "masked as land for the whole simulation (values zero-filled). "
+                "Fill the gaps or pass an explicit mask to silence this "
+                "warning.",
+                UserWarning,
+                stacklevel=2,
+            )
         return clean_values, inferred
 
     return clean_values, None
