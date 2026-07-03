@@ -439,6 +439,8 @@ class Dataset(eqx.Module):
         t_arr   = jnp.asarray(t,   dtype=dtype)
         lat_arr = jnp.asarray(lat, dtype=dtype)
         lon_arr = jnp.asarray(lon, dtype=dtype)
+        _check_periodic_lon_ascending(lon_arr, lon_period)
+        nt   = int(t_arr.shape[0])
         nlat = int(lat_arr.shape[0])
         nlon = int(lon_arr.shape[0])
         grid = Grid(
@@ -450,9 +452,22 @@ class Dataset(eqx.Module):
             lon_period=lon_period,
         )
         masks = masks or {}
+        unknown = set(masks) - set(fields)
+        if unknown:
+            raise ValueError(
+                f"masks contains keys {sorted(unknown)!r} that match no field; "
+                f"known fields are {sorted(fields)!r}."
+            )
         loaded: dict[str, Field] = {}
         for name, v in fields.items():
             v_arr = jnp.asarray(v, dtype=dtype)
+            if v_arr.shape != (nt, nlat, nlon):
+                raise ValueError(
+                    f"fields[{name!r}]: expected shape (time, lat, lon) = "
+                    f"{(nt, nlat, nlon)} matching the coordinate arrays, got "
+                    f"{v_arr.shape}. Check the axis order — data stored as "
+                    "(time, lon, lat) must be transposed."
+                )
             clean, mask = _resolve_mask(
                 v_arr, masks.get(name),
                 expected_mask_shape=(nlat, nlon),
@@ -594,6 +609,7 @@ class Dataset(eqx.Module):
         t_arr   = jnp.asarray(t,           dtype=dtype)
         lat_arr = jnp.asarray(center_lat,  dtype=dtype)
         lon_arr = jnp.asarray(center_lon,  dtype=dtype)
+        _check_periodic_lon_ascending(lon_arr, lon_period)
 
         nt   = int(t_arr.shape[0])
         nlat = int(lat_arr.shape[0])
@@ -698,6 +714,13 @@ class Dataset(eqx.Module):
                 loaded[name] = Field(
                     values=tr_clean, grid=grid, stagger="center", mask=tr_mask,
                 )
+
+        unknown = set(masks) - set(loaded)
+        if unknown:
+            raise ValueError(
+                f"masks contains keys {sorted(unknown)!r} that match no field; "
+                f"known fields are {sorted(loaded)!r}."
+            )
         return Dataset(fields=loaded, grid=grid)
 
     @staticmethod
@@ -779,6 +802,26 @@ class Dataset(eqx.Module):
             dtype=dtype,
             lon_period=lon_period,
             masks=masks,
+        )
+
+
+def _check_periodic_lon_ascending(
+    lon_arr: Float[Array, "lon"], lon_period: float | None
+) -> None:
+    """Reject descending longitudes when periodic wrapping is requested.
+
+    The periodic index arithmetic folds queries with ``% lon_period`` above
+    ``lon_coords[0]``, which assumes an ascending axis; a descending axis
+    silently produces wrong indices and weights. (Without ``lon_period``,
+    descending coordinates work — the spacing sign cancels.)
+    """
+    if lon_period is None:
+        return
+    if not bool(jnp.all(jnp.diff(lon_arr) > 0)):
+        raise ValueError(
+            "lon_period requires strictly ascending longitude coordinates; "
+            "the periodic wrap arithmetic is undefined on a descending axis. "
+            "Flip the longitude axis (and the field values) before loading."
         )
 
 
