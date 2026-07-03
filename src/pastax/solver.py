@@ -528,28 +528,25 @@ class EulerHeun(AbstractSolver):
         return _add(y, _scale(dt, f0), _scale(0.5, _add(diff0, diff1)))
 
 
-def _milstein_correction(
+def _diffusion_jac_diag(
     term: Callable,
     t: Float[Array, ""],
     y: Float[Array, "2"],
     args: PyTree,
     ctrl: PyTree,
-    g: Float[Array, "2"],
-    dW: Float[Array, "n_noise"],
 ) -> Float[Array, "2"]:
-    r"""Diagonal-noise Milstein cross-term :math:`\tfrac12\,g\,(\partial g_i/\partial y_i)\,dW^2`.
+    r"""Diagonal :math:`\partial g_i/\partial y_i` of a diagonal diffusion coefficient.
 
-    Returns the :math:`\tfrac12\,g\,(\partial g_i/\partial y_i)\,dW^2` vector
-    (Stratonovich form). Itô subtracts
-    :math:`\tfrac12\,g\,(\partial g_i/\partial y_i)\,dt` on top.
+    Computed once per step via ``jax.jacfwd`` and shared between the Milstein
+    cross-term :math:`\tfrac12\,g\,(\partial g_i/\partial y_i)\,dW^2` and the
+    Itô drift correction :math:`-\tfrac12\,g\,(\partial g_i/\partial y_i)\,dt`.
     """
     def g_fn(y_):
         _, g_out = term(t, y_, args, ctrl)
         return g_out
 
     dgdy = jax.jacfwd(g_fn)(y)            # (2, 2)
-    dgdy_diag = jnp.diag(dgdy)
-    return 0.5 * g * dgdy_diag * dW ** 2
+    return jnp.diag(dgdy)
 
 
 class ItoMilstein(AbstractSolver):
@@ -596,13 +593,8 @@ class ItoMilstein(AbstractSolver):
                 f"got g.shape == {g.shape}. Use EulerHeun for matrix diffusion."
             )
         dW = jnp.sqrt(jnp.abs(dt)) * z
-        cross = _milstein_correction(term, t, y, args, ctrl, g, dW)
-        def g_fn(y_):
-            _, g_out = term(t, y_, args, ctrl)
-            return g_out
-        dgdy_diag = jnp.diag(jax.jacfwd(g_fn)(y))
-        ito_drift = -0.5 * g * dgdy_diag * dt
-        return y + f * dt + g * dW + cross + ito_drift
+        dgdy_diag = _diffusion_jac_diag(term, t, y, args, ctrl)
+        return y + f * dt + g * dW + 0.5 * g * dgdy_diag * (dW ** 2 - dt)
 
 
 class StratonovichMilstein(AbstractSolver):
@@ -650,8 +642,8 @@ class StratonovichMilstein(AbstractSolver):
                 f"got g.shape == {g.shape}. Use EulerHeun for matrix diffusion."
             )
         dW = jnp.sqrt(jnp.abs(dt)) * z
-        cross = _milstein_correction(term, t, y, args, ctrl, g, dW)
-        return y + f * dt + g * dW + cross
+        dgdy_diag = _diffusion_jac_diag(term, t, y, args, ctrl)
+        return y + f * dt + g * dW + 0.5 * g * dgdy_diag * dW ** 2
 
 
 def _sample_noise(
@@ -706,14 +698,13 @@ def _run_ode(
     term: Callable,
     y0: Float[Array, "2"],
     ts: Float[Array, " time"],
+    dt: float,
     solver: AbstractSolver,
     args: PyTree | None = None,
     controls: PyTree | None = None,
     adjoint: str = "checkpointed",
     checkpoints: int | str | None = None,
 ) -> Float[Array, "time 2"]:
-    dt = ts[1] - ts[0]
-
     if args is None and controls is None:
         def body(y: Float[Array, "2"], t: Float[Array, ""]) -> tuple:
             term_fn = lambda t_, y_, a_, c_: term(t_, y_)
@@ -751,6 +742,7 @@ def _run_sde(
     term: Callable,
     y0: Float[Array, "2"],
     ts: Float[Array, " time"],
+    dt: float,
     solver: AbstractSolver,
     z_seq: Float[Array, "steps 2"],
     args: PyTree | None = None,
@@ -758,8 +750,6 @@ def _run_sde(
     adjoint: str = "checkpointed",
     checkpoints: int | str | None = None,
 ) -> Float[Array, "time 2"]:
-    dt = ts[1] - ts[0]
-
     if args is None and controls is None:
         def body(y: Float[Array, "2"], inputs: Float[Array, ""]) -> tuple:
             t, z = inputs
@@ -843,8 +833,8 @@ def solve(
             ``(2,)``) is the single-leaf case. Defines the output structure.
         t0: Start time in seconds. JAX scalar — can change between calls without
             recompilation. The implicit end time is ``t0 + n_save * save_dt``.
-        n_save: Number of output intervals (static). Each output leaf has a leading
-            ``n_save + 1`` axis including the initial state.
+        n_save: Number of output intervals (static, ``>= 1``). Each output leaf
+            has a leading ``n_save + 1`` axis including the initial state.
         int_dt: Integration step size in seconds (static). Use a negative value
             for backward-in-time integration.
         save_dt: Output interval in seconds (static). Must be an integer multiple
@@ -890,6 +880,9 @@ def solve(
     if adjoint not in ("checkpointed", "forward"):
         raise ValueError(f'adjoint must be "checkpointed" or "forward", got {adjoint!r}.')
 
+    if n_save < 1:
+        raise ValueError(f"n_save must be >= 1, got {n_save}.")
+
     n_substeps = round(save_dt / int_dt)
     if n_substeps < 1:
         raise ValueError(
@@ -907,15 +900,15 @@ def solve(
         noise_proto = y0 if brownian_structure is None else brownian_structure
         if n_samples == 1:
             z = _sample_noise(key, n_fine, noise_proto)
-            result = _run_sde(term, y0, ts_fine, solver, z, args, controls, adjoint, checkpoints)
+            result = _run_sde(term, y0, ts_fine, int_dt, solver, z, args, controls, adjoint, checkpoints)
             return _subsample(result, n_substeps)
         else:
             keys = jr.split(key, n_samples)
             z = jax.vmap(lambda k: _sample_noise(k, n_fine, noise_proto))(keys)
             result = jax.vmap(
-                lambda z_: _run_sde(term, y0, ts_fine, solver, z_, args, controls, adjoint, checkpoints)
+                lambda z_: _run_sde(term, y0, ts_fine, int_dt, solver, z_, args, controls, adjoint, checkpoints)
             )(z)
             return _subsample(result, n_substeps, axis=1)
     else:
-        result = _run_ode(term, y0, ts_fine, solver, args, controls, adjoint, checkpoints)
+        result = _run_ode(term, y0, ts_fine, int_dt, solver, args, controls, adjoint, checkpoints)
         return _subsample(result, n_substeps)
