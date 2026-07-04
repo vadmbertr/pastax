@@ -763,8 +763,82 @@ class TestPeriodicLonAscending:
                 vectors={"current": {"u": ("uo", u), "v": ("vo", v)}},
                 lon_period=360.0,
             )
-            
-            
+
+
+class TestLoadersAreTracerSafe:
+    """The loaders must be callable from inside a traced (jit/vmap) region.
+
+    Host-side validations that read concrete values (the ascending-lon check
+    and NaN-mask inference) are skipped under tracing; the caller then owns
+    coordinate correctness and passes explicit masks when needed.
+    """
+
+    _lat = np.array([0.0, 1.0, 2.0, 3.0])
+    _lon = np.array([0.0, 90.0, 180.0, 270.0])
+    _t = np.array([0.0, 3600.0])
+
+    def test_from_arrays_jit_with_lon_period(self):
+        u = np.ones((2, 4, 4), dtype=np.float32)
+
+        def build_and_interp(u, lon, q):
+            ds = Dataset.from_arrays(
+                {"u": u}, t=self._t, lat=self._lat, lon=lon, lon_period=360.0
+            )
+            return ds["u"].interp(jnp.array(0.0), q, jnp.array(1.0))
+
+        v = jax.jit(build_and_interp)(
+            jnp.asarray(u), jnp.asarray(self._lon), jnp.array(315.0)
+        )
+        assert float(v) == pytest.approx(1.0, abs=1e-6)
+
+    def test_from_arrays_jit_nan_zeroed_mask_deferred(self):
+        u = np.ones((2, 4, 4), dtype=np.float32)
+        u[:, 0, 0] = np.nan  # would infer a mask eagerly
+
+        def total(u):
+            ds = Dataset.from_arrays({"u": u}, t=self._t, lat=self._lat, lon=self._lon)
+            return ds["u"].values.sum()
+
+        # NaN is still replaced with 0 under trace (2 cells) → 32 - 2 = 30.
+        assert float(jax.jit(total)(jnp.asarray(u))) == pytest.approx(30.0)
+
+        # Eager on the same input still infers the mask (structure differs).
+        eager = Dataset.from_arrays(
+            {"u": u}, t=self._t, lat=self._lat, lon=self._lon
+        )
+        assert eager["u"].mask is not None
+
+    def test_from_arrays_jit_with_explicit_mask(self):
+        u = np.ones((2, 4, 4), dtype=np.float32)
+        m = np.zeros((4, 4), dtype=bool)
+        m[0, 0] = True
+
+        def build(u, mask):
+            ds = Dataset.from_arrays(
+                {"u": u}, t=self._t, lat=self._lat, lon=self._lon, masks={"u": mask}
+            )
+            return ds["u"].mask
+
+        out = jax.jit(build)(jnp.asarray(u), jnp.asarray(m))
+        assert bool(out[0, 0]) is True
+
+    def test_from_arrays_cgrid_jit(self):
+        clat = np.linspace(0.0, 4.0, 5)
+        clon = np.linspace(0.0, 5.0, 6)
+        uc = np.ones((2, 5, 5), dtype=np.float32)
+        vc = np.ones((2, 4, 6), dtype=np.float32)
+
+        def build(uc, vc):
+            ds = Dataset.from_arrays_cgrid(
+                self._t, clat, clon,
+                vectors={"current": {"u": ("u", uc), "v": ("v", vc)}},
+            )
+            return ds["u"].interp(jnp.array(0.0), jnp.array(2.5), jnp.array(2.0))
+
+        v = jax.jit(build)(jnp.asarray(uc), jnp.asarray(vc))
+        assert float(v) == pytest.approx(1.0, abs=1e-6)
+
+
 class TestFromArraysShapeValidation:
     def _coords(self):
         t   = np.linspace(0.0, 3 * 3600.0, 4)
