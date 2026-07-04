@@ -854,6 +854,16 @@ class Dataset(eqx.Module):
         )
 
 
+def _is_traced(x: Array) -> bool:
+    """True when ``x`` is an abstract JAX tracer (inside ``jit`` / ``vmap`` / ``grad``).
+
+    Host-side validation that must read concrete values (a ``bool(...)`` on an
+    array) is skipped when this returns ``True`` so the loaders stay callable
+    from within a traced region; the caller then owns coordinate correctness.
+    """
+    return isinstance(x, jax.core.Tracer)
+
+
 def _check_periodic_lon_ascending(
     lon_arr: Float[Array, "lon"], lon_period: float | None
 ) -> None:
@@ -863,8 +873,14 @@ def _check_periodic_lon_ascending(
     ``lon_coords[0]``, which assumes an ascending axis; a descending axis
     silently produces wrong indices and weights. (Without ``lon_period``,
     descending coordinates work — the spacing sign cancels.)
+
+    The check reads concrete values, so it is a no-op when ``lon_arr`` is a
+    tracer (the loader was called from inside ``jit`` / ``vmap``): correctness
+    of the coordinate axis is then the caller's responsibility.
     """
     if lon_period is None:
+        return
+    if _is_traced(lon_arr):
         return
     if not bool(jnp.all(jnp.diff(lon_arr) > 0)):
         raise ValueError(
@@ -909,6 +925,13 @@ def _resolve_mask(
        Field is bit-exact identical (PyTree structure included) to one
        built before the mask feature was added.
 
+    NaN-mask inference (step 3) reads concrete values *and* would make the
+    returned PyTree structure data-dependent (``mask=None`` vs a bool array),
+    which is illegal under tracing. It is therefore skipped when ``values`` is
+    a tracer: the NaN→0 replacement still happens (a safe traced op), but the
+    mask is left ``None`` unless an explicit ``user_mask`` is given. Pass
+    ``masks=`` when building a Dataset from inside ``jit`` and you need coasts.
+
     Returns:
         ``(clean_values, mask)`` where ``mask`` is either a 2-D bool array
         or ``None``.
@@ -925,6 +948,9 @@ def _resolve_mask(
                 "(wet-and-dry) are not supported."
             )
         return clean_values, mask
+
+    if _is_traced(values):
+        return clean_values, None
 
     if bool(nan_locs.any()):
         inferred = nan_locs.any(axis=0)
