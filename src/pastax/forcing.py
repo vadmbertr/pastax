@@ -466,7 +466,7 @@ class Dataset(eqx.Module):
         t_arr   = jnp.asarray(t,   dtype=jnp.int64)
         lat_arr = jnp.asarray(lat, dtype=dtype)
         lon_arr = jnp.asarray(lon, dtype=dtype)
-        _check_periodic_lon_ascending(lon_arr, lon_period)
+        _check_periodic_lon(lon_arr, lon_period)
         nt   = int(t_arr.shape[0])
         nlat = int(lat_arr.shape[0])
         nlon = int(lon_arr.shape[0])
@@ -640,7 +640,7 @@ class Dataset(eqx.Module):
         t_arr   = jnp.asarray(t,           dtype=jnp.int64)
         lat_arr = jnp.asarray(center_lat,  dtype=dtype)
         lon_arr = jnp.asarray(center_lon,  dtype=dtype)
-        _check_periodic_lon_ascending(lon_arr, lon_period)
+        _check_periodic_lon(lon_arr, lon_period)
 
         nt   = int(t_arr.shape[0])
         nlat = int(lat_arr.shape[0])
@@ -846,15 +846,22 @@ def _is_traced(x: Array) -> bool:
     return isinstance(x, jax.core.Tracer)
 
 
-def _check_periodic_lon_ascending(
+def _check_periodic_lon(
     lon_arr: Float[Array, "lon"], lon_period: float | None
 ) -> None:
-    """Reject descending longitudes when periodic wrapping is requested.
+    """Validate longitude coordinates when periodic wrapping is requested.
 
-    The periodic index arithmetic folds queries with ``% lon_period`` above
-    ``lon_coords[0]``, which assumes an ascending axis; a descending axis
-    silently produces wrong indices and weights. (Without ``lon_period``,
-    descending coordinates work — the spacing sign cancels.)
+    Two preconditions of the periodic index arithmetic are checked:
+
+    1. **Ascending axis.** The query is folded with ``% lon_period`` above
+       ``lon_coords[0]``, which assumes an ascending axis; a descending axis
+       silently produces wrong indices and weights. (Without ``lon_period``,
+       descending coordinates work — the spacing sign cancels.)
+    2. **Spans exactly one period.** The wrap identifies the cell at
+       ``lon_coords[-1] + dlon`` with ``lon_coords[0]``, so the grid must span
+       exactly one period: ``nlon * dlon == lon_period``. A grid that does not
+       (e.g. a regional slab mislabelled periodic, or one that includes the
+       duplicate wrap endpoint) yields silently wrong wrapped indices.
 
     The check reads concrete values, so it is a no-op when ``lon_arr`` is a
     tracer (the loader was called from inside ``jit`` / ``vmap``): correctness
@@ -869,6 +876,18 @@ def _check_periodic_lon_ascending(
             "lon_period requires strictly ascending longitude coordinates; "
             "the periodic wrap arithmetic is undefined on a descending axis. "
             "Flip the longitude axis (and the field values) before loading."
+        )
+    nlon = int(lon_arr.shape[0])
+    dlon = float(lon_arr[1] - lon_arr[0])
+    implied_period = nlon * dlon
+    if abs(implied_period - lon_period) > 1e-3 * abs(lon_period):
+        raise ValueError(
+            f"lon_period={lon_period} requires the grid to span exactly one "
+            f"period (nlon * dlon == lon_period), but nlon={nlon} points with "
+            f"spacing dlon={dlon:g} span {implied_period:g}. The wrap identifies "
+            "the cell past the last centre with the first, so a periodic grid "
+            "must not include the duplicate wrap endpoint, and its extent must "
+            "equal lon_period. Check the period, or drop/append a column."
         )
 
 
