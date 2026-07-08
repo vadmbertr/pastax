@@ -52,6 +52,51 @@ def _coerce_time_to_seconds(t: Array) -> Array:
     return t_arr
 
 
+def _asarray_time_int64(t: Array) -> Array:
+    """Store integer-second time coordinates as a JAX ``int64`` array.
+
+    Time coordinates are kept as ``int64`` seconds so epoch-scale counts
+    (``datetime64`` input converts to seconds since the Unix epoch, ~1.7e9 s)
+    stay exact. When ``jax_enable_x64`` is disabled JAX silently truncates the
+    request to ``int32``, which represents second counts exactly only while
+    ``|t| < 2**31`` (dates before 2038-01-19); later timestamps overflow and
+    corrupt time interpolation.
+
+    JAX flags this with a generic ``int64 ... truncated to int32`` message that
+    does not mention the consequence for time. This helper suppresses that
+    message and emits a pastax-specific one instead, spelling out the overflow
+    risk and how to avoid it. Tracers are passed straight through (no host-side
+    config read while tracing).
+    """
+    import warnings
+
+    if isinstance(t, jax.Array) or jax.config.jax_enable_x64:
+        return jnp.asarray(t, dtype=jnp.int64)
+
+    with warnings.catch_warnings():
+        # Swallow JAX's generic downcast warning for this call; we re-raise a
+        # more informative one below.
+        warnings.filterwarnings(
+            "ignore",
+            message="Explicitly requested dtype int64",
+            category=UserWarning,
+        )
+        t_arr = jnp.asarray(t, dtype=jnp.int64)
+
+    warnings.warn(
+        "pastax stores time coordinates as int64 seconds, but jax_enable_x64 "
+        "is disabled so they were truncated to int32. int32 seconds are exact "
+        "only for |t| < 2**31 (dates before 2038-01-19); later timestamps "
+        "overflow and corrupt time interpolation. Enable 64-bit precision with "
+        'jax.config.update("jax_enable_x64", True) (or set JAX_ENABLE_X64=1) '
+        "before building the Dataset, or pass numeric time offsets relative to "
+        "a reference near your data instead of absolute epoch seconds.",
+        UserWarning,
+        stacklevel=3,
+    )
+    return t_arr
+
+
 def _nearest_idx(coords: Float[Array, "n"], x: Float[Array, ""], n: int) -> Array:
     """Nearest-neighbour index on an equally-spaced 1-D grid, clamped to [0, n-1]."""
     x0 = coords[0]
@@ -463,7 +508,7 @@ class Dataset(eqx.Module):
             Dataset with all fields on the given grid.
         """
         t = _coerce_time_to_seconds(t)
-        t_arr   = jnp.asarray(t,   dtype=jnp.int64)
+        t_arr   = _asarray_time_int64(t)
         lat_arr = jnp.asarray(lat, dtype=dtype)
         lon_arr = jnp.asarray(lon, dtype=dtype)
         _check_periodic_lon_ascending(lon_arr, lon_period)
@@ -637,7 +682,7 @@ class Dataset(eqx.Module):
             )
 
         t = _coerce_time_to_seconds(t)
-        t_arr   = jnp.asarray(t,           dtype=jnp.int64)
+        t_arr   = _asarray_time_int64(t)
         lat_arr = jnp.asarray(center_lat,  dtype=dtype)
         lon_arr = jnp.asarray(center_lon,  dtype=dtype)
         _check_periodic_lon_ascending(lon_arr, lon_period)

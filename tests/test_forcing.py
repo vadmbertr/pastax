@@ -1,5 +1,7 @@
 """Tests for forcing.py: Field and Dataset."""
 
+import warnings
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -261,6 +263,49 @@ class TestDatasetFromArrays:
             dataset["u"].t_coords,
             jnp.asarray(epoch, dtype=dataset["u"].t_coords.dtype),
         )
+
+    def test_datetime64_without_x64_warns_informatively(self):
+        """With x64 disabled, epoch-second time coords truncate to int32; the
+        loader must replace JAX's generic downcast warning with a pastax
+        message that names the 2038 overflow risk and the fix."""
+        t_dt = np.array(["2024-01-01", "2024-01-02"], dtype="datetime64[D]")
+        _, lat, lon = self._coords()
+        u = np.ones((2, 4, 4), dtype=np.float32)
+
+        was_x64 = jax.config.jax_enable_x64
+        jax.config.update("jax_enable_x64", False)
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
+            messages = [str(w.message) for w in caught]
+        finally:
+            jax.config.update("jax_enable_x64", was_x64)
+
+        assert any("jax_enable_x64" in m and "2038" in m for m in messages), messages
+        # JAX's generic message is suppressed in favour of ours.
+        assert not any(
+            "truncated to int32" in m and "pastax" not in m for m in messages
+        ), messages
+
+    def test_datetime64_with_x64_does_not_warn(self):
+        """When x64 is enabled the int64 time coords are exact — no warning."""
+        t_dt = np.array(["2024-01-01", "2024-01-02"], dtype="datetime64[D]")
+        _, lat, lon = self._coords()
+        u = np.ones((2, 4, 4), dtype=np.float32)
+
+        was_x64 = jax.config.jax_enable_x64
+        jax.config.update("jax_enable_x64", True)
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
+            time_warnings = [
+                w for w in caught if "time coordinates" in str(w.message)
+            ]
+        finally:
+            jax.config.update("jax_enable_x64", was_x64)
+        assert time_warnings == []
 
     def test_from_arrays_datetime64_matches_from_xarray(self):
         """from_arrays with datetime64 and from_xarray must yield identical t_coords."""
