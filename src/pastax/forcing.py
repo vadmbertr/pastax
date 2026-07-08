@@ -401,7 +401,15 @@ class Dataset(eqx.Module):
             return jnp.stack([u, v])
 
         if scheme == "partialslip":
-            if self.grid is not None and self.grid.stagger_type == "C":
+            # Check the fields' stagger roles, not just the dataset-level
+            # grid: a Dataset built directly (grid=None) around face-staggered
+            # fields must not fall through to the A-grid maths below, which
+            # would read V values on U-face coordinates.
+            if (
+                (self.grid is not None and self.grid.stagger_type == "C")
+                or u_field.stagger != "center"
+                or v_field.stagger != "center"
+            ):
                 raise NotImplementedError(
                     "scheme='partialslip' is not implemented for Arakawa "
                     "C-grid datasets. Use scheme='default' (per-Field "
