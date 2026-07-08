@@ -169,6 +169,17 @@ class Field(eqx.Module):
         """Longitude period for this field's stagger role (``None`` on faces)."""
         return self.grid.period_for(self.stagger)
 
+    @property
+    def lon_closed(self) -> bool:
+        """Whether this field's longitude axis spans one full period (wraps).
+
+        ``True`` for a global periodic grid (interpolation wraps across the
+        seam), ``False`` for an open seam-crossing regional slab (continuous
+        across the antimeridian but not wrapping). Only meaningful when
+        :attr:`lon_period` is set.
+        """
+        return self.grid.closed_for(self.stagger)
+
     @classmethod
     def standalone(
         cls,
@@ -187,27 +198,31 @@ class Field(eqx.Module):
         :class:`Grid` in the slot matching ``stagger``, and the returned field
         reads them back through the usual grid-backed properties.
 
-        With ``lon_period`` set, the passed ``lon_coords`` are taken to span
-        exactly one period and the field wraps in longitude — for a face
-        stagger this means the coordinates must be the seam-inclusive face
-        axis (``nlon`` points; see :meth:`pastax.Grid.u_face_coords`), not the
-        ``nlon - 1`` interior faces.
+        With ``lon_period`` set, the passed ``lon_coords`` are classified like
+        the loaders: an axis spanning exactly one period is a global (closed)
+        grid that wraps — for a face stagger the coordinates must then be the
+        seam-inclusive face axis (``nlon`` points; see
+        :meth:`pastax.Grid.u_face_coords`), not the ``nlon - 1`` interior faces —
+        while a shorter seam-crossing axis is an open grid, stored unwrapped and
+        continuous across the antimeridian without wrapping.
         """
+        lon_out, lon_closed = _classify_and_unwrap_lon(lon_coords, lon_period)
+        lon_coords = jnp.asarray(lon_out)
         if stagger == "center":
             grid = Grid(
                 t_coords=t_coords, lat_coords=lat_coords, lon_coords=lon_coords,
-                lon_period=lon_period,
+                lon_period=lon_period, lon_closed=lon_closed,
             )
         elif stagger == "u_face":
             grid = Grid(
                 t_coords=t_coords, lat_coords=lat_coords, lon_coords=lon_coords,
-                stagger_type="C", lon_period=lon_period,
+                stagger_type="C", lon_period=lon_period, lon_closed=lon_closed,
                 u_lat_coords=lat_coords, u_lon_coords=lon_coords,
             )
         elif stagger == "v_face":
             grid = Grid(
                 t_coords=t_coords, lat_coords=lat_coords, lon_coords=lon_coords,
-                stagger_type="C", lon_period=lon_period,
+                stagger_type="C", lon_period=lon_period, lon_closed=lon_closed,
                 v_lat_coords=lat_coords, v_lon_coords=lon_coords,
             )
         else:
@@ -233,8 +248,13 @@ class Field(eqx.Module):
         Returns:
             Interpolated scalar value at the query point. Outside the grid the
             interpolation extrapolates linearly (clamping to grid boundaries
-            beyond one cell). When ``lon_period`` is set, longitude wraps
-            instead of extrapolating. When ``self.mask`` is set, coastal
+            beyond one cell). When ``lon_period`` is set on a global (closed)
+            grid, longitude wraps instead of extrapolating. On an open
+            seam-crossing regional grid the query is folded into the grid's
+            window (so it may be given in any longitude convention) and
+            interpolated continuously across the antimeridian; queries outside
+            the covered arc extrapolate like a bounded grid rather than wrapping
+            to the far side. When ``self.mask`` is set, coastal
             cells use inverse-distance partial-cell weighting and fully
             land-bound cells return ``0`` (see
             :func:`pastax.interpolation.bilinear_interp_2d`) — the right
@@ -242,9 +262,15 @@ class Field(eqx.Module):
             tracers (an SST of ``0`` over land is a value, not a gap).
         """
         lat_coords, lon_coords = self.grid.coords_for(self.stagger)
+        lon_period = self.grid.period_for(self.stagger)
+        if lon_period is not None and not self.grid.closed_for(self.stagger):
+            # Open seam-crossing grid: fold the query into the stored (unwrapped,
+            # ascending) window and interpolate as a bounded grid — no wrap.
+            lon = _fold_into_window(lon_coords, lon, lon_period)
+            lon_period = None
         return spatiotemporal_interp(
             self.values, self.grid.t_coords, lat_coords, lon_coords,
-            t, lat, lon, lon_period=self.grid.period_for(self.stagger),
+            t, lat, lon, lon_period=lon_period,
             mask=self.mask,
         )
 
@@ -270,8 +296,10 @@ class Field(eqx.Module):
         Returns:
             Array of shape (2*t_window+1, 2*lat_window+1, 2*lon_window+1).
             Time and latitude windows are clamped to the grid boundary near the
-            edges. The longitude window wraps modulo ``lon_period`` when that
-            attribute is set, otherwise it is clamped like the others.
+            edges. The longitude window wraps modulo ``lon_period`` on a global
+            (closed) periodic grid; on an open seam-crossing grid the query is
+            folded into the stored window and the window is clamped (no wrap),
+            and without ``lon_period`` it is clamped like the others.
         """
         nt   = self.t_coords.shape[0]
         nlat = self.lat_coords.shape[0]
@@ -287,23 +315,29 @@ class Field(eqx.Module):
         it_start   = jnp.clip(it   - t_window,   0, nt   - wt)
         ilat_start = jnp.clip(ilat - lat_window, 0, nlat - wlat)
 
-        if self.lon_period is None:
-            ilon = _nearest_idx(self.lon_coords, lon, nlon)
-            ilon_start = jnp.clip(ilon - lon_window, 0, nlon - wlon)
-            return jax.lax.dynamic_slice(
+        if self.lon_period is not None and self.lon_closed:
+            # Closed global periodic grid — wrap the window across the seam.
+            ilon = _nearest_idx_periodic(self.lon_coords, lon, nlon, self.lon_period)
+            block = jax.lax.dynamic_slice(
                 self.values,
-                (it_start, ilat_start, ilon_start),
-                (wt, wlat, wlon),
+                (it_start, ilat_start, jnp.astype(0, jnp.int32)),
+                (wt, wlat, nlon),
             )
+            lon_idx = (ilon - lon_window + jnp.arange(wlon)) % nlon
+            return block[:, :, lon_idx]
 
-        ilon = _nearest_idx_periodic(self.lon_coords, lon, nlon, self.lon_period)
-        block = jax.lax.dynamic_slice(
+        # Bounded OR open seam-crossing grid — clamped window, no wrap. An open
+        # grid folds the query into its stored (unwrapped) window first.
+        lon_q = lon
+        if self.lon_period is not None:
+            lon_q = _fold_into_window(self.lon_coords, lon, self.lon_period)
+        ilon = _nearest_idx(self.lon_coords, lon_q, nlon)
+        ilon_start = jnp.clip(ilon - lon_window, 0, nlon - wlon)
+        return jax.lax.dynamic_slice(
             self.values,
-            (it_start, ilat_start, jnp.astype(0, jnp.int32)),
-            (wt, wlat, nlon),
+            (it_start, ilat_start, ilon_start),
+            (wt, wlat, wlon),
         )
-        lon_idx = (ilon - lon_window + jnp.arange(wlon)) % nlon
-        return block[:, :, lon_idx]
 
 
 class Dataset(eqx.Module):
@@ -460,12 +494,18 @@ class Dataset(eqx.Module):
                     "(NaN-inferred or explicit)."
                 )
             joint_mask = u_field.mask & v_field.mask
+            lon_q = lon
+            lon_period = u_field.lon_period
+            if lon_period is not None and not u_field.lon_closed:
+                # Open seam-crossing grid: fold into the window, no wrap.
+                lon_q = _fold_into_window(u_field.lon_coords, lon, lon_period)
+                lon_period = None
             u, v = spatiotemporal_velocity_partialslip(
                 u_field.values, v_field.values,
                 u_field.t_coords, u_field.lat_coords, u_field.lon_coords,
-                t, lat, lon, joint_mask,
+                t, lat, lon_q, joint_mask,
                 slip_a=slip_a, slip_b=slip_b,
-                lon_period=u_field.lon_period,
+                lon_period=lon_period,
             )
             return jnp.stack([u, v])
 
@@ -482,6 +522,7 @@ class Dataset(eqx.Module):
         lon: Array,
         dtype: DTypeLike = jnp.float32,
         lon_period: float | None = None,
+        lon_closed: bool | None = None,
         masks: dict[str, Array] | None = None,
     ) -> Dataset:
         """Build a Dataset from numpy or JAX arrays.
@@ -496,11 +537,21 @@ class Dataset(eqx.Module):
                 Double precision should be used to avoid truncation errors.
             lat: 1-D latitude coordinate array (degrees), equally spaced.
             lon: 1-D longitude coordinate array (degrees), equally spaced.
-            dtype: JAX dtype for all arrays, except for the time coordinate 
+            dtype: JAX dtype for all arrays, except for the time coordinate
                 (default float32).
-            lon_period: If set (e.g. ``360.0``), all fields are constructed
-                with periodic longitude wrapping. The grid must span exactly
-                one period.
+            lon_period: If set (e.g. ``360.0``), longitude is treated as circular
+                with this period. A grid spanning exactly one period is a global
+                (closed) grid that wraps; a shorter grid that crosses the
+                antimeridian (e.g. ``170°…-170°``) is an open regional slab,
+                stored unwrapped (ascending) and continuous across the seam
+                without wrapping. Seam-crossing input may be given in any
+                longitude convention; queries are folded automatically.
+            lon_closed: Optional override for the closed/open classification.
+                Normally derived from the coordinates (``nlon*dlon == lon_period``
+                → closed). Pass explicitly (``True``/``False``) to build a grid
+                under ``jit``/``vmap`` tracing, where concrete coordinates are
+                unavailable and the classification would otherwise default to
+                closed. Ignored when ``lon_period`` is ``None``.
             masks: Optional ``{field_name: 2-D bool array of shape (lat, lon)}``
                 land masks. ``True`` marks a land cell. When a field appears
                 in ``masks``, that mask is used. Otherwise a mask is inferred
@@ -516,8 +567,8 @@ class Dataset(eqx.Module):
         t = _coerce_time_to_seconds(t)
         t_arr   = _asarray_time_int64(t)
         lat_arr = jnp.asarray(lat, dtype=dtype)
-        lon_arr = jnp.asarray(lon, dtype=dtype)
-        _check_periodic_lon(lon_arr, lon_period)
+        lon_out, lon_closed = _classify_and_unwrap_lon(lon, lon_period, lon_closed)
+        lon_arr = jnp.asarray(lon_out, dtype=dtype)
         nt   = int(t_arr.shape[0])
         nlat = int(lat_arr.shape[0])
         nlon = int(lon_arr.shape[0])
@@ -528,6 +579,7 @@ class Dataset(eqx.Module):
             grid_type="rectilinear",
             stagger_type="A",
             lon_period=lon_period,
+            lon_closed=lon_closed,
         )
         masks = masks or {}
         unknown = set(masks) - set(fields)
@@ -566,6 +618,7 @@ class Dataset(eqx.Module):
         coordinates: dict[str, str],
         dtype: DTypeLike = jnp.float32,
         lon_period: float | None = None,
+        lon_closed: bool | None = None,
         masks: dict[str, Array] | None = None,
     ) -> Dataset:
         """Load a Dataset from an xarray Dataset (zarr or netCDF backed).
@@ -575,9 +628,11 @@ class Dataset(eqx.Module):
             fields: Mapping {internal_name: xarray_variable_name}.
             coordinates: Mapping with keys "time", "lat", "lon" → xarray coord names.
             dtype: JAX dtype for all arrays (default float32).
-            lon_period: If set (e.g. ``360.0``), all fields are constructed
-                with periodic longitude wrapping. The grid must span exactly
-                one period.
+            lon_period: If set (e.g. ``360.0``), longitude is treated as circular
+                with this period (global wrap or seam-crossing regional slab);
+                see :meth:`from_arrays`.
+            lon_closed: Optional override for the closed/open classification; see
+                :meth:`from_arrays`.
             masks: Optional land masks keyed by internal field name; see
                 :meth:`from_arrays` for semantics. If omitted, masks are
                 inferred from NaN — which matches the CMEMS / CF
@@ -596,6 +651,7 @@ class Dataset(eqx.Module):
             lon=ds[coordinates["lon"]].values,
             dtype=dtype,
             lon_period=lon_period,
+            lon_closed=lon_closed,
             masks=masks,
         )
 
@@ -613,6 +669,7 @@ class Dataset(eqx.Module):
         v_lon: Array | None = None,
         dtype: DTypeLike = jnp.float32,
         lon_period: float | None = None,
+        lon_closed: bool | None = None,
         masks: dict[str, Array] | None = None,
     ) -> Dataset:
         """Build a Dataset on a NEMO-convention Arakawa C-grid.
@@ -694,8 +751,8 @@ class Dataset(eqx.Module):
         t = _coerce_time_to_seconds(t)
         t_arr   = _asarray_time_int64(t)
         lat_arr = jnp.asarray(center_lat,  dtype=dtype)
-        lon_arr = jnp.asarray(center_lon,  dtype=dtype)
-        _check_periodic_lon(lon_arr, lon_period)
+        lon_out, lon_closed = _classify_and_unwrap_lon(center_lon, lon_period, lon_closed)
+        lon_arr = jnp.asarray(lon_out, dtype=dtype)
 
         nt   = int(t_arr.shape[0])
         nlat = int(lat_arr.shape[0])
@@ -708,14 +765,16 @@ class Dataset(eqx.Module):
             grid_type="rectilinear",
             stagger_type="C",
             lon_period=lon_period,
+            lon_closed=lon_closed,
         )
         derived_u_lat, derived_u_lon = centre_grid.u_face_coords()
         derived_v_lat, derived_v_lon = centre_grid.v_face_coords()
 
-        # A periodic centre grid has one U face per centre cell (the seam face
-        # included), so U is nlon-wide; a bounded grid has nlon - 1 interior
-        # faces. V is unaffected (latitude is never periodic).
-        nlon_u = nlon if lon_period is not None else nlon - 1
+        # A closed (global periodic) centre grid has one U face per centre cell
+        # (the seam face included), so U is nlon-wide; a bounded OR open
+        # (seam-crossing regional) grid has nlon - 1 interior faces. V is
+        # unaffected (latitude is never periodic).
+        nlon_u = nlon if (lon_period is not None and lon_closed) else nlon - 1
 
         u_lat_arr = jnp.asarray(u_lat, dtype=dtype) if u_lat is not None else derived_u_lat
         u_lon_arr = jnp.asarray(u_lon, dtype=dtype) if u_lon is not None else derived_u_lon
@@ -735,6 +794,7 @@ class Dataset(eqx.Module):
             grid_type="rectilinear",
             stagger_type="C",
             lon_period=lon_period,
+            lon_closed=lon_closed,
             u_lat_coords=u_lat_arr,
             u_lon_coords=u_lon_arr,
             v_lat_coords=v_lat_arr,
@@ -824,6 +884,7 @@ class Dataset(eqx.Module):
         staggered_coordinates: dict[str, str] | None = None,
         dtype: DTypeLike = jnp.float32,
         lon_period: float | None = None,
+        lon_closed: bool | None = None,
         masks: dict[str, Array] | None = None,
     ) -> Dataset:
         """Load a C-grid Dataset from an xarray Dataset.
@@ -858,6 +919,7 @@ class Dataset(eqx.Module):
                 vector.
             dtype: JAX dtype for all arrays (default float32).
             lon_period: Forwarded to :meth:`from_arrays_cgrid`.
+            lon_closed: Forwarded to :meth:`from_arrays_cgrid`.
             masks: Forwarded to :meth:`from_arrays_cgrid`. Keys must match
                 the field names declared in ``vectors`` and ``tracers``.
 
@@ -893,6 +955,7 @@ class Dataset(eqx.Module):
             v_lon=ds[stag["v_lon"]].values if "v_lon" in stag else None,
             dtype=dtype,
             lon_period=lon_period,
+            lon_closed=lon_closed,
             masks=masks,
         )
 
@@ -907,49 +970,106 @@ def _is_traced(x: Array) -> bool:
     return isinstance(x, jax.core.Tracer)
 
 
-def _check_periodic_lon(
-    lon_arr: Float[Array, "lon"], lon_period: float | None
-) -> None:
-    """Validate longitude coordinates when periodic wrapping is requested.
+def _fold_into_window(
+    lon_coords: Float[Array, "lon"], lon: Float[Array, ""], period: float
+) -> Float[Array, ""]:
+    """Fold a query longitude into an open grid's window on a circle of ``period``.
 
-    Two preconditions of the periodic index arithmetic are checked:
+    An open (seam-crossing) grid stores an unwrapped, strictly-ascending axis
+    ``[x0, ..., x1]`` spanning less than one period. A query may be given in any
+    convention (e.g. ``-175`` or ``185`` for the same point), so it must be
+    folded to the grid's representation before the ordinary bounded index
+    arithmetic runs.
 
-    1. **Ascending axis.** The query is folded with ``% lon_period`` above
-       ``lon_coords[0]``, which assumes an ascending axis; a descending axis
-       silently produces wrong indices and weights. (Without ``lon_period``,
-       descending coordinates work — the spacing sign cancels.)
-    2. **Spans exactly one period.** The wrap identifies the cell at
-       ``lon_coords[-1] + dlon`` with ``lon_coords[0]``, so the grid must span
-       exactly one period: ``nlon * dlon == lon_period``. A grid that does not
-       (e.g. a regional slab mislabelled periodic, or one that includes the
-       duplicate wrap endpoint) yields silently wrong wrapped indices.
+    The modulo branch cut is centred in the *uncovered* arc opposite the grid
+    (around ``x0 + period/2``) rather than at the western edge ``x0``: with the
+    cut at ``x0`` a query one cell west of the grid would fold almost a full
+    period east and extrapolate catastrophically (and non-differentiably) right
+    at the boundary. Centring it makes both near-grid extrapolation zones behave
+    like a plain bounded grid. Pure arithmetic — safe under ``jit``/``vmap``/``grad``.
+    """
+    x0 = lon_coords[0]
+    x1 = lon_coords[-1]
+    mid = 0.5 * (x0 + x1)
+    return mid + jnp.mod(lon - mid + 0.5 * period, period) - 0.5 * period
 
-    The check reads concrete values, so it is a no-op when ``lon_arr`` is a
-    tracer (the loader was called from inside ``jit`` / ``vmap``): correctness
-    of the coordinate axis is then the caller's responsibility.
+
+def _classify_and_unwrap_lon(
+    lon: Array, lon_period: float | None, lon_closed: bool | None = None
+) -> tuple[Array, bool]:
+    """Validate/unwrap a periodic longitude axis and classify it closed vs open.
+
+    Returns ``(lon_out, lon_closed)`` where ``lon_out`` is the coordinate array
+    to store and ``lon_closed`` says whether the grid spans exactly one period.
+
+    Two topologies are supported when ``lon_period`` is set:
+
+    * **closed** — an ascending axis spanning exactly one period
+      (``nlon * dlon == lon_period``): the global periodic grid, wrap
+      ``(i+1) % n``. Ascending input is returned unchanged (the closed path is
+      byte-identical to before this function existed).
+    * **open** — a seam-crossing regional slab (e.g. ``170°…-170°``) spanning
+      *less* than one period. The single antimeridian wrap is unwrapped into a
+      strictly-ascending axis (``lon[0] + cumsum(diff % period)``) so every
+      downstream consumer stays seam-agnostic; the grid does not wrap.
+
+    The classification reads concrete values, so under tracing (``jit``/``vmap``)
+    it cannot run: it then returns the array unchanged and defaults to
+    ``closed`` (today's behaviour), unless an explicit ``lon_closed`` override is
+    passed — which is authoritative and lets an open grid be built under tracing.
+    Classification runs in float64 on the host, before any float32 cast.
     """
     if lon_period is None:
-        return
-    if _is_traced(lon_arr):
-        return
-    if not bool(jnp.all(jnp.diff(lon_arr) > 0)):
+        return lon, True
+    if _is_traced(lon):
+        return lon, True if lon_closed is None else bool(lon_closed)
+
+    import numpy as np
+
+    lon_np = np.asarray(lon, dtype=np.float64)
+    nlon = int(lon_np.shape[0])
+    if nlon < 2:
+        raise ValueError(
+            "lon_period requires at least 2 longitude points to define the "
+            f"grid spacing; got nlon={nlon}."
+        )
+    diffs = np.diff(lon_np)
+    if bool(np.all(diffs > 0)):
+        lon_out = lon  # already ascending — pass through unchanged
+        dlon = float(lon_np[1] - lon_np[0])
+    elif bool(np.all(diffs < 0)):
         raise ValueError(
             "lon_period requires strictly ascending longitude coordinates; "
             "the periodic wrap arithmetic is undefined on a descending axis. "
             "Flip the longitude axis (and the field values) before loading."
         )
-    nlon = int(lon_arr.shape[0])
-    dlon = float(lon_arr[1] - lon_arr[0])
-    implied_period = nlon * dlon
-    if abs(implied_period - lon_period) > 1e-3 * abs(lon_period):
+    else:
+        # Seam-crossing: unwrap the single antimeridian wrap into a monotonic
+        # ascending axis. Each step, taken modulo the period, is the forward arc.
+        step = np.mod(diffs, lon_period)
+        if not bool(np.allclose(step, step[0], rtol=1e-3)):
+            raise ValueError(
+                "lon_period longitudes must be equally spaced and ascending, or "
+                "a single antimeridian-crossing wrap of an equally-spaced axis; "
+                "got an axis that is neither (non-uniform spacing after "
+                "unwrapping the seam)."
+            )
+        lon_out = lon_np[0] + np.concatenate([[0.0], np.cumsum(step)])
+        dlon = float(step[0])
+
+    span = nlon * dlon
+    if span > lon_period * (1.0 + 1e-3):
         raise ValueError(
-            f"lon_period={lon_period} requires the grid to span exactly one "
-            f"period (nlon * dlon == lon_period), but nlon={nlon} points with "
-            f"spacing dlon={dlon:g} span {implied_period:g}. The wrap identifies "
-            "the cell past the last centre with the first, so a periodic grid "
-            "must not include the duplicate wrap endpoint, and its extent must "
-            "equal lon_period. Check the period, or drop/append a column."
+            f"lon_period={lon_period} but the grid spans {span:g} (nlon={nlon} "
+            f"points with spacing dlon={dlon:g}), overshooting one period. A "
+            "periodic grid must not include the duplicate wrap endpoint; drop "
+            "the repeated column or fix the period."
         )
+    if lon_closed is None:
+        lon_closed = abs(span - lon_period) <= 1e-3 * abs(lon_period)
+    else:
+        lon_closed = bool(lon_closed)
+    return lon_out, lon_closed
 
 
 def _check_cgrid_shape(name: str, got: tuple[int, ...], expected: tuple[int, ...]) -> None:
