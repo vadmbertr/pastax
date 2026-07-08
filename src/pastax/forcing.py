@@ -14,7 +14,7 @@ from .interpolation import spatiotemporal_interp, spatiotemporal_velocity_partia
 
 if TYPE_CHECKING:
     import xarray as xr
-    from jax import DTypeLike
+    from jax.typing import DTypeLike
 
 __all__ = ["Field", "Dataset"]
 
