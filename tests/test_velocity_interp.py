@@ -199,6 +199,27 @@ class TestPartialSlipErrors:
                 scheme="partialslip",
             )
 
+    def test_c_grid_fields_raise_even_without_dataset_grid(self):
+        """A Dataset built directly (grid=None) around face-staggered fields
+        must still be rejected: the A-grid partial-slip maths would read V
+        values on U-face coordinates."""
+        nlat, nlon, nt = 5, 6, 2
+        lat = np.linspace(0.0, 4.0, nlat).astype(np.float32)
+        lon = np.linspace(0.0, 5.0, nlon).astype(np.float32)
+        t = np.array([0.0, 1.0], dtype=np.float32)
+        u_data = np.zeros((nt, nlat, nlon - 1), dtype=np.float32)
+        v_data = np.zeros((nt, nlat - 1, nlon), dtype=np.float32)
+        cgrid = Dataset.from_arrays_cgrid(
+            t, lat, lon,
+            {"current": {"u": ("u", u_data), "v": ("v", v_data)}},
+        )
+        ds = Dataset(fields=cgrid.fields, grid=None)
+        with pytest.raises(NotImplementedError, match="C-grid"):
+            ds.velocity_interp(
+                jnp.asarray(0.0), jnp.asarray(2.5), jnp.asarray(2.0),
+                scheme="partialslip",
+            )
+
     def test_partialslip_without_mask_raises(self):
         ds = _agrid_dataset(with_mask=False, land_row=False)
         with pytest.raises(ValueError, match="land mask"):
