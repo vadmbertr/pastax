@@ -78,3 +78,24 @@ class TestUnitConversions:
         one_deg = jnp.array([1.0, 1.0])
         m = degrees_to_meters(one_deg, lat)
         assert m[0] == pytest.approx(m[1] * 0.5, rel=1e-3)
+
+    def test_meters_to_degrees_finite_and_safe_at_pole(self):
+        """safe_divide keeps the forward value and gradient finite at the pole
+        (no inf/nan). The zonal component is still legitimately large there —
+        the flat-Earth longitude scaling diverges — but it must not blow up to
+        a non-finite value or poison the backward pass."""
+        disp_m = jnp.array([1000.0, 1000.0])
+        out = meters_to_degrees(disp_m, jnp.array(90.0))
+        assert jnp.all(jnp.isfinite(out))
+        g = jax.grad(lambda d: meters_to_degrees(d, jnp.array(90.0)).sum())(disp_m)
+        assert jnp.all(jnp.isfinite(g))
+
+    def test_meters_to_degrees_unchanged_at_normal_lat(self):
+        """The safe_divide swap must not change results where cos(lat) != 0."""
+        disp_m = jnp.array([1234.0, -567.0])
+        lat = jnp.array(37.0)
+        got = meters_to_degrees(disp_m, lat)
+        # Independent computation of the same naive formula.
+        deg = jnp.degrees(disp_m / EARTH_RADIUS)
+        expected = deg.at[0].divide(jnp.cos(jnp.radians(lat)))
+        assert jnp.allclose(got, expected, rtol=1e-6)
