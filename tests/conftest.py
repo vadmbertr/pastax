@@ -1,4 +1,4 @@
 import jax
 
-# Use CPU and 64-bit floats for test precision
+# Run the test suite on CPU
 jax.config.update("jax_platform_name", "cpu")
