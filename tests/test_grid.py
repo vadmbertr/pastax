@@ -43,6 +43,45 @@ def test_v_face_coords_shift_half_cell_in_lat():
     assert jnp.allclose(lat_v, lat[:-1] + 0.5 * dlat)
 
 
+def test_u_face_coords_periodic_includes_seam_face():
+    """On a periodic grid every centre cell has an east face (the seam face
+    included), so U is nlon-wide with faces a half-cell east of each centre."""
+    t = jnp.asarray([0.0, 3600.0])
+    lat = jnp.asarray([0.0, 1.0])
+    lon = jnp.asarray([0.0, 90.0, 180.0, 270.0])  # nlon=4, period 360
+    g = Grid(
+        t_coords=t, lat_coords=lat, lon_coords=lon,
+        stagger_type="C", lon_period=360.0,
+    )
+    lat_u, lon_u = g.u_face_coords()
+    assert jnp.allclose(lat_u, lat)
+    assert lon_u.shape == (lon.shape[0],)  # nlon, not nlon - 1
+    assert jnp.allclose(lon_u, jnp.asarray([45.0, 135.0, 225.0, 315.0]))
+    # spans exactly one period and stays equally spaced
+    assert jnp.allclose(jnp.diff(lon_u), 90.0)
+
+
+def test_period_for_returns_period_for_all_staggers_when_periodic():
+    t = jnp.asarray([0.0, 3600.0])
+    lat = jnp.asarray([0.0, 1.0])
+    lon = jnp.asarray([0.0, 90.0, 180.0, 270.0])
+    g = Grid(
+        t_coords=t, lat_coords=lat, lon_coords=lon,
+        stagger_type="C", lon_period=360.0,
+    )
+    assert g.period_for("center") == 360.0
+    assert g.period_for("u_face") == 360.0
+    assert g.period_for("v_face") == 360.0
+
+
+def test_period_for_returns_none_for_all_staggers_when_bounded():
+    t, lat, lon = _centre_grid()
+    g = Grid(t_coords=t, lat_coords=lat, lon_coords=lon, stagger_type="C")
+    assert g.period_for("center") is None
+    assert g.period_for("u_face") is None
+    assert g.period_for("v_face") is None
+
+
 def test_staggered_coords_preserve_equal_spacing():
     """The C-grid first-order interp relies on shifted coords being equally
     spaced. Verify that explicitly so a future regression (e.g. switch to a
@@ -163,6 +202,80 @@ def test_cgrid_fields_share_one_set_of_coords():
     # Time is shared by all roles.
     assert ds["u"].t_coords is ds.grid.t_coords
     assert ds["v"].t_coords is ds.grid.t_coords
+
+
+def _periodic_cgrid():
+    """Global periodic C-grid: nlon=4 centres of 90 deg; U values encode the
+    face index so wrapping is observable."""
+    t = jnp.asarray([0.0, 3600.0])
+    clat = jnp.asarray([0.0, 1.0, 2.0])
+    clon = jnp.asarray([0.0, 90.0, 180.0, 270.0])
+    nt, nlat, nlon = 2, 3, 4
+    u = jnp.broadcast_to(jnp.asarray([10.0, 11.0, 12.0, 13.0]), (nt, nlat, nlon))
+    v = jnp.zeros((nt, nlat - 1, nlon))
+    ds = Dataset.from_arrays_cgrid(
+        t, clat, clon, {"cur": {"u": ("u", u), "v": ("v", v)}}, lon_period=360.0,
+    )
+    return ds
+
+
+def test_periodic_cgrid_loader_accepts_nlon_wide_u():
+    """A periodic C-grid takes nlon-wide U (one east face per centre cell) and
+    stores the seam-inclusive face longitudes on the grid."""
+    ds = _periodic_cgrid()
+    assert ds["u"].values.shape == (2, 3, 4)          # nlon, not nlon - 1
+    assert ds["u"].lon_coords.shape == (4,)
+    assert jnp.allclose(ds["u"].lon_coords, jnp.asarray([45.0, 135.0, 225.0, 315.0]))
+    assert ds["u"].lon_period == 360.0
+    assert ds["v"].lon_period == 360.0
+
+
+def test_periodic_cgrid_rejects_bounded_u_shape():
+    """With lon_period set, an nlon-1-wide U array (the bounded shape) must be
+    rejected — the seam face is now required."""
+    t = jnp.asarray([0.0, 3600.0])
+    clat = jnp.asarray([0.0, 1.0, 2.0])
+    clon = jnp.asarray([0.0, 90.0, 180.0, 270.0])
+    u_bounded = jnp.ones((2, 3, 3))   # nlon - 1
+    v = jnp.zeros((2, 2, 4))
+    with pytest.raises(ValueError, match="shape mismatch"):
+        Dataset.from_arrays_cgrid(
+            t, clat, clon, {"cur": {"u": ("u", u_bounded), "v": ("v", v)}},
+            lon_period=360.0,
+        )
+
+
+def test_periodic_u_face_interp_wraps_across_seam():
+    """U interpolation at lon=0 must blend the seam face (315deg -> 13) and the
+    first face (45deg -> 10) to their midpoint, rather than extrapolate."""
+    ds = _periodic_cgrid()
+    v = ds["u"].interp(jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(1.0))
+    assert float(v) == pytest.approx(11.5, abs=1e-4)
+
+
+def test_periodic_u_face_neighborhood_wraps_across_seam():
+    ds = _periodic_cgrid()
+    nb = ds["u"].neighborhood(
+        jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(1.0),
+        t_window=0, lat_window=0, lon_window=1,
+    )
+    # centred on face index 0 (45deg): wrapped window is [seam=13, 10, 11]
+    assert jnp.allclose(nb[0, 0], jnp.asarray([13.0, 10.0, 11.0]))
+
+
+def test_standalone_u_face_periodic_wraps():
+    """Field.standalone now stores lon_period for face staggers and wraps."""
+    lon_u = jnp.asarray([45.0, 135.0, 225.0, 315.0])  # seam-inclusive faces
+    lat = jnp.asarray([0.0, 1.0])
+    t = jnp.asarray([0.0, 1.0])
+    vals = jnp.broadcast_to(jnp.asarray([10.0, 11.0, 12.0, 13.0]), (2, 2, 4))
+    f = Field.standalone(
+        values=vals, t_coords=t, lat_coords=lat, lon_coords=lon_u,
+        lon_period=360.0, stagger="u_face",
+    )
+    assert f.lon_period == 360.0
+    v = f.interp(jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(0.0))
+    assert float(v) == pytest.approx(11.5, abs=1e-4)
 
 
 def test_grid_backed_interp_is_jit_vmap_grad_safe():

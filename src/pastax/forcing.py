@@ -141,6 +141,12 @@ class Field(eqx.Module):
         (e.g. in tests): the given coordinates are stored on a private
         :class:`Grid` in the slot matching ``stagger``, and the returned field
         reads them back through the usual grid-backed properties.
+
+        With ``lon_period`` set, the passed ``lon_coords`` are taken to span
+        exactly one period and the field wraps in longitude — for a face
+        stagger this means the coordinates must be the seam-inclusive face
+        axis (``nlon`` points; see :meth:`pastax.Grid.u_face_coords`), not the
+        ``nlon - 1`` interior faces.
         """
         if stagger == "center":
             grid = Grid(
@@ -150,13 +156,13 @@ class Field(eqx.Module):
         elif stagger == "u_face":
             grid = Grid(
                 t_coords=t_coords, lat_coords=lat_coords, lon_coords=lon_coords,
-                stagger_type="C",
+                stagger_type="C", lon_period=lon_period,
                 u_lat_coords=lat_coords, u_lon_coords=lon_coords,
             )
         elif stagger == "v_face":
             grid = Grid(
                 t_coords=t_coords, lat_coords=lat_coords, lon_coords=lon_coords,
-                stagger_type="C",
+                stagger_type="C", lon_period=lon_period,
                 v_lat_coords=lat_coords, v_lon_coords=lon_coords,
             )
         else:
@@ -590,7 +596,9 @@ class Dataset(eqx.Module):
                 which each component is registered in ``Dataset.fields``
                 (and how :meth:`velocity_interp` finds them via ``u_name`` /
                 ``v_name``) and the corresponding values. U arrays have
-                shape ``(time, nlat, nlon - 1)``; V arrays have shape
+                shape ``(time, nlat, nlon - 1)`` on a bounded grid, or
+                ``(time, nlat, nlon)`` when ``lon_period`` is set (the seam
+                east face is then represented); V arrays have shape
                 ``(time, nlat - 1, nlon)``. At least one vector must be
                 supplied; field names must be unique across all vectors
                 and tracers.
@@ -599,8 +607,9 @@ class Dataset(eqx.Module):
             u_lat: Override for U latitudes (defaults to ``center_lat``).
                 Shared by every registered U field.
             u_lon: Override for U longitudes (defaults to centre lons shifted
-                east by half a cell, length ``nlon - 1``). Shared by every
-                registered U field.
+                east by half a cell: length ``nlon - 1`` on a bounded grid, or
+                ``nlon`` when ``lon_period`` is set — the seam face included).
+                Shared by every registered U field.
             v_lat: Override for V latitudes (defaults to centre lats shifted
                 north by half a cell, length ``nlat - 1``). Shared by every
                 registered V field.
@@ -608,18 +617,19 @@ class Dataset(eqx.Module):
                 Shared by every registered V field.
             dtype: JAX dtype for all arrays (default float32).
             lon_period: If set (e.g. ``360.0``), the centre grid is treated
-                as periodic in longitude. Tracer fields receive
-                ``lon_period``; U/V faces do not (their coordinate arrays
-                no longer span a full period, so periodic wrapping would be
-                ill-defined at first order). In particular the seam U face
-                between ``lon[-1]`` and ``lon[0] + lon_period`` is not
-                represented, and U/V fields extrapolate instead of wrapping
-                across the seam — see :meth:`pastax.Grid.period_for` for the
-                implications and workarounds.
+                as periodic in longitude and every field wraps across the
+                seam. Tracer and V-face fields keep their ``nlon`` longitude
+                columns; U-face fields gain the seam east face, so U is
+                ``nlon``-wide (one face per centre cell) rather than
+                ``nlon - 1``, and its default longitudes are the centre lons
+                shifted east by half a cell (see :meth:`Grid.u_face_coords`).
+                All roles share the centre period (see
+                :meth:`pastax.Grid.period_for`).
             masks: Optional land masks keyed by the field names declared in
                 ``vectors`` and ``tracers``. Each mask is a 2-D bool array;
-                the expected shape per field is ``(nlat, nlon - 1)`` for a
-                U-face field, ``(nlat - 1, nlon)`` for a V-face field, and
+                the expected shape per field is ``(nlat, nlon - 1)`` (or
+                ``(nlat, nlon)`` when ``lon_period`` is set) for a U-face
+                field, ``(nlat - 1, nlon)`` for a V-face field, and
                 ``(nlat, nlon)`` for a tracer. When a field is absent from
                 ``masks``, a mask is inferred from NaN locations in that
                 field's values array. NaN values are always replaced with
@@ -657,12 +667,17 @@ class Dataset(eqx.Module):
         derived_u_lat, derived_u_lon = centre_grid.u_face_coords()
         derived_v_lat, derived_v_lon = centre_grid.v_face_coords()
 
+        # A periodic centre grid has one U face per centre cell (the seam face
+        # included), so U is nlon-wide; a bounded grid has nlon - 1 interior
+        # faces. V is unaffected (latitude is never periodic).
+        nlon_u = nlon if lon_period is not None else nlon - 1
+
         u_lat_arr = jnp.asarray(u_lat, dtype=dtype) if u_lat is not None else derived_u_lat
         u_lon_arr = jnp.asarray(u_lon, dtype=dtype) if u_lon is not None else derived_u_lon
         v_lat_arr = jnp.asarray(v_lat, dtype=dtype) if v_lat is not None else derived_v_lat
         v_lon_arr = jnp.asarray(v_lon, dtype=dtype) if v_lon is not None else derived_v_lon
         _check_cgrid_shape("u_lat", u_lat_arr.shape, (nlat,))
-        _check_cgrid_shape("u_lon", u_lon_arr.shape, (nlon - 1,))
+        _check_cgrid_shape("u_lon", u_lon_arr.shape, (nlon_u,))
         _check_cgrid_shape("v_lat", v_lat_arr.shape, (nlat - 1,))
         _check_cgrid_shape("v_lon", v_lon_arr.shape, (nlon,))
 
@@ -707,7 +722,7 @@ class Dataset(eqx.Module):
             v_arr = jnp.asarray(v_values, dtype=dtype)
             _check_cgrid_shape(
                 f"vectors[{group!r}]['u'] ({u_field_name!r})",
-                u_arr.shape, (nt, nlat, nlon - 1),
+                u_arr.shape, (nt, nlat, nlon_u),
             )
             _check_cgrid_shape(
                 f"vectors[{group!r}]['v'] ({v_field_name!r})",
@@ -716,7 +731,7 @@ class Dataset(eqx.Module):
 
             u_clean, u_mask = _resolve_mask(
                 u_arr, masks.get(u_field_name),
-                expected_mask_shape=(nlat, nlon - 1), field_name=u_field_name,
+                expected_mask_shape=(nlat, nlon_u), field_name=u_field_name,
             )
             v_clean, v_mask = _resolve_mask(
                 v_arr, masks.get(v_field_name),
@@ -784,8 +799,9 @@ class Dataset(eqx.Module):
                 tuple says which xarray variable holds the values and under
                 which name to register the resulting Field in
                 ``Dataset.fields``. U variables have shape
-                ``(time, nlat, nlon - 1)``; V variables have shape
-                ``(time, nlat - 1, nlon)``.
+                ``(time, nlat, nlon - 1)`` — or ``(time, nlat, nlon)`` when
+                ``lon_period`` is set (the seam east face is represented);
+                V variables have shape ``(time, nlat - 1, nlon)``.
             coordinates: Mapping with keys ``"time"``, ``"lat"``, ``"lon"``
                 → xarray coord names for the centre grid.
             tracers: Optional ``{internal_name: xarray_variable_name}`` for
@@ -876,7 +892,8 @@ def _check_cgrid_shape(name: str, got: tuple[int, ...], expected: tuple[int, ...
     if got != expected:
         raise ValueError(
             f"C-grid shape mismatch for {name}: expected {expected}, got {got}. "
-            f"NEMO convention requires U at shape (time, nlat, nlon-1) and "
+            f"NEMO convention requires U at shape (time, nlat, nlon-1) — or "
+            f"(time, nlat, nlon) on a periodic grid (lon_period set) — and "
             f"V at shape (time, nlat-1, nlon)."
         )
 
