@@ -357,6 +357,37 @@ class TestVariogramScore:
         b = jax.jit(variogram_score)(f, o)
         assert jnp.allclose(a, b)
 
+    @pytest.mark.parametrize("p", [0.5, 1.0])
+    def test_grad_finite_for_p_below_two(self, p):
+        """|x|^p has an unbounded derivative at x=0 for p < 1; the component
+        diagonal is exactly zero, so without the double-where trick the
+        backward pass produced nan (0 * inf survives the zero weights)."""
+        key = jax.random.key(24)
+        f = jax.random.normal(key, (6, 3, 2))
+        o = jnp.zeros((3, 2))
+        g = jax.grad(lambda a: variogram_score(a, o, p=p, reduce="sum"))(f)
+        assert jnp.all(jnp.isfinite(g))
+
+    def test_grad_finite_with_ties_in_forecast(self):
+        """Exactly tied ensemble members create off-diagonal zero differences
+        too; gradients must stay finite there as well."""
+        f = jnp.array([[[1.0, 1.0]], [[1.0, 2.0]]])  # components tied in member 0
+        o = jnp.array([[0.0, 1.0]])
+        g = jax.grad(lambda a: variogram_score(a, o, p=0.5, reduce="sum"))(f)
+        assert jnp.all(jnp.isfinite(g))
+
+    def test_value_unchanged_by_safe_pow(self):
+        """The double-where rewrite must not change forward values."""
+        f = jax.random.normal(jax.random.key(25), (6, 3, 2))
+        o = jax.random.normal(jax.random.key(26), (3, 2))
+        for p in (0.5, 1.0, 2.0):
+            expected = (
+                ((jnp.abs(f[..., :, None] - f[..., None, :]) ** p).mean(0)
+                 - jnp.abs(o[..., :, None] - o[..., None, :]) ** p) ** 2
+                * (jnp.ones((2, 2)) - jnp.eye(2))
+            ).sum(axis=(-2, -1))
+            assert jnp.allclose(variogram_score(f, o, p=p), expected, atol=1e-6)
+
 
 def test_reduce_invalid_value_raises():
     f = jnp.ones((3, 2, 2))

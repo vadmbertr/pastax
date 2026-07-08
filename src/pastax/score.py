@@ -55,6 +55,21 @@ def l2_distance(
     return safe_sqrt(jnp.sum((x - y) ** 2, axis=-1))
 
 
+def _safe_abs_pow(x: Float[Array, "..."], p: float) -> Float[Array, "..."]:
+    r"""Gradient-safe :math:`|x|^p`.
+
+    ``|x| ** p`` has an unbounded derivative at ``x = 0`` for ``p < 1``
+    (:math:`p\,|x|^{p-1} \to \infty`), which turns into ``nan`` in the
+    backward pass — and a ``0 * nan`` further down (e.g. a zero
+    ``component_weights`` entry in :func:`variogram_score`) stays ``nan``.
+    The standard "double where" trick evaluates the power only where
+    ``x != 0`` so the value is unchanged (``|0|^p == 0`` for ``p > 0``)
+    while the gradient at exact zeros is ``0`` instead of ``nan``.
+    """
+    mask = x != 0.0
+    return jnp.where(mask, jnp.abs(jnp.where(mask, x, 1.0)) ** p, 0.0)
+
+
 def _reduce(
     score_per_t: Float[Array, " T"],
     reduce: Reduce,
@@ -229,7 +244,11 @@ def variogram_score(
     Args:
         forecast: Ensemble forecast, shape ``(S, T, 2)``.
         obs: Observed trajectory, shape ``(T, 2)``.
-        p: Variogram order. Default ``2.0``.
+        p: Variogram order. Default ``2.0``. Any ``p > 0`` is
+            gradient-safe: the powers are evaluated through a "double
+            where" so exactly-zero differences (the component diagonal,
+            or ties in the data) contribute a zero gradient instead of
+            ``nan`` when ``p < 1``.
         component_weights: ``(2, 2)`` non-negative weight matrix. Defaults to
             ``ones((2, 2)) - eye(2)``.
         reduce: See :func:`squared_error`.
@@ -241,9 +260,9 @@ def variogram_score(
     if component_weights is None:
         component_weights = jnp.ones((2, 2)) - jnp.eye(2)
 
-    diff_fcst = jnp.abs(forecast[..., :, None] - forecast[..., None, :]) ** p
+    diff_fcst = _safe_abs_pow(forecast[..., :, None] - forecast[..., None, :], p)
     ex_fcst = diff_fcst.mean(axis=0)
-    diff_obs = jnp.abs(obs[..., :, None] - obs[..., None, :]) ** p
+    diff_obs = _safe_abs_pow(obs[..., :, None] - obs[..., None, :], p)
     residual = ex_fcst - diff_obs
 
     score_per_t = (component_weights * residual ** 2).sum(axis=(-2, -1))
