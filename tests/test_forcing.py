@@ -250,139 +250,17 @@ class TestDatasetFromArrays:
         assert float(v) == pytest.approx(1.5)
 
     def test_from_arrays_accepts_datetime64(self):
-        """datetime64 time is rebased to seconds since the first timestamp."""
+        """datetime64 time is rebased to seconds since the Unix epoch."""
         t_dt = np.array(["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"],
                         dtype="datetime64[D]")
         _, lat, lon = self._coords()
         u = np.ones((4, 4, 4), dtype=np.float32)
         dataset = Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
         epoch = t_dt.astype("datetime64[s]").astype(np.int64)
-        expected = epoch - epoch[0]
         assert jnp.allclose(
             dataset["u"].t_coords,
-            jnp.asarray(expected, dtype=dataset["u"].t_coords.dtype),
+            jnp.asarray(epoch, dtype=dataset["u"].t_coords.dtype),
         )
-        assert int(dataset.grid.t_origin) == int(epoch[0])
-        assert dataset.grid.t_origin.dtype == np.int64
-
-    def test_datetime64_rebasing_preserves_float32_precision(self):
-        """Hourly datetime64 coords at a 2026 epoch stay exact in float32.
-
-        Raw epoch seconds (~1.77e9) have a 128 s float32 granularity, so
-        without rebasing hourly steps cannot be represented and interpolation
-        weights are quantized. After rebasing, coords are small integers and
-        a mid-cell time query interpolates exactly.
-        """
-        t_dt = np.arange(
-            np.datetime64("2026-07-01T00:00:00"),
-            np.datetime64("2026-07-01T04:00:00"),
-            np.timedelta64(1, "h"),
-        )
-        lat = np.linspace(0.0, 3.0, 4)
-        lon = np.linspace(10.0, 13.0, 4)
-        # Field value equals the hour index at every grid point.
-        u = np.broadcast_to(
-            np.arange(4, dtype=np.float32)[:, None, None], (4, 4, 4)
-        )
-        dataset = Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
-        assert jnp.array_equal(
-            dataset["u"].t_coords, jnp.array([0.0, 3600.0, 7200.0, 10800.0])
-        )
-        # Mid-cell query: exactly half-way between hours 1 and 2.
-        v = dataset["u"].interp(jnp.array(5400.0), jnp.array(11.0), jnp.array(1.0))
-        assert float(v) == pytest.approx(1.5, abs=1e-6)
-
-    def test_different_t_origin_does_not_retrace_jit(self):
-        """t_origin is a pytree leaf: swapping forcing origins must not recompile."""
-
-        def build(day):
-            t_dt = np.arange(
-                np.datetime64(day),
-                np.datetime64(day) + np.timedelta64(4, "h"),
-                np.timedelta64(1, "h"),
-            )
-            lat = np.linspace(0.0, 3.0, 4)
-            lon = np.linspace(10.0, 13.0, 4)
-            u = np.ones((4, 4, 4), dtype=np.float32)
-            return Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
-
-        traces = {"n": 0}
-
-        @jax.jit
-        def f(ds):
-            traces["n"] += 1  # runs at trace time only
-            return ds["u"].interp(jnp.array(1800.0), jnp.array(11.0), jnp.array(1.0))
-
-        v1 = f(build("2026-07-01T00:00"))
-        v2 = f(build("2026-09-01T00:00"))  # same shapes, different t_origin
-        assert traces["n"] == 1
-        assert float(v1) == pytest.approx(float(v2))
-
-    def test_t_origin_traces_through_solve_without_recompiling(self):
-        """t_origin flows into the solver term as a traced value, not a constant.
-
-        The absolute epoch time ``t + grid.t_origin`` (the month-of-year use
-        case) is recovered inside the term and drives a seasonal signal. A
-        single jitted program must:
-
-        * trace exactly once across datasets with different ``t_origin`` and a
-          changed ``t0`` (no recompilation), and
-        * still produce *different* trajectories for different origins —
-          proving ``t_origin`` is a runtime input threaded all the way into
-          the term, not baked into the trace as a constant.
-        """
-        from pastax import Euler
-
-        def build(day):
-            t_dt = np.arange(
-                np.datetime64(day),
-                np.datetime64(day) + np.timedelta64(6, "h"),
-                np.timedelta64(1, "h"),
-            )
-            lat = np.linspace(0.0, 3.0, 4)
-            lon = np.linspace(10.0, 13.0, 4)
-            u = np.ones((6, 4, 4), dtype=np.float32)
-            v = np.zeros((6, 4, 4), dtype=np.float32)
-            return Dataset.from_arrays({"u": u, "v": v}, t=t_dt, lat=lat, lon=lon)
-
-        year = 365.25 * 86400.0
-
-        def term(t, y, args):
-            ds = args
-            abs_t = t + ds.grid.t_origin  # absolute epoch seconds (traced leaf)
-            season = jnp.sin(2.0 * jnp.pi * abs_t / year)
-            u = ds["u"].interp(t, y[0], y[1])
-            v = ds["v"].interp(t, y[0], y[1])
-            return jnp.array([u, v]) + 1e-3 * season
-
-        traces = {"n": 0}
-
-        @jax.jit
-        def run(ds, t0):
-            traces["n"] += 1  # trace-time only
-            return solve(
-                term, jnp.array([11.0, 1.0]), t0,
-                n_save=3, int_dt=3600.0, save_dt=3600.0,
-                solver=Euler(), args=ds,
-            )
-
-        r_jul = run(build("2026-07-01T00:00"), jnp.array(0.0))
-        r_sep = run(build("2026-09-01T00:00"), jnp.array(0.0))  # different origin
-        _ = run(build("2026-07-01T00:00"), jnp.array(3600.0))   # different t0
-
-        assert traces["n"] == 1  # no recompilation
-        assert jnp.all(jnp.isfinite(r_jul)) and jnp.all(jnp.isfinite(r_sep))
-        # Different origins → different seasonal phase → different trajectory,
-        # so t_origin genuinely reached the term as a runtime value.
-        assert not jnp.allclose(r_jul, r_sep)
-
-    def test_numeric_time_passes_through_unrebased(self):
-        """Plain numeric time input keeps its frame and t_origin stays 0."""
-        t, lat, lon = self._coords()
-        u = np.ones((4, 4, 4), dtype=np.float32)
-        dataset = Dataset.from_arrays({"u": u}, t=t + 123.0, lat=lat, lon=lon)
-        assert int(dataset.grid.t_origin) == 0
-        assert float(dataset["u"].t_coords[0]) == pytest.approx(123.0)
 
     def test_from_arrays_datetime64_matches_from_xarray(self):
         """from_arrays with datetime64 and from_xarray must yield identical t_coords."""
@@ -618,11 +496,6 @@ class TestDatasetCGrid:
         assert jnp.allclose(from_xr["v"].values, from_arr["v"].values)
         assert jnp.allclose(from_xr["u"].lon_coords, from_arr["u"].lon_coords)
         assert jnp.allclose(from_xr["v"].lat_coords, from_arr["v"].lat_coords)
-        # datetime64 time is rebased identically on both paths.
-        epoch0 = int(t.astype("datetime64[s]").astype(np.int64)[0])
-        assert int(from_xr.grid.t_origin) == epoch0
-        assert int(from_arr.grid.t_origin) == epoch0
-        assert float(from_xr.grid.t_coords[0]) == 0.0
 
     def test_from_xarray_cgrid_with_explicit_staggered_coords(self):
         t = np.linspace(0.0, 7200.0, 3)
