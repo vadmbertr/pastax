@@ -31,6 +31,21 @@ def test_field_mask_defaults_to_none():
     assert f.mask is None
 
 
+@pytest.mark.parametrize("stagger", ["u_face", "v_face"])
+def test_standalone_rejects_lon_period_on_faces(stagger):
+    """Face fields never wrap in longitude; lon_period used to be silently
+    dropped for face staggers — it must be rejected loudly instead."""
+    with pytest.raises(ValueError, match="lon_period is not supported"):
+        Field.standalone(
+            values=jnp.zeros((2, 3, 4)),
+            t_coords=jnp.asarray([0.0, 1.0]),
+            lat_coords=jnp.linspace(0.0, 2.0, 3),
+            lon_coords=jnp.linspace(0.0, 3.0, 4),
+            lon_period=4.0,
+            stagger=stagger,
+        )
+
+
 def test_field_accepts_explicit_mask():
     mask = jnp.array([[False, True], [True, False]])
     f = Field.standalone(
