@@ -70,12 +70,25 @@ class Grid(eqx.Module):
     def u_face_coords(self) -> tuple[Float[Array, "lat"], Float[Array, "lon_u"]]:
         r"""Return ``(lat_u, lon_u)`` — coordinates of U-face centres (NEMO C-grid).
 
-        For a centre grid of size ``nlon`` in longitude, U lives on the
-        ``nlon - 1`` east faces between adjacent cells:
+        For a **bounded** centre grid of size ``nlon`` in longitude, U lives on
+        the ``nlon - 1`` interior east faces between adjacent cells:
 
         .. math::
 
             \mathrm{lon}_u[i] = \tfrac{1}{2}\left(\mathrm{lon}_c[i] + \mathrm{lon}_c[i+1]\right)
+
+        When :attr:`lon_period` is set the grid is periodic, so every centre
+        cell has an east face — including the seam face between the last centre
+        and the first-plus-a-period. There are then ``nlon`` U faces, each a
+        half-cell east of its centre:
+
+        .. math::
+
+            \mathrm{lon}_u[i] = \mathrm{lon}_c[i] + \tfrac{1}{2}\,\Delta\lambda
+
+        This ``nlon``-face axis spans exactly one period, so U interpolation
+        wraps across the seam with the same first-order periodic scheme used for
+        centre fields (see :meth:`period_for`).
 
         Latitude is unchanged: :math:`\mathrm{lat}_u = \mathrm{lat}_c`.
 
@@ -84,7 +97,11 @@ class Grid(eqx.Module):
         """
         self._check_rectilinear("u_face_coords")
         lon_c = self.lon_coords
-        lon_u = 0.5 * (lon_c[:-1] + lon_c[1:])
+        if self.lon_period is None:
+            lon_u = 0.5 * (lon_c[:-1] + lon_c[1:])
+        else:
+            dlon = lon_c[1] - lon_c[0]
+            lon_u = lon_c + 0.5 * dlon
         return self.lat_coords, lon_u
 
     def v_face_coords(self) -> tuple[Float[Array, "lat_v"], Float[Array, "lon"]]:
@@ -147,19 +164,15 @@ class Grid(eqx.Module):
     ) -> float | None:
         """Return the longitude period a field at ``stagger`` should use.
 
-        Centre (tracer) fields inherit :attr:`lon_period`. U/V faces always get
-        ``None``: their coordinate arrays no longer span a full period, so
-        periodic wrapping would be ill-defined at first order.
-
-        Consequence for global (periodic) C-grids: the U face between
-        ``lon_c[-1]`` and ``lon_c[0] + lon_period`` — the seam face — is not
-        represented (there are ``nlon - 1`` U faces, not ``nlon``), and face
-        fields *extrapolate* rather than wrap across the seam. Queries near
-        the seam meridian therefore lose the C-grid's coastal guarantees; if
-        trajectories cross the seam, prefer A-grid forcing or rotate the grid
-        so the seam sits over land.
+        Every stagger role inherits :attr:`lon_period`: centre longitudes span
+        one period by construction, V-face longitudes equal the centre
+        longitudes, and periodic U faces are built seam-inclusive (``nlon``
+        faces spanning one period; see :meth:`u_face_coords`). When
+        :attr:`lon_period` is ``None`` all roles get ``None`` (bounded grid, no
+        wrapping). Latitude is never periodic, so this concerns only the
+        longitude axis.
         """
-        return self.lon_period if stagger == "center" else None
+        return self.lon_period
 
     def _check_rectilinear(self, method: str) -> None:
         if self.grid_type != "rectilinear":
