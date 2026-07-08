@@ -141,7 +141,19 @@ class Field(eqx.Module):
         (e.g. in tests): the given coordinates are stored on a private
         :class:`Grid` in the slot matching ``stagger``, and the returned field
         reads them back through the usual grid-backed properties.
+
+        Raises:
+            ValueError: If ``lon_period`` is combined with a face stagger.
+                Face fields never wrap (see :meth:`pastax.Grid.period_for`),
+                so the argument would be silently ignored.
         """
+        if lon_period is not None and stagger != "center":
+            raise ValueError(
+                f"lon_period is not supported for stagger={stagger!r}: face "
+                "fields never wrap in longitude — their coordinate arrays do "
+                "not span a full period (see Grid.period_for). Build the "
+                "field without lon_period, or use stagger='center'."
+            )
         if stagger == "center":
             grid = Grid(
                 t_coords=t_coords, lat_coords=lat_coords, lon_coords=lon_coords,
