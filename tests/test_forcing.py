@@ -683,6 +683,49 @@ class TestPeriodicLonAscending:
             )
 
 
+class TestPeriodicLonSpan:
+    """lon_period demands the grid span exactly one period (nlon*dlon == period)."""
+
+    def test_regional_grid_mislabelled_periodic_raises(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.array([0.0, 1.0])
+        lon = np.array([0.0, 1.0, 2.0, 3.0])  # spans 4 deg, not 360
+        u = np.ones((2, 2, 4), dtype=np.float32)
+        with pytest.raises(ValueError, match="span exactly one|span exactly"):
+            Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
+
+    def test_duplicate_wrap_endpoint_raises(self):
+        """Including the wrap endpoint (nlon+1 points, last == first + period)
+        overshoots one period by a cell and must be rejected."""
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.array([0.0, 1.0])
+        lon = np.array([0.0, 90.0, 180.0, 270.0, 360.0])  # 5 pts incl. wrap
+        u = np.ones((2, 2, 5), dtype=np.float32)
+        with pytest.raises(ValueError, match="span exactly one|duplicate wrap"):
+            Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
+
+    def test_correct_span_accepted(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.array([0.0, 1.0])
+        lon = np.array([0.0, 90.0, 180.0, 270.0])  # 4 * 90 == 360
+        u = np.ones((2, 2, 4), dtype=np.float32)
+        ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
+        assert ds["u"].lon_period == 360.0
+
+    def test_cgrid_mislabelled_periodic_raises(self):
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.linspace(0.0, 4.0, 5)
+        lon = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])  # spans 6 deg, not 360
+        u = np.ones((2, 5, 5), dtype=np.float32)
+        v = np.ones((2, 4, 6), dtype=np.float32)
+        with pytest.raises(ValueError, match="span exactly one|span exactly"):
+            Dataset.from_arrays_cgrid(
+                t, lat, lon,
+                vectors={"current": {"u": ("uo", u), "v": ("vo", v)}},
+                lon_period=360.0,
+            )
+
+
 class TestLoadersAreTracerSafe:
     """The loaders must be callable from inside a traced (jit/vmap) region.
 
