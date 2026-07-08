@@ -22,9 +22,8 @@ from typing import Literal
 
 import equinox as eqx
 import jax.numpy as jnp
-import numpy as np
 
-from ._types import Array, Float, Int
+from ._types import Array, Float
 
 __all__ = ["Grid"]
 
