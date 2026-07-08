@@ -95,6 +95,25 @@ class TestFromArraysMask:
         # NaN was still cleared from values regardless.
         assert bool(jnp.isnan(ds["u"].values).any()) is False
 
+    def test_user_mask_zeroes_fill_values(self):
+        """Values under an explicit mask are zeroed, even when not NaN.
+
+        Datasets flagging land with a fill value (e.g. 1e20) instead of NaN
+        must not leak that fill value into the interpolation paths that still
+        read land corners (partial-slip naive fallback, all-corners-land).
+        """
+        t, lat, lon = self._coords()
+        u = np.ones((3, 4, 5), dtype=np.float32)
+        u[:, 0, 0] = 1e20         # fill value marking land, no NaN
+        explicit = np.zeros((4, 5), dtype=bool)
+        explicit[0, 0] = True
+        ds = Dataset.from_arrays(
+            {"u": u}, t=t, lat=lat, lon=lon, masks={"u": explicit},
+        )
+        assert float(ds["u"].values[0, 0, 0]) == 0.0
+        # Ocean cells are untouched.
+        assert float(ds["u"].values[0, 1, 1]) == 1.0
+
     def test_per_field_mask_routing(self):
         t, lat, lon = self._coords()
         u = np.ones((3, 4, 5), dtype=np.float32)

@@ -912,8 +912,12 @@ def _resolve_mask(
 
     1. NaN values are always replaced with 0 in the returned values array.
     2. If ``user_mask`` is provided, it is validated against
-       ``expected_mask_shape`` and used as-is. Time-varying (3-D) masks are
-       rejected.
+       ``expected_mask_shape`` and used as-is, and the values under the mask
+       are zeroed. Datasets that flag land with a fill value (e.g. ``1e20``)
+       instead of NaN would otherwise leak those fill values into the
+       interpolation paths that still read land corners (the partial-slip
+       naive fallback and its all-corners-land case). Time-varying (3-D)
+       masks are rejected.
     3. Otherwise, if NaN was present in ``values``, infer a 2-D mask from
        ``isnan(values).any(axis=0)``. Cells that are NaN at *some but not
        all* time steps are almost certainly missing data (sensor gaps)
@@ -947,6 +951,9 @@ def _resolve_mask(
                 f"{expected_mask_shape}, got {mask.shape}. Time-varying masks "
                 "(wet-and-dry) are not supported."
             )
+        clean_values = jnp.where(
+            mask, jnp.asarray(0.0, dtype=clean_values.dtype), clean_values
+        )
         return clean_values, mask
 
     if _is_traced(values):
