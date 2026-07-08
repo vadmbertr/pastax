@@ -2,7 +2,7 @@
 
 import jax.numpy as jnp
 
-from ._safe_math import safe_sqrt
+from ._safe_math import safe_divide, safe_sqrt
 from ._types import Array, Float
 
 __all__ = [
@@ -65,6 +65,14 @@ def meters_to_degrees(
     additionally divided by :math:`\cos(\mathrm{lat})` to account for shrinking
     longitude circles toward the poles.
 
+    The division uses :func:`pastax.safe_divide`, so an *exactly* zero
+    :math:`\cos(\mathrm{lat})` yields ``0`` (with a finite gradient) rather
+    than ``inf``/``nan``. Note this is a corner-case guard only: the flat-Earth
+    longitude scaling genuinely diverges at the poles, and near (but not at)
+    :math:`\pm 90^\circ` — where :math:`\cos(\mathrm{lat})` is tiny but
+    nonzero — the zonal component is still legitimately huge. Treat results
+    within a cell of the poles as unreliable.
+
     Args:
         disp_m: Displacement(s) ``[east, north]`` in **metres**. The last axis
             must have size 2; leading axes are passed through unchanged.
@@ -77,7 +85,7 @@ def meters_to_degrees(
     rad = disp_m / EARTH_RADIUS
     deg = jnp.degrees(rad)
     lon_scale = jnp.cos(jnp.radians(lat_deg))
-    return deg.at[..., 0].divide(lon_scale)
+    return deg.at[..., 0].set(safe_divide(deg[..., 0], lon_scale))
 
 
 def degrees_to_meters(
