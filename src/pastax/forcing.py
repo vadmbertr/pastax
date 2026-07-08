@@ -248,7 +248,7 @@ class Field(eqx.Module):
         ilon = _nearest_idx_periodic(self.lon_coords, lon, nlon, self.lon_period)
         block = jax.lax.dynamic_slice(
             self.values,
-            (it_start, ilat_start, 0),
+            (it_start, ilat_start, jnp.astype(0, jnp.int32)),
             (wt, wlat, nlon),
         )
         lon_idx = (ilon - lon_window + jnp.arange(wlon)) % nlon

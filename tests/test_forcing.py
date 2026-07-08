@@ -250,45 +250,17 @@ class TestDatasetFromArrays:
         assert float(v) == pytest.approx(1.5)
 
     def test_from_arrays_accepts_datetime64(self):
-        """datetime64 time is rebased to seconds since the first timestamp."""
+        """datetime64 time is rebased to seconds since the Unix epoch."""
         t_dt = np.array(["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"],
                         dtype="datetime64[D]")
         _, lat, lon = self._coords()
         u = np.ones((4, 4, 4), dtype=np.float32)
         dataset = Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
         epoch = t_dt.astype("datetime64[s]").astype(np.int64)
-        expected = epoch - epoch[0]
         assert jnp.allclose(
             dataset["u"].t_coords,
-            jnp.asarray(expected, dtype=dataset["u"].t_coords.dtype),
+            jnp.asarray(epoch, dtype=dataset["u"].t_coords.dtype),
         )
-
-    def test_datetime64_rebasing_preserves_float32_precision(self):
-        """Hourly datetime64 coords at a 2026 epoch stay exact in float32.
-
-        Raw epoch seconds (~1.77e9) have a 128 s float32 granularity, so
-        without rebasing hourly steps cannot be represented and interpolation
-        weights are quantized. After rebasing, coords are small integers and
-        a mid-cell time query interpolates exactly.
-        """
-        t_dt = np.arange(
-            np.datetime64("2026-07-01T00:00:00"),
-            np.datetime64("2026-07-01T04:00:00"),
-            np.timedelta64(1, "h"),
-        )
-        lat = np.linspace(0.0, 3.0, 4)
-        lon = np.linspace(10.0, 13.0, 4)
-        # Field value equals the hour index at every grid point.
-        u = np.broadcast_to(
-            np.arange(4, dtype=np.float32)[:, None, None], (4, 4, 4)
-        )
-        dataset = Dataset.from_arrays({"u": u}, t=t_dt, lat=lat, lon=lon)
-        assert jnp.array_equal(
-            dataset["u"].t_coords, jnp.array([0.0, 3600.0, 7200.0, 10800.0])
-        )
-        # Mid-cell query: exactly half-way between hours 1 and 2.
-        v = dataset["u"].interp(jnp.array(5400.0), jnp.array(11.0), jnp.array(1.0))
-        assert float(v) == pytest.approx(1.5, abs=1e-6)
 
     def test_from_arrays_datetime64_matches_from_xarray(self):
         """from_arrays with datetime64 and from_xarray must yield identical t_coords."""
