@@ -20,9 +20,28 @@ Each score accepts a ``reduce`` argument:
 
 The default distance kernel for :func:`squared_error` and
 :func:`energy_score` is the Euclidean distance. A user may pass any callable
-satisfying the broadcasting kernel contract — 
+satisfying the broadcasting kernel contract —
 notably :func:`pastax.metric.separation_distance`
 for great-circle distances on the sphere.
+
+.. warning::
+
+    **Antimeridian / longitude convention.** These scores operate on the raw
+    ``[lon, lat]`` components and are *not* aware of the ±180° seam. Two
+    positions either side of the dateline (e.g. ``179`` and ``-179``) read as
+    ~358° apart rather than ~2°, and a forecast and observation supplied in
+    different longitude conventions — e.g. one wrapped to ``[-180, 180)``, the
+    other carrying the solver's unbounded longitude (``181``, ``200``, …) — are
+    compared inconsistently. Keep every input (all ensemble members *and* the
+    observation) in a single, consistent longitude convention and avoid data
+    that straddles the seam; ``pastax.wrap_longitude`` can normalise them the
+    same way. For :func:`squared_error` / :func:`energy_score`, additionally
+    pass a great-circle kernel (``kernel=pastax.haversine`` or
+    :func:`pastax.metric.separation_distance`) so the distance itself is
+    seam-safe. :func:`dawid_sebastiani` and :func:`variogram_score` have no
+    kernel hook and rely entirely on the consistent-convention requirement.
+    (The metrics in :mod:`pastax.metric` are seam-safe — they use
+    :func:`pastax.haversine`, which is periodic in longitude.)
 """
 
 from collections.abc import Callable
@@ -104,6 +123,14 @@ def squared_error(
     With the default L2 kernel this is the squared error of the ensemble
     mean (Pic et al. 2025, Eq. 11).
 
+    .. note::
+
+        The default :func:`l2_distance` kernel is *not* antimeridian-safe. Near
+        the dateline pass a great-circle kernel (``kernel=pastax.haversine`` or
+        :func:`pastax.metric.separation_distance`) and keep the forecast and
+        observation in one consistent longitude convention — see the
+        module-level warning.
+
     Args:
         forecast: Ensemble forecast, shape ``(S, T, 2)``.
         obs: Observed trajectory, shape ``(T, 2)``.
@@ -141,6 +168,15 @@ def dawid_sebastiani(
     ensemble at time :math:`t`. Requires :math:`S \geq 3` for :math:`\Sigma_t` to
     be a.s. full-rank on :math:`\mathbb{R}^2`; for :math:`S \leq 2` the score is
     undefined (singular covariance).
+
+    .. note::
+
+        Not antimeridian-safe and has no kernel hook: the sample covariance and
+        the ``mu - obs`` term are taken on the raw ``[lon, lat]`` components, so
+        an ensemble straddling ±180° gets a spuriously inflated longitude
+        variance that corrupts :math:`\Sigma_t`, its log-determinant and the
+        Mahalanobis term. Keep the ensemble and observation in one consistent
+        longitude convention, away from the seam — see the module-level warning.
 
     Args:
         forecast: Ensemble forecast, shape ``(S, T, 2)``, with ``S >= 3``.
@@ -193,6 +229,17 @@ def energy_score(
     off-diagonal estimator exactly. Strictly proper for the L2 kernel and
     :math:`\alpha \in (0, 2)`; propriety with other kernels is not guaranteed.
 
+    .. note::
+
+        The default :func:`l2_distance` kernel is *not* antimeridian-safe. Near
+        the dateline pass a great-circle kernel (``kernel=pastax.haversine`` or
+        :func:`pastax.metric.separation_distance`) and keep inputs in one
+        consistent longitude convention — see the module-level warning. Note the
+        trade-off: strict propriety holds for the Euclidean default (a distance
+        of negative type) but is *not* guaranteed for the geodesic/haversine
+        distance. A chordal distance (map ``[lon, lat]`` to a 3-D unit vector
+        and take the Euclidean distance) is both seam-safe *and* strictly proper.
+
     Args:
         forecast: Ensemble forecast, shape ``(S, T, 2)``, with ``S >= 2``.
         obs: Observed trajectory, shape ``(T, 2)``.
@@ -240,6 +287,14 @@ def variogram_score(
     Sums over both component pairs :math:`(i, j)`; with the default
     ``component_weights = 1 - I``, the diagonal contribution (zero) is masked
     out and the off-diagonal pair is counted twice (symmetric formulation).
+
+    .. note::
+
+        Not antimeridian-safe and has no kernel hook: the component differences
+        :math:`|X_{t,i} - X_{t,j}|` use the *absolute* longitude value, so the
+        score depends on the longitude convention and is wrong when forecast and
+        observation disagree on it or when data straddles ±180°. Keep every input
+        in one consistent longitude convention — see the module-level warning.
 
     Args:
         forecast: Ensemble forecast, shape ``(S, T, 2)``.
