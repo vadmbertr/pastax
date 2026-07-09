@@ -684,15 +684,22 @@ class TestPeriodicLonAscending:
 
 
 class TestPeriodicLonSpan:
-    """lon_period demands the grid span exactly one period (nlon*dlon == period)."""
+    """lon_period classifies the grid: span == period is a closed (global) grid
+    that wraps; span < period is an open seam-crossing regional grid; span >
+    period (a duplicate wrap endpoint) is rejected."""
 
-    def test_regional_grid_mislabelled_periodic_raises(self):
+    def test_regional_subperiod_grid_accepted_as_open(self):
+        """A sub-period grid is a valid *open* grid (span < period), not an error."""
         t = np.linspace(0.0, 3600.0, 2)
         lat = np.array([0.0, 1.0])
-        lon = np.array([0.0, 1.0, 2.0, 3.0])  # spans 4 deg, not 360
+        lon = np.array([0.0, 1.0, 2.0, 3.0])  # spans 4 deg < 360 -> open
         u = np.ones((2, 2, 4), dtype=np.float32)
-        with pytest.raises(ValueError, match="span exactly one|span exactly"):
-            Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
+        ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
+        assert ds.grid.lon_closed is False
+        assert ds["u"].lon_period == 360.0
+        # interpolation is continuous within the window (constant field -> 1.0)
+        v = ds["u"].interp(jnp.array(0.0), jnp.array(1.5), jnp.array(0.5))
+        assert float(v) == pytest.approx(1.0)
 
     def test_duplicate_wrap_endpoint_raises(self):
         """Including the wrap endpoint (nlon+1 points, last == first + period)
@@ -701,29 +708,211 @@ class TestPeriodicLonSpan:
         lat = np.array([0.0, 1.0])
         lon = np.array([0.0, 90.0, 180.0, 270.0, 360.0])  # 5 pts incl. wrap
         u = np.ones((2, 2, 5), dtype=np.float32)
-        with pytest.raises(ValueError, match="span exactly one|duplicate wrap"):
+        with pytest.raises(ValueError, match="overshoot|duplicate wrap|spans"):
             Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
 
-    def test_correct_span_accepted(self):
+    def test_correct_span_accepted_as_closed(self):
         t = np.linspace(0.0, 3600.0, 2)
         lat = np.array([0.0, 1.0])
         lon = np.array([0.0, 90.0, 180.0, 270.0])  # 4 * 90 == 360
         u = np.ones((2, 2, 4), dtype=np.float32)
         ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
         assert ds["u"].lon_period == 360.0
+        assert ds.grid.lon_closed is True
 
-    def test_cgrid_mislabelled_periodic_raises(self):
+    def test_seam_crossing_grid_unwrapped_and_open(self):
+        """A grid crossing the antimeridian (170...-170) is stored unwrapped
+        (ascending) and classified open."""
+        t = np.linspace(0.0, 3600.0, 2)
+        lat = np.array([0.0, 1.0])
+        lon = np.array([170.0, 175.0, 180.0, -175.0, -170.0])  # crosses seam
+        u = np.ones((2, 2, 5), dtype=np.float32)
+        ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
+        assert ds.grid.lon_closed is False
+        stored = np.asarray(ds["u"].lon_coords)
+        assert np.all(np.diff(stored) > 0)  # strictly ascending
+        np.testing.assert_allclose(stored, [170.0, 175.0, 180.0, 185.0, 190.0])
+
+    def test_cgrid_subperiod_grid_accepted_as_open(self):
+        """A sub-period C-grid is open: U has nlon-1 interior faces, not nlon."""
         t = np.linspace(0.0, 3600.0, 2)
         lat = np.linspace(0.0, 4.0, 5)
-        lon = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])  # spans 6 deg, not 360
-        u = np.ones((2, 5, 5), dtype=np.float32)
+        lon = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])  # spans 5 deg < 360 -> open
+        u = np.ones((2, 5, 5), dtype=np.float32)  # nlon - 1 = 5 interior faces
         v = np.ones((2, 4, 6), dtype=np.float32)
-        with pytest.raises(ValueError, match="span exactly one|span exactly"):
-            Dataset.from_arrays_cgrid(
-                t, lat, lon,
-                vectors={"current": {"u": ("uo", u), "v": ("vo", v)}},
-                lon_period=360.0,
+        ds = Dataset.from_arrays_cgrid(
+            t, lat, lon,
+            vectors={"current": {"u": ("uo", u), "v": ("vo", v)}},
+            lon_period=360.0,
+        )
+        assert ds.grid.lon_closed is False
+        assert ds.grid.u_lon_coords.shape == (5,)
+        assert ds.grid.closed_for("u_face") is False
+
+
+class TestOpenSeamCrossingLon:
+    """Open (seam-crossing) regional grids: continuity across the antimeridian
+    without wrapping, in any longitude convention, and safe under tracing."""
+
+    @staticmethod
+    def _ramp_field():
+        # Field value equals the (unwrapped) longitude of each column, so a
+        # correct interpolation returns the query longitude itself.
+        t = np.array([0.0, 3600.0])
+        lat = np.array([0.0, 1.0])
+        lon = np.array([170.0, 175.0, 180.0, -175.0, -170.0])  # -> 170..190
+        uw = np.array([170.0, 175.0, 180.0, 185.0, 190.0])
+        u = np.tile(uw, (2, 2, 1)).astype(np.float32)
+        ds = Dataset.from_arrays({"u": u}, t=t, lat=lat, lon=lon, lon_period=360.0)
+        return ds["u"]
+
+    def test_interp_continuous_across_seam(self):
+        f = self._ramp_field()
+        for q in (178.0, 182.0, 185.0):
+            v = f.interp(jnp.array(0.0), jnp.array(q), jnp.array(0.5))
+            assert float(v) == pytest.approx(q, abs=1e-2)
+
+    def test_representation_invariance(self):
+        """A query given as -175 equals the same query given as 185."""
+        f = self._ramp_field()
+        a = f.interp(jnp.array(0.0), jnp.array(-175.0), jnp.array(0.5))
+        b = f.interp(jnp.array(0.0), jnp.array(185.0), jnp.array(0.5))
+        assert float(a) == pytest.approx(float(b))
+        assert float(a) == pytest.approx(185.0, abs=1e-2)
+
+    def test_open_extrapolates_where_closed_would_wrap(self):
+        """West of the window, an open grid extrapolates (does not wrap east)."""
+        f = self._ramp_field()  # window [170, 190]
+        # 169 is 1 deg west of the western edge: gentle extrapolation ~169,
+        # NOT a wrap to the eastern end (~190).
+        v = f.interp(jnp.array(0.0), jnp.array(169.0), jnp.array(0.5))
+        assert float(v) == pytest.approx(169.0, abs=1e-1)
+
+    def test_nonseam_open_matches_bounded(self):
+        """A non-seam open subset (lon_period=360, lon_closed=False) interpolates a
+        varying field identically to the same grid loaded bounded (lon_period=None)
+        for in-window queries — the centred fold is the identity there — and folds
+        alternate-convention queries into the window."""
+        t = np.array([0.0, 3600.0])
+        lat = np.array([0.0, 1.0])
+        lon = np.array([10.0, 20.0, 30.0, 40.0])  # non-seam, spans 30 deg < 360
+        ramp = np.tile(lon.astype(np.float32), (2, 2, 1))  # value == longitude
+        open_ds = Dataset.from_arrays(
+            {"u": ramp}, t=t, lat=lat, lon=lon, lon_period=360.0, lon_closed=False
+        )
+        bounded_ds = Dataset.from_arrays({"u": ramp}, t=t, lat=lat, lon=lon)
+        assert open_ds.grid.lon_closed is False
+        for q in (12.5, 25.0, 33.7):
+            o = float(open_ds["u"].interp(jnp.array(0.0), jnp.array(q), jnp.array(0.5)))
+            b = float(bounded_ds["u"].interp(jnp.array(0.0), jnp.array(q), jnp.array(0.5)))
+            assert o == pytest.approx(q, abs=1e-3)   # ramp: interpolated value == longitude
+            # open == bounded for in-window queries (up to float32 fold rounding,
+            # ~1e-5; a wrong cell would differ by a full grid step ~10 deg)
+            assert o == pytest.approx(b, abs=1e-4)
+        # a query in another convention (25 - 360) folds back into the window;
+        # the bounded grid would instead extrapolate far outside it.
+        alt = float(open_ds["u"].interp(jnp.array(0.0), jnp.array(25.0 - 360.0), jnp.array(0.5)))
+        assert alt == pytest.approx(25.0, abs=1e-3)
+
+    def test_jit_vmap_grad_safe(self):
+        f = self._ramp_field()
+
+        def fn(q):
+            return f.interp(jnp.array(0.0), q, jnp.array(0.5))
+        # jit
+        assert float(jax.jit(fn)(jnp.array(182.0))) == pytest.approx(182.0, abs=1e-2)
+        # vmap over queries straddling the seam (incl. the -175 convention)
+        out = jax.vmap(fn)(jnp.array([178.0, 182.0, -175.0]))
+        np.testing.assert_allclose(np.asarray(out), [178.0, 182.0, 185.0], atol=1e-2)
+        # grad is finite and ~1 (ramp slope), including across the seam at 180
+        for q in (182.0, 180.0):
+            g = jax.grad(fn)(jnp.array(q))
+            assert np.isfinite(float(g))
+            assert float(g) == pytest.approx(1.0, abs=1e-2)
+
+    def test_neighborhood_open_clamps_no_wrap(self):
+        f = self._ramp_field()
+        # centred on -175 (=185): the three columns are 180, 185, 190
+        nb = f.neighborhood(
+            jnp.array(0.0), jnp.array(-175.0), jnp.array(0.5),
+            t_window=0, lat_window=0, lon_window=1,
+        )
+        np.testing.assert_allclose(np.asarray(nb[0, 0]), [180.0, 185.0, 190.0])
+        # at the western edge it clamps (no wrap to the eastern end)
+        nb_edge = f.neighborhood(
+            jnp.array(0.0), jnp.array(170.0), jnp.array(0.5),
+            t_window=0, lat_window=0, lon_window=1,
+        )
+        np.testing.assert_allclose(np.asarray(nb_edge[0, 0]), [170.0, 175.0, 180.0])
+
+    def test_lon_closed_override_under_jit(self):
+        """Under tracing the axis can't be classified; an explicit lon_closed
+        lets an open grid be built inside jit."""
+        t = np.array([0.0, 3600.0])
+        lat = np.array([0.0, 1.0])
+        lon = jnp.array([170.0, 175.0, 180.0, 185.0, 190.0])  # already unwrapped
+        uw = np.array([170.0, 175.0, 180.0, 185.0, 190.0])
+        u = jnp.asarray(np.tile(uw, (2, 2, 1)).astype(np.float32))
+
+        def build_and_interp(u, lon, q):
+            ds = Dataset.from_arrays(
+                {"u": u}, t=t, lat=lat, lon=lon,
+                lon_period=360.0, lon_closed=False,
             )
+            return ds["u"].interp(jnp.array(0.0), q, jnp.array(0.5))
+
+        out = jax.jit(build_and_interp)(u, lon, jnp.array(182.0))
+        assert float(out) == pytest.approx(182.0, abs=1e-2)
+
+    def test_raw_seam_autounwrap_under_jit(self):
+        """With lon_closed=False the loader unwraps a seam even under tracing, so
+        RAW seam coords can be loaded inside jit without pre-unwrapping."""
+        t = np.array([0.0, 3600.0])
+        lat = np.array([0.0, 1.0])
+        lon_raw = jnp.array([170.0, 175.0, 180.0, -175.0, -170.0])  # crosses seam
+        uw = np.array([170.0, 175.0, 180.0, 185.0, 190.0])
+        u = jnp.asarray(np.tile(uw, (2, 2, 1)).astype(np.float32))
+
+        def build(u, lon, q):
+            ds = Dataset.from_arrays(
+                {"u": u}, t=t, lat=lat, lon=lon,
+                lon_period=360.0, lon_closed=False,
+            )
+            return ds["u"].interp(jnp.array(0.0), q, jnp.array(0.5)), ds["u"].lon_coords
+
+        val, coords = jax.jit(build)(u, lon_raw, jnp.array(-175.0))
+        assert float(val) == pytest.approx(185.0, abs=1e-2)  # -175 folds to 185
+        coords = np.asarray(coords)
+        assert np.all(np.diff(coords) > 0)  # stored axis unwrapped to ascending
+        np.testing.assert_allclose(coords, [170.0, 175.0, 180.0, 185.0, 190.0], atol=1e-3)
+
+        # same under vmap over queries in both conventions
+        out = jax.vmap(lambda q: jax.jit(build)(u, lon_raw, q)[0])(
+            jnp.array([178.0, 182.0, -175.0])
+        )
+        np.testing.assert_allclose(np.asarray(out), [178.0, 182.0, 185.0], atol=1e-2)
+
+
+class TestClassifyAndUnwrapLon:
+    """Eager classification/unwrap of the longitude axis (host-side)."""
+
+    def test_ascending_coords_stored_byte_identical(self):
+        """A plain ascending grid is passed through unchanged (no cumsum drift):
+        the stored coords equal the input exactly."""
+        from pastax.forcing import _classify_and_unwrap_lon
+
+        lon = np.array([0.3, 0.4, 0.5, 0.6], dtype=np.float32)  # non-exact spacing
+        lon_out, closed = _classify_and_unwrap_lon(lon, 360.0)
+        assert closed is False  # spans 0.4 deg < 360 -> open
+        assert lon_out is lon  # same object, not a reconstructed axis
+
+    def test_seam_input_unwrapped_and_open(self):
+        from pastax.forcing import _classify_and_unwrap_lon
+
+        lon = np.array([170.0, 175.0, 180.0, -175.0, -170.0])
+        lon_out, closed = _classify_and_unwrap_lon(lon, 360.0)
+        assert closed is False
+        np.testing.assert_allclose(np.asarray(lon_out), [170, 175, 180, 185, 190])
 
 
 class TestLoadersAreTracerSafe:
