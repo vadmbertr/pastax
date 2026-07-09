@@ -7,6 +7,7 @@ from .geo import (
     degrees_to_meters,
     haversine,
     meters_to_degrees,
+    wrap_longitude,
 )
 from .grid import Grid
 from .interpolation import bilinear_interp_2d, linear_interp_1d, spatiotemporal_interp
@@ -41,6 +42,7 @@ __all__ = [
     "haversine",
     "meters_to_degrees",
     "degrees_to_meters",
+    "wrap_longitude",
     # interpolation
     "linear_interp_1d",
     "bilinear_interp_2d",

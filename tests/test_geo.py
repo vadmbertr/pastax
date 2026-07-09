@@ -9,6 +9,7 @@ from pastax.geo import (
     degrees_to_meters,
     haversine,
     meters_to_degrees,
+    wrap_longitude,
 )
 
 
@@ -99,3 +100,42 @@ class TestUnitConversions:
         deg = jnp.degrees(disp_m / EARTH_RADIUS)
         expected = deg.at[0].divide(jnp.cos(jnp.radians(lat)))
         assert jnp.allclose(got, expected, rtol=1e-6)
+
+
+class TestWrapLongitude:
+    def test_default_window_minus180_to_180(self):
+        lon = jnp.array([45.0, 181.0, -181.0, 200.0, 540.0])
+        got = wrap_longitude(lon)
+        # 45->45, 181->-179, -181->179, 200->-160, 540->180->-180
+        assert jnp.allclose(got, jnp.array([45.0, -179.0, 179.0, -160.0, -180.0]))
+
+    def test_in_window_values_unchanged(self):
+        lon = jnp.array([-180.0, -90.0, 0.0, 90.0, 179.999])
+        assert jnp.allclose(wrap_longitude(lon), lon)
+
+    def test_lower_zero_gives_0_360(self):
+        lon = jnp.array([-10.0, 10.0, 370.0, 360.0])
+        got = wrap_longitude(lon, lower=0.0)
+        # -10->350, 10->10, 370->10, 360->0
+        assert jnp.allclose(got, jnp.array([350.0, 10.0, 10.0, 0.0]))
+
+    def test_idempotent(self):
+        lon = jnp.array([181.0, 540.0, -400.0, 12.3])
+        once = wrap_longitude(lon)
+        assert jnp.allclose(wrap_longitude(once), once)
+
+    def test_shape_preserved_and_lonlat_column(self):
+        # a [lon, lat] trajectory: wrap only the longitude column
+        traj = jnp.array([[178.0, 10.0], [181.0, 11.0], [184.0, 12.0]])
+        wrapped = traj.at[..., 0].set(wrap_longitude(traj[..., 0]))
+        assert wrapped.shape == traj.shape
+        assert jnp.allclose(wrapped[:, 0], jnp.array([178.0, -179.0, -176.0]))
+        assert jnp.allclose(wrapped[:, 1], traj[:, 1])  # latitude untouched
+
+    def test_jit_vmap_grad_safe(self):
+        assert float(jax.jit(wrap_longitude)(jnp.array(181.0))) == pytest.approx(-179.0)
+        out = jax.vmap(wrap_longitude)(jnp.array([181.0, -181.0, 200.0]))
+        assert jnp.allclose(out, jnp.array([-179.0, 179.0, -160.0]))
+        # derivative is 1 away from the wrap seam, and finite
+        g = jax.grad(lambda x: wrap_longitude(x))(jnp.array(200.0))
+        assert jnp.isfinite(g) and float(g) == pytest.approx(1.0)
