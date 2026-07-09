@@ -10,6 +10,7 @@ __all__ = [
     "haversine",
     "meters_to_degrees",
     "degrees_to_meters",
+    "wrap_longitude",
 ]
 
 EARTH_RADIUS: float = 6_371_008.8
@@ -110,3 +111,43 @@ def degrees_to_meters(
     meters = rad * EARTH_RADIUS
     lon_scale = jnp.cos(jnp.radians(lat_deg))
     return meters.at[..., 0].multiply(lon_scale)
+
+
+def wrap_longitude(
+    lon: Float[Array, "..."],
+    period: float = 360.0,
+    lower: float = -180.0,
+) -> Float[Array, "..."]:
+    r"""Wrap longitude(s) into the half-open window ``[lower, lower + period)``.
+
+    The solver integrates position without normalising it, so a particle that
+    drifts across the antimeridian accumulates an unbounded longitude
+    (``181°``, ``200°``, …) — which is the correct *continuous* representation
+    for a trajectory. This is a **post-processing / display** helper that folds
+    such longitudes back into a canonical window. The defaults give the
+    ``[-180, 180)`` convention; pass ``lower=0.0`` for ``[0, 360)``.
+
+    Element-wise and shape-preserving; pure arithmetic, so it is safe under
+    ``jit`` / ``vmap`` / ``grad``. For a ``[lon, lat]`` trajectory of shape
+    ``(..., 2)``, wrap only the longitude column, e.g.::
+
+        traj = traj.at[..., 0].set(wrap_longitude(traj[..., 0]))
+
+    .. warning::
+
+        Do **not** feed wrapped longitudes into quantities computed by finite
+        differences along a trajectory (velocity, separation, dispersion): the
+        ``±period`` discontinuity at the window edge corrupts them. Use the raw
+        (unwrapped) longitude for those, and wrap only for presentation.
+        :func:`haversine` is unaffected — it is periodic in longitude.
+
+    Args:
+        lon: Longitude value(s) in degrees, any shape.
+        period: Longitude period in degrees (default ``360.0``).
+        lower: Lower edge of the target window (default ``-180.0``); the window
+            is ``[lower, lower + period)``.
+
+    Returns:
+        Longitudes folded into ``[lower, lower + period)``, same shape as ``lon``.
+    """
+    return jnp.mod(lon - lower, period) + lower
