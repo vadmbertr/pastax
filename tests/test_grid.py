@@ -61,6 +61,41 @@ def test_u_face_coords_periodic_includes_seam_face():
     assert jnp.allclose(jnp.diff(lon_u), 90.0)
 
 
+def test_u_face_coords_open_uses_interior_midpoints():
+    """An open (seam-crossing) grid has no wrap and no seam face: U lives on the
+    nlon-1 interior midpoints, like a bounded grid, computed on the unwrapped
+    (ascending) centres."""
+    t = jnp.asarray([0.0, 3600.0])
+    lat = jnp.asarray([0.0, 1.0])
+    lon = jnp.asarray([170.0, 175.0, 180.0, 185.0, 190.0])  # unwrapped seam grid
+    g = Grid(
+        t_coords=t, lat_coords=lat, lon_coords=lon,
+        stagger_type="C", lon_period=360.0, lon_closed=False,
+    )
+    lat_u, lon_u = g.u_face_coords()
+    assert jnp.allclose(lat_u, lat)
+    assert lon_u.shape == (lon.shape[0] - 1,)  # nlon - 1, no seam face
+    assert jnp.allclose(lon_u, jnp.asarray([172.5, 177.5, 182.5, 187.5]))
+
+
+def test_closed_for_matches_lon_closed_for_all_staggers():
+    t = jnp.asarray([0.0, 3600.0])
+    lat = jnp.asarray([0.0, 1.0])
+    lon = jnp.asarray([170.0, 175.0, 180.0, 185.0, 190.0])
+    g_open = Grid(
+        t_coords=t, lat_coords=lat, lon_coords=lon,
+        stagger_type="C", lon_period=360.0, lon_closed=False,
+    )
+    for stagger in ("center", "u_face", "v_face"):
+        assert g_open.closed_for(stagger) is False
+    g_closed = Grid(
+        t_coords=t, lat_coords=lat, lon_coords=jnp.asarray([0.0, 90.0, 180.0, 270.0]),
+        stagger_type="C", lon_period=360.0,
+    )
+    for stagger in ("center", "u_face", "v_face"):
+        assert g_closed.closed_for(stagger) is True
+
+
 def test_period_for_returns_period_for_all_staggers_when_periodic():
     t = jnp.asarray([0.0, 3600.0])
     lat = jnp.asarray([0.0, 1.0])
