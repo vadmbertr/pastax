@@ -174,4 +174,17 @@ def setup(app):  # noqa: D401 - sphinx hook
             )
         MySTNodeVisitor.visit_abbreviation = visit_abbreviation
 
+    # sphinx-ext-mystmd does not implement a visitor for docutils ``citation``
+    # nodes: ``[Key]_`` references emit ``link`` nodes with ``url="#Key"`` but
+    # the ``.. [Key]`` definitions are dropped, leaving the links dead. Emit a
+    # block carrying the citation's id so each definition becomes an anchor
+    # (not a ``container``: mystmd validates containers by ``kind`` and fails
+    # the strict build with "container of kind undefined"). Definitions live
+    # at the bottom of each module's rst page, rendering once, page-bottom.
+    def visit_citation(self, node):
+        return self.enter_myst_node(
+            {"type": "block", "children": []}, node
+        )
+    MySTNodeVisitor.visit_citation = visit_citation
+
     app.connect("build-finished", _inject_outline_headings)

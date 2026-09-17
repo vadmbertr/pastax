@@ -1,6 +1,6 @@
 """pastax: Differentiable Lagrangian simulator for ocean surface trajectories."""
 
-from ._safe_math import safe_divide, safe_log, safe_sqrt
+from ._safe_math import safe_abs_pow, safe_divide, safe_log, safe_sqrt
 from .forcing import Dataset, Field
 from .geo import (
     EARTH_RADIUS,
@@ -34,6 +34,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     # safe math
+    "safe_abs_pow",
     "safe_sqrt",
     "safe_log",
     "safe_divide",

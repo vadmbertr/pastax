@@ -9,11 +9,11 @@ dependencies = [
     "jax>=0.4.30",
     "equinox>=0.11.0",
     "jaxtyping>=0.2.30",
+    "lineax>=0.0.7"
 ]
 
 [project.optional-dependencies]
 forcing = ["xarray>=2024.1.0", "zarr>=2.17.0", "netcdf4>=1.6.0", "numpy>=1.26.0"]
-sde = ["lineax>=0.0.7"]
 docs = [
     "cartopy>=0.22",
     "cmocean>=4.0",
@@ -33,7 +33,6 @@ dev = [
     "cmocean>=4.0",
     "ipykernel>=6.29",
     "jupyter-server>=2.14",
-    "lineax>=0.0.7",
     "matplotlib>=3.8",
     "netcdf4>=1.6.0",
     "numpy>=1.26.0",
