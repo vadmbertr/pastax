@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from pastax._safe_math import safe_divide, safe_log, safe_sqrt
+from pastax._safe_math import safe_abs_pow, safe_divide, safe_log, safe_sqrt
 
 
 class TestSafeSqrt:
@@ -44,3 +44,21 @@ class TestSafeDivide:
     def test_grad_finite(self):
         g = jax.grad(lambda a: safe_divide(a, jnp.array(2.0)))(jnp.array(3.0))
         assert jnp.isfinite(g)
+
+class TestSafeAbsPow:
+    def test_values(self):
+        assert jnp.allclose(
+            safe_abs_pow(jnp.array([0., 1., -2.]), 0.5),
+            jnp.array([0.0, 1.0, jnp.sqrt(2.0)])
+        )
+
+    def test_matches_naive_pow(self):
+        key = jax.random.key(0)
+        x = jax.random.normal(key, (10,))
+        for p in (0.5, 1.0, 2.0):
+            assert jnp.allclose(safe_abs_pow(x, p), jnp.abs(x) ** p)
+
+    def test_grad_at_zero_finite_p_below_one(self):
+        x = jnp.array([0.0, 1.0])
+        g = jax.grad(lambda a: jnp.sum(safe_abs_pow(a, 0.5)))(x)
+        assert jnp.all(jnp.isfinite(g))

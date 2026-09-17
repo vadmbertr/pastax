@@ -85,7 +85,7 @@ def liu_index(
     y_ref: Float[Array, "*#batch time 2"],
     min_length: float = 0,
 ) -> Float[Array, "*batch time"]:
-    r"""Liu & Weisberg (2011) normalised cumulative Lagrangian separation.
+    r"""`Liu & Weisberg, 2011`_ normalised cumulative Lagrangian separation.
 
     .. math::
 
@@ -97,8 +97,6 @@ def liu_index(
     at time :math:`t`.
     The denominator is thus a double cumulative sum of the per-step distances.
 
-    Reference: Liu & Weisberg (2011), J. Geophys. Res.
-
     Args:
         y: Predicted trajectory/-ies, shape ``(..., T, 2)``.
         y_ref: Reference trajectory, shape ``(..., T, 2)``; broadcasts against ``y``.
@@ -107,6 +105,8 @@ def liu_index(
 
     Returns:
         Dimensionless Liu Index, shape ``(..., T)``.
+
+    .. _Liu & Weisberg, 2011: https://doi.org/10.1029/2010JC006837
     """
     cumulative_separation = jnp.cumsum(haversine(y, y_ref), axis=-1)
     cumulative_length = jnp.cumsum(_cumulative_reference_length(y_ref) + min_length, axis=-1)

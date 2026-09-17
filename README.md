@@ -14,7 +14,7 @@
 
 📖 **Documentation:** <https://vadmbertr.github.io/pastax/> — full API reference and a runnable [tutorial notebook](docs/tutorial.ipynb).
 
-## Project Status
+## Features overview
 
 - Bilinear interpolation of rectilinear forcing fields, with neighbourhood cube extraction
 - A-grid and NEMO-convention Arakawa C-grid forcing layouts (`Dataset.from_arrays_cgrid` / `from_xarray_cgrid`)
@@ -33,8 +33,10 @@
 From Git:
 
 ```bash
-pip install git+https://github.com/vadmbertr/pastax             # core (JAX, Equinox, jaxtyping)
-pip install "git+https://github.com/vadmbertr/pastax[forcing]"  # + xarray, zarr, netCDF4
+# core: equinox, jax, jaxtyping, lineax
+pip install git+https://github.com/vadmbertr/pastax
+# + netCDF4, numpy, xarray, zarr
+pip install "git+https://github.com/vadmbertr/pastax[forcing]"
 ```
 
 From source:
@@ -134,14 +136,14 @@ class State(NamedTuple):
     v: jnp.ndarray   # velocity [v_lon, v_lat] (deg/s)
 
 def sde_term(t, y):
-    accel = -(y.v - u_current(t, y.x)) / tau          # your f(x, t[, v]); deg/s^2
-    drift = State(x=y.v, v=accel)                      # dx = v, dv = accel
-    diff  = State(x=jnp.zeros(2), v=jnp.full(2, 1e-5)) # diagonal noise on velocity only
+    accel = -(y.v - u_current(t, y.x)) / tau            # your f(x, t[, v]); deg/s^2
+    drift = State(x=y.v, v=accel)                       # dx = v, dv = accel
+    diff  = State(x=jnp.zeros(2), v=jnp.full(2, 1e-5))  # diagonal noise on velocity only
     return drift, diff
 
 y0   = State(x=jnp.array([-4.0, 48.0]), v=jnp.zeros(2))
 traj = solve(sde_term, y0, jnp.array(0.0), 120, 3600., 3600., EulerHeun(), key=jr.key(0))
-# traj.x, traj.v each have shape (121, 2)   — underdamped Langevin: dx=v dt, dv=accel dt + g dW
+# traj.x, traj.v each have shape (121, 2)   — Langevin: dx=v dt, dv=accel dt + g dW
 ```
 
 For a general (matrix / cross-leaf) diffusion, return a
@@ -318,9 +320,9 @@ patches = dataset.neighborhood(t, lon, lat, lat_window=1, lon_window=1)
 ```python
 from pastax import meters_to_degrees, degrees_to_meters
 
-disp_m = jnp.array([500.0, 1000.0])  # [east, north] metres
+disp_m = jnp.array([500.0, 1000.0])            # [east, north] metres
 lat_ref = jnp.array(45.0)
-disp_deg = meters_to_degrees(disp_m, lat_ref)   # [dlon, dlat] degrees
+disp_deg = meters_to_degrees(disp_m, lat_ref)  # [dlon, dlat] degrees
 ```
 
 ### Backwards-in-time integration
@@ -344,11 +346,17 @@ import jax
 
 # Reverse-mode gradient through the ODE solver (default adjoint="checkpointed":
 # low-memory binomial checkpointing, O(sqrt(n)) memory by default)
-grad = jax.grad(lambda y0: solve(ode_term, y0, t0, n_save, int_dt, save_dt, args=dataset).sum())(y0)
+grad = jax.grad(
+    lambda y0: solve(ode_term, y0, t0, n_save, int_dt, save_dt, args=dataset).sum()
+)(y0)
 
-# Forward-mode JVP requires adjoint="forward" (the checkpointed adjoint is reverse-mode only)
+# Forward-mode JVP requires adjoint="forward" (the checkpointed adjoint is reverse-mode 
+# only)
 traj, tangent = jax.jvp(
-    lambda y0: solve(ode_term, y0, t0, n_save, int_dt, save_dt, args=dataset, adjoint="forward"),
+    lambda y0: solve(
+        ode_term, y0, t0, n_save, int_dt, save_dt, 
+        args=dataset, adjoint="forward"
+    ),
     (y0,), (jnp.ones(2),),
 )
 ```
@@ -367,9 +375,9 @@ checkpoint every step).
 from pastax import separation_distance, normalized_separation_distance, liu_index
 
 # Single-trajectory metrics
-sep = separation_distance(trajectory, reference)          # (T,), metres
+sep = separation_distance(trajectory, reference)             # (T,), metres
 nsd = normalized_separation_distance(trajectory, reference)  # (T,), dimensionless
-li  = liu_index(trajectory, reference)                    # (T,), dimensionless
+li  = liu_index(trajectory, reference)                       # (T,), dimensionless
 
 # Ensemble metrics — broadcasting the ensemble leading axis
 sep_ens = separation_distance(ensemble, reference)  # (S, T)
@@ -383,37 +391,32 @@ from pastax import dawid_sebastiani, energy_score, squared_error, variogram_scor
 
 # Along trajectory scores
 ds_ts = dawid_sebastiani(ens, ref, reduce=None)  # (T,)
-es_ts = energy_score(ens, ref, reduce=None)  # (T,)
-se_ts = squared_error(ens, ref, reduce=None)  # (T,)
-vs_ts = variogram_score(ens, ref, reduce=None)  # (T,)
+es_ts = energy_score(ens, ref, reduce=None)      # (T,)
+se_ts = squared_error(ens, ref, reduce=None)     # (T,)
 
 # Final scores
 ds_t1 = dawid_sebastiani(ens, ref, reduce="last")  # scalar
-es_t1 = energy_score(ens, ref, reduce="last")  # scalar
-se_t1 = squared_error(ens, ref, reduce="last")  # scalar
-vs_t1 = variogram_score(ens, ref, reduce="last")  # scalar
+es_t1 = energy_score(ens, ref, reduce="last")      # scalar
+se_t1 = squared_error(ens, ref, reduce="last")     # scalar
 
 # Aggregated scores
 ds_agg = dawid_sebastiani(ens, ref, reduce="sum")  # scalar
-es_agg = energy_score(ens, ref, reduce="sum")  # scalar
-se_agg = squared_error(ens, ref, reduce="sum")  # scalar
-vs_agg = variogram_score(ens, ref, reduce="sum")  # scalar
+es_agg = energy_score(ens, ref, reduce="sum")      # scalar
+se_agg = squared_error(ens, ref, reduce="sum")     # scalar
 
-# Custom score kernel (relevant for the energy score and the square error only)
+# Trajectory-level score: temporal dependence across lags
+vs = variogram_score(ens, ref)  # scalar
+
+# Custom score kernel (squared error, energy score, and variogram score)
 es_agg = energy_score(ens, ref, kernel=separation_distance)
 se_agg = squared_error(ens, ref, kernel=separation_distance)
+variogram_score(ens, ref, kernel=separation_distance)
 ```
 
 ## API Reference
 
-The full API reference — every public symbol, signature, and docstring — lives on the documentation site: <https://vadmbertr.github.io/pastax/api>.
-
-## Dependencies
-
-- [JAX](https://github.com/google/jax) ≥ 0.4.30
-- [Equinox](https://github.com/patrick-kidger/equinox) ≥ 0.11.0
-- [jaxtyping](https://github.com/patrick-kidger/jaxtyping) ≥ 0.2.30
-- xarray, Zarr, netCDF4 (optional, for forcing loading)
+The full API reference lives on the documentation site: 
+<https://vadmbertr.github.io/pastax/api>.
 
 ## License
 

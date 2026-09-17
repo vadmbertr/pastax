@@ -1,47 +1,48 @@
 """Proper scoring rules for probabilistic (ensemble) trajectory forecasts.
 
-Implements four scoring rules (see Pic et al., 2025) for ensemble forecasts
-of shape ``(S, T, 2)`` evaluated against an observed trajectory ``(T, 2)``:
+Implements four scoring rules (see `Pic et al., 2025`_) for ensemble 
+forecasts of shape ``(S, T, 2)`` evaluated against an observed trajectory 
+``(T, 2)``:
 
 - :func:`squared_error` — deterministic-mean squared distance.
 - :func:`dawid_sebastiani` — Gaussian-likelihood-based, no kernel.
 - :func:`energy_score` — kernel-based proper scoring rule (unbiased estimator).
-- :func:`variogram_score` — component-wise pairwise-difference score.
+- :func:`variogram_score` — temporal variogram score for trajectory dependence.
 
 All scores follow the *negative orientation* convention: lower is better.
 
-Each score accepts a ``reduce`` argument:
+The pointwise scores (:func:`squared_error`, :func:`dawid_sebastiani`,
+:func:`energy_score`) accept a ``reduce`` argument:
 
 - ``reduce=None`` returns the per-time score of shape ``(T,)``.
 - ``reduce="last"`` returns the scalar score at the final time.
 - ``reduce="sum"`` returns ``(weights * score).sum()``, defaulting to a
-  uniform sum when ``weights`` is ``None``. By Proposition 2 of Pic et al.,
+  uniform sum when ``weights`` is ``None``. By Proposition 2 of 
+  `Pic et al., 2025`_,
   a non-negative-weighted sum of proper scoring rules is itself proper.
 
-The default distance kernel for :func:`squared_error` and
-:func:`energy_score` is the Euclidean distance. A user may pass any callable
-satisfying the broadcasting kernel contract —
-notably :func:`pastax.metric.separation_distance`
-for great-circle distances on the sphere.
+The default distance kernel for :func:`squared_error`, :func:`energy_score`,
+and :func:`variogram_score` is the Euclidean distance. A user may pass any
+callable satisfying the broadcasting kernel contract — notably
+:func:`pastax.metric.separation_distance` for great-circle distances on the
+sphere.
+
+:func:`variogram_score` is trajectory-level rather than pointwise in time. It
+compares forecast and observed increments across selected temporal lags and
+returns one scalar score.
 
 .. warning::
+    **Longitude convention / antimeridian.** The default Euclidean kernel acts
+    on raw ``[lon, lat]`` coordinates and is not antimeridian-safe. For
+    :func:`energy_score` and :func:`variogram_score`, pass a great-circle kernel
+    such as :func:`pastax.metric.separation_distance` for geographic
+    trajectories. :func:`squared_error` first computes the component-wise
+    ensemble mean, so it still requires a consistent longitude convention even
+    when the final distance is geodesic. :func:`dawid_sebastiani` has no kernel
+    hook and likewise operates directly on raw components.
 
-    **Antimeridian / longitude convention.** These scores operate on the raw
-    ``[lon, lat]`` components and are *not* aware of the ±180° seam. Two
-    positions either side of the dateline (e.g. ``179`` and ``-179``) read as
-    ~358° apart rather than ~2°, and a forecast and observation supplied in
-    different longitude conventions — e.g. one wrapped to ``[-180, 180)``, the
-    other carrying the solver's unbounded longitude (``181``, ``200``, …) — are
-    compared inconsistently. Keep every input (all ensemble members *and* the
-    observation) in a single, consistent longitude convention and avoid data
-    that straddles the seam; ``pastax.wrap_longitude`` can normalise them the
-    same way. For :func:`squared_error` / :func:`energy_score`, additionally
-    pass a great-circle kernel (``kernel=pastax.haversine`` or
-    :func:`pastax.metric.separation_distance`) so the distance itself is
-    seam-safe. :func:`dawid_sebastiani` and :func:`variogram_score` have no
-    kernel hook and rely entirely on the consistent-convention requirement.
-    (The metrics in :mod:`pastax.metric` are seam-safe — they use
-    :func:`pastax.haversine`, which is periodic in longitude.)
+.. _`Lyons, 2020`: https://doi.org/10.2140/pjm.2020.307.383
+.. _`Pic et al., 2025`: https://doi.org/10.5194/ascmo-11-23-2025
 """
 
 from collections.abc import Callable
@@ -50,13 +51,13 @@ from typing import Literal
 import jax
 import jax.numpy as jnp
 
-from ._safe_math import safe_sqrt
+from ._safe_math import safe_abs_pow, safe_sqrt
 from ._types import Array, Float
 
 __all__ = [
-    "squared_error",
     "dawid_sebastiani",
     "energy_score",
+    "squared_error",
     "variogram_score",
 ]
 
@@ -72,21 +73,6 @@ def l2_distance(
     y: Float[Array, "... 2"],
 ) -> Float[Array, "..."]:
     return safe_sqrt(jnp.sum((x - y) ** 2, axis=-1))
-
-
-def _safe_abs_pow(x: Float[Array, "..."], p: float) -> Float[Array, "..."]:
-    r"""Gradient-safe :math:`|x|^p`.
-
-    ``|x| ** p`` has an unbounded derivative at ``x = 0`` for ``p < 1``
-    (:math:`p\,|x|^{p-1} \to \infty`), which turns into ``nan`` in the
-    backward pass — and a ``0 * nan`` further down (e.g. a zero
-    ``component_weights`` entry in :func:`variogram_score`) stays ``nan``.
-    The standard "double where" trick evaluates the power only where
-    ``x != 0`` so the value is unchanged (``|0|^p == 0`` for ``p > 0``)
-    while the gradient at exact zeros is ``0`` instead of ``nan``.
-    """
-    mask = x != 0.0
-    return jnp.where(mask, jnp.abs(jnp.where(mask, x, 1.0)) ** p, 0.0)
 
 
 def _reduce(
@@ -105,49 +91,6 @@ def _reduce(
     raise ValueError(f"reduce must be None, 'last', or 'sum'; got {reduce!r}")
 
 
-def squared_error(
-    forecast: Float[Array, "S T 2"],
-    obs: Float[Array, "T 2"],
-    *,
-    kernel: Kernel = l2_distance,
-    reduce: Reduce = None,
-    weights: Float[Array, " T"] | None = None,
-) -> Float[Array, " T"] | Float[Array, ""]:
-    r"""Squared distance between ensemble mean and observation.
-
-    .. math::
-
-        \mathrm{SE}_t = \operatorname{kernel}\!\left(
-        \operatorname{mean}_s \mathrm{forecast}[s, t],\ \mathrm{obs}[t]\right)^2
-
-    With the default L2 kernel this is the squared error of the ensemble
-    mean (Pic et al. 2025, Eq. 11).
-
-    .. note::
-
-        The default :func:`l2_distance` kernel is *not* antimeridian-safe. Near
-        the dateline pass a great-circle kernel (``kernel=pastax.haversine`` or
-        :func:`pastax.metric.separation_distance`) and keep the forecast and
-        observation in one consistent longitude convention — see the
-        module-level warning.
-
-    Args:
-        forecast: Ensemble forecast, shape ``(S, T, 2)``.
-        obs: Observed trajectory, shape ``(T, 2)``.
-        kernel: Broadcasting distance kernel. Defaults to :func:`l2_distance`.
-        reduce: Time reduction. ``None`` returns the per-time vector;
-            ``"last"`` returns the scalar at the final time; ``"sum"`` returns
-            the (optionally weighted) sum over time.
-        weights: Per-time weights for ``reduce="sum"``; ignored otherwise.
-
-    Returns:
-        Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
-    """
-    mu = forecast.mean(axis=0)
-    score_per_t = kernel(mu, obs) ** 2
-    return _reduce(score_per_t, reduce, weights)
-
-
 def dawid_sebastiani(
     forecast: Float[Array, "S T 2"],
     obs: Float[Array, "T 2"],
@@ -155,7 +98,8 @@ def dawid_sebastiani(
     reduce: Reduce = None,
     weights: Float[Array, " T"] | None = None,
 ) -> Float[Array, " T"] | Float[Array, ""]:
-    r"""Dawid-Sebastiani score: Gaussian log-likelihood of the observation under the ensemble.
+    r"""Dawid-Sebastiani score: Gaussian log-likelihood under the ensemble
+    (Eq. 9 of `Pic et al., 2025`_).
 
     The per-time score is
 
@@ -164,13 +108,12 @@ def dawid_sebastiani(
         \mathrm{DS}_t = \log\det \Sigma_t
         + (\mu_t - y_t)^{\top}\, \Sigma_t^{-1}\, (\mu_t - y_t)
 
-    where :math:`\Sigma_t` is the unbiased (``ddof=1``) sample covariance of the
-    ensemble at time :math:`t`. Requires :math:`S \geq 3` for :math:`\Sigma_t` to
-    be a.s. full-rank on :math:`\mathbb{R}^2`; for :math:`S \leq 2` the score is
-    undefined (singular covariance).
+    where :math:`\Sigma_t` is the unbiased (``ddof=1``) sample covariance of
+    the ensemble at time :math:`t`. Requires :math:`S \geq 3` for
+    :math:`\Sigma_t` to be a.s. full-rank on :math:`\mathbb{R}^2`; for
+    :math:`S \leq 2` the score is undefined (singular covariance).
 
     .. note::
-
         Not antimeridian-safe and has no kernel hook: the sample covariance and
         the ``mu - obs`` term are taken on the raw ``[lon, lat]`` components, so
         an ensemble straddling ±180° gets a spuriously inflated longitude
@@ -187,14 +130,16 @@ def dawid_sebastiani(
     Returns:
         Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
     """
-
     if forecast.shape[0] < 3:
         raise ValueError(
             "dawid_sebastiani requires an ensemble of size S >= 3 (the ddof=1 "
             f"sample covariance is singular below that); got S = {forecast.shape[0]}."
         )
 
-    def _one_t(fcst_t: Float[Array, "S 2"], obs_t: Float[Array, "2"]) -> Float[Array, ""]:
+    def _one_t(
+        fcst_t: Float[Array, "S 2"],
+        obs_t: Float[Array, "2"],
+    ) -> Float[Array, ""]:
         s = fcst_t.shape[0]
         mu = fcst_t.mean(axis=0)
         centered = fcst_t - mu
@@ -216,29 +161,35 @@ def energy_score(
     reduce: Reduce = None,
     weights: Float[Array, " T"] | None = None,
 ) -> Float[Array, " T"] | Float[Array, ""]:
-    r"""Energy score (Pic et al. 2025, Eq. 12) — unbiased Monte Carlo estimator.
+    r"""Energy score (Eq. 12 of `Pic et al., 2025`_)  — unbiased Monte Carlo 
+    estimator.
 
     .. math::
-
         \mathrm{ES}_t = \frac{1}{S} \sum_s d\!\left(X_t^{(s)}, y_t\right)^{\alpha}
         - \frac{1}{2 S (S-1)} \sum_{s \neq s'}
         d\!\left(X_t^{(s)}, X_t^{(s')}\right)^{\alpha}
 
     The pairwise term is computed as a full ``(S, S)`` mean (including the
     zero diagonal) multiplied by ``S/(S-1)``, which recovers the unbiased
-    off-diagonal estimator exactly. Strictly proper for the L2 kernel and
-    :math:`\alpha \in (0, 2)`; propriety with other kernels is not guaranteed.
+    off-diagonal estimator exactly.
+
+    Let :math:`d_\alpha(x,y)=\operatorname{kernel}(x,y)^\alpha`. The energy
+    score is proper when :math:`d_\alpha` is of negative type, and strictly
+    proper when it is of strong negative type. For the Euclidean L2 kernel 
+    this gives strict propriety for :math:`\alpha\in(0,2)`.
 
     .. note::
+        The default :func:`l2_distance` kernel is *not* antimeridian-safe. For
+        geographic trajectories, pass a great-circle kernel such as
+        :func:`pastax.metric.separation_distance`.
 
-        The default :func:`l2_distance` kernel is *not* antimeridian-safe. Near
-        the dateline pass a great-circle kernel (``kernel=pastax.haversine`` or
-        :func:`pastax.metric.separation_distance`) and keep inputs in one
-        consistent longitude convention — see the module-level warning. Note the
-        trade-off: strict propriety holds for the Euclidean default (a distance
-        of negative type) but is *not* guaranteed for the geodesic/haversine
-        distance. A chordal distance (map ``[lon, lat]`` to a 3-D unit vector
-        and take the Euclidean distance) is both seam-safe *and* strictly proper.
+        For :math:`\alpha=1`, great-circle (angular/haversine) distance on the
+        sphere is of negative type, so the corresponding energy score is
+        proper. It is not of strong negative type on the full sphere, hence
+        strict propriety does not hold globally. `Lyons, 2020`_ proves that a
+        subset of a sphere containing at most one pair of antipodal points is
+        of strong negative type; on such a support (in particular, within an
+        open hemisphere) the great-circle energy score is strictly proper.
 
     Args:
         forecast: Ensemble forecast, shape ``(S, T, 2)``, with ``S >= 2``.
@@ -249,7 +200,7 @@ def energy_score(
         weights: See :func:`squared_error`.
 
     Returns:
-        Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
+        Per-time fair energy score of shape ``(T,)`` or a scalar, per ``reduce``.
     """
     s = forecast.shape[0]
     if s < 2:
@@ -262,8 +213,47 @@ def energy_score(
 
     pairwise = kernel(forecast[:, None], forecast[None]) ** alpha
     disp_per_t = jnp.mean(pairwise, axis=(0, 1)) * s / (s - 1)
-
     score_per_t = bias_per_t - disp_per_t / 2.0
+    return _reduce(score_per_t, reduce, weights)
+
+
+def squared_error(
+    forecast: Float[Array, "S T 2"],
+    obs: Float[Array, "T 2"],
+    *,
+    kernel: Kernel = l2_distance,
+    reduce: Reduce = None,
+    weights: Float[Array, " T"] | None = None,
+) -> Float[Array, " T"] | Float[Array, ""]:
+    r"""Squared distance between ensemble mean and observation.
+
+    .. math::
+
+        \mathrm{SE}_t = \operatorname{kernel}\!\left(
+        \operatorname{mean}_s \mathrm{forecast}[s, t],\ \mathrm{obs}[t]\right)^2
+
+    With the default L2 kernel this is the squared error of the ensemble mean
+    (Eq. 11 of `Pic et al., 2025`_).
+
+    .. note::
+        The default :func:`l2_distance` kernel is *not* antimeridian-safe. For
+        geographic trajectories, pass a great-circle kernel such as
+        :func:`pastax.metric.separation_distance`.
+
+    Args:
+        forecast: Ensemble forecast, shape ``(S, T, 2)``.
+        obs: Observed trajectory, shape ``(T, 2)``.
+        kernel: Broadcasting distance kernel. Defaults to :func:`l2_distance`.
+        reduce: Time reduction. ``None`` returns the per-time vector;
+            ``"last"`` returns the scalar at the final time; ``"sum"`` returns
+            the (optionally weighted) sum over time.
+        weights: Per-time weights for ``reduce="sum"``; ignored otherwise.
+
+    Returns:
+        Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
+    """
+    mu = forecast.mean(axis=0)
+    score_per_t = kernel(mu, obs) ** 2
     return _reduce(score_per_t, reduce, weights)
 
 
@@ -271,54 +261,147 @@ def variogram_score(
     forecast: Float[Array, "S T 2"],
     obs: Float[Array, "T 2"],
     *,
-    p: float = 2.0,
-    component_weights: Float[Array, "2 2"] | None = None,
-    reduce: Reduce = None,
-    weights: Float[Array, " T"] | None = None,
-) -> Float[Array, " T"] | Float[Array, ""]:
-    r"""Variogram score of order ``p`` (Pic et al. 2025, Eq. 13).
+    kernel: Kernel = l2_distance,
+    p: float = 0.5,
+    lags: tuple[int, ...] | None = None,
+    lag_weights: Float[Array, " L"] | None = None,
+) -> Float[Array, ""]:
+    r"""Fair temporal variogram score (Eq. 13 of `Pic et al., 2025`_) of order 
+    ``p`` for ensemble trajectories.
+
+    The population score is
 
     .. math::
+        \mathrm{VS}_{p}
+        =
+        \sum_{\ell\in\mathcal L}
+        \frac{a_\ell}{T-\ell}
+        \sum_{i=0}^{T-\ell-1}
+        \left[
+        \mathbb{E}_F\!\left\{
+        d(X_i,X_{i+\ell})^p
+        \right\}
+        -
+        d(y_i,y_{i+\ell})^p
+        \right]^2 .
 
-        \mathrm{VS}_t = \sum_{i,j} w_{ij} \left(
-        \mathbb{E}_F\!\left[\,|X_{t,i} - X_{t,j}|^{p}\right]
-        - |y_{t,i} - y_{t,j}|^{p}\right)^2
+    Here :math:`d` is ``kernel``, :math:`\mathcal L` is the selected set of
+    positive temporal lags, and :math:`a_\ell` is the corresponding lag weight.
 
-    Sums over both component pairs :math:`(i, j)`; with the default
-    ``component_weights = 1 - I``, the diagonal contribution (zero) is masked
-    out and the off-diagonal pair is counted twice (symmetric formulation).
+    For a finite ensemble, this function uses the *fair* (unbiased) estimator
+    of each squared variogram discrepancy.
+
+    The implementation evaluates the U-statistic in :math:`O(S)` rather than
+    explicitly constructing the :math:`S\times S` off-diagonal matrix:
+
+    .. math::
+        \frac{
+        \left(\sum_s R_s\right)^2 - \sum_s R_s^2
+        }{S(S-1)}.
+
+    For each lag, the score is averaged over every valid starting time before
+    the lag weight is applied, so short lags do not receive more weight merely
+    because they contain more valid time pairs.
+
+    This is the variogram construction applied to the *temporal dimensions* of
+    a trajectory rather than to coordinate components at a single time. It
+    therefore targets temporal dependence / increment structure and complements
+    the pointwise-in-time :func:`energy_score`.
 
     .. note::
+        The default :func:`l2_distance` kernel is *not* antimeridian-safe. For
+        geographic trajectories, pass a great-circle kernel such as
+        :func:`pastax.metric.separation_distance`.
 
-        Not antimeridian-safe and has no kernel hook: the component differences
-        :math:`|X_{t,i} - X_{t,j}|` use the *absolute* longitude value, so the
-        score depends on the longitude convention and is wrong when forecast and
-        observation disagree on it or when data straddles ±180°. Keep every input
-        in one consistent longitude convention — see the module-level warning.
+        The population variogram score is proper but generally not strictly
+        proper: it identifies the selected pairwise transformed moments, not
+        the complete joint trajectory distribution.
 
     Args:
-        forecast: Ensemble forecast, shape ``(S, T, 2)``.
+        forecast: Ensemble forecast, shape ``(S, T, 2)``, with ``S >= 2``.
         obs: Observed trajectory, shape ``(T, 2)``.
-        p: Variogram order. Default ``2.0``. Any ``p > 0`` is
-            gradient-safe: the powers are evaluated through a "double
-            where" so exactly-zero differences (the component diagonal,
-            or ties in the data) contribute a zero gradient instead of
-            ``nan`` when ``p < 1``.
-        component_weights: ``(2, 2)`` non-negative weight matrix. Defaults to
-            ``ones((2, 2)) - eye(2)``.
-        reduce: See :func:`squared_error`.
-        weights: See :func:`squared_error`.
+        kernel: Broadcasting distance kernel between trajectory states.
+            Defaults to :func:`l2_distance`.
+        p: Variogram order, ``p > 0``. Defaults to ``0.5``.
+        lags: Positive integer temporal lags. If ``None``, uses every lag
+            ``1, ..., T - 1``. Lags are Python integers and should be static
+            when the function is wrapped in :func:`jax.jit`.
+        lag_weights: Non-negative weight for each entry of ``lags``. If
+            ``None``, uses equal weights summing to one. Supplied weights are
+            normalized to sum to one. Invalid lags raise :class:`ValueError`
+            (lags must stay concrete Python integers under :func:`jax.jit` —
+            close them over or use ``static_argnames``); invalid lag_weights
+            raise :class:`ValueError` in eager mode.
 
     Returns:
-        Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
+        Scalar fair temporal variogram score.
     """
-    if component_weights is None:
-        component_weights = jnp.ones((2, 2)) - jnp.eye(2)
+    s, t = forecast.shape[:2]
 
-    diff_fcst = _safe_abs_pow(forecast[..., :, None] - forecast[..., None, :], p)
-    ex_fcst = diff_fcst.mean(axis=0)
-    diff_obs = _safe_abs_pow(obs[..., :, None] - obs[..., None, :], p)
-    residual = ex_fcst - diff_obs
+    if s < 2:
+        raise ValueError(
+            "variogram_score requires an ensemble of size S >= 2 for the fair "
+            f"off-diagonal estimator; got S = {s}."
+        )
 
-    score_per_t = (component_weights * residual ** 2).sum(axis=(-2, -1))
-    return _reduce(score_per_t, reduce, weights)
+    if obs.shape[0] != t:
+        raise ValueError(
+            "forecast and obs must have the same time dimension; "
+            f"got T={t} and T_obs={obs.shape[0]}."
+        )
+
+    if lags is None:
+        lags = tuple(range(1, t))
+
+    if len(lags) == 0:
+        raise ValueError("lags must contain at least one positive lag.")
+
+    for lag in lags:
+        if not isinstance(lag, int) or isinstance(lag, bool):
+            raise ValueError(f"lags must be integers; got {lag!r}.")
+        if not 1 <= lag <= t - 1:
+            raise ValueError(
+                f"lags must satisfy 1 <= lag <= T - 1 = {t - 1}; got {lag}."
+            )
+
+    if lag_weights is None:
+        lag_weights = jnp.ones((len(lags),), dtype=forecast.dtype)
+    else:
+        lag_weights = jnp.asarray(lag_weights, dtype=forecast.dtype)
+        if lag_weights.shape != (len(lags),):
+            raise ValueError(
+                "lag_weights must have one entry per lag; "
+                f"got shape {lag_weights.shape} for {len(lags)} lags."
+            )
+
+    wmin = jnp.min(lag_weights)
+    wsum = jnp.sum(lag_weights)
+    if not isinstance(wmin, jax.core.Tracer):
+        if float(wmin) < 0.0:
+            raise ValueError("lag_weights must be non-negative.")
+        if float(wsum) <= 0.0:
+            raise ValueError("lag_weights must sum to a positive value.")
+    lag_weights = lag_weights / wsum
+
+    lag_scores = []
+    for lag in lags:
+        fcst_vgram = safe_abs_pow(
+            kernel(forecast[:, :-lag], forecast[:, lag:]),
+            p,
+        )
+        obs_vgram = safe_abs_pow(
+            kernel(obs[:-lag], obs[lag:]),
+            p,
+        )
+
+        residual = fcst_vgram - obs_vgram[None, :]
+
+        residual_sum = residual.sum(axis=0)
+        residual_sq_sum = jnp.sum(residual**2, axis=0)
+        fair_pair_score = (
+            residual_sum**2 - residual_sq_sum
+        ) / (s * (s - 1))
+
+        lag_scores.append(jnp.mean(fair_pair_score))
+
+    return jnp.sum(lag_weights * jnp.stack(lag_scores))
