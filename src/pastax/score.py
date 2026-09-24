@@ -1,8 +1,15 @@
 """Proper scoring rules for probabilistic (ensemble) trajectory forecasts.
 
 Implements four scoring rules (see `Pic et al., 2025`_) for ensemble 
-forecasts of shape ``(S, T, 2)`` evaluated against an observed trajectory 
-``(T, 2)``:
+forecasts of shape ``(S, T, C)`` evaluated against an observed trajectory 
+``(T, C)``:
+
+The trailing axis ``C`` is the feature dimension — typically ``2`` for
+``[lon, lat]`` trajectories, or ``3`` for e.g. chordal-projected
+unit-sphere coordinates. Kernels must support the ``C`` they are given:
+:func:`l2_distance` accepts any ``C``;
+:func:`pastax.metric.separation_distance` and the haversine expect
+``C = 2``.
 
 - :func:`squared_error` — deterministic-mean squared distance.
 - :func:`dawid_sebastiani` — Gaussian-likelihood-based, no kernel.
@@ -72,7 +79,7 @@ __all__ = [
 
 Reduce = Literal["last", "sum", "joint"] | None
 Kernel = Callable[
-    [Float[Array, "... 2"], Float[Array, "... 2"]],
+    [Float[Array, "... C"], Float[Array, "... C"]],
     Float[Array, "..."],
 ]
 
@@ -87,8 +94,8 @@ def _validate_joint_inputs(forecast, obs) -> None:
 
 
 def l2_distance(
-    x: Float[Array, "... 2"],
-    y: Float[Array, "... 2"],
+    x: Float[Array, "... C"],
+    y: Float[Array, "... C"],
 ) -> Float[Array, "..."]:
     return safe_sqrt(jnp.sum((x - y) ** 2, axis=-1))
 
@@ -113,8 +120,8 @@ def _reduce(
 
 
 def dawid_sebastiani(
-    forecast: Float[Array, "S T 2"],
-    obs: Float[Array, "T 2"],
+    forecast: Float[Array, "S T C"],
+    obs: Float[Array, "T C"],
     *,
     reduce: Reduce = None,
     weights: Float[Array, " T"] | None = None,
@@ -130,9 +137,9 @@ def dawid_sebastiani(
         + (\mu_t - y_t)^{\top}\, \Sigma_t^{-1}\, (\mu_t - y_t)
 
     where :math:`\Sigma_t` is the unbiased (``ddof=1``) sample covariance of
-    the ensemble at time :math:`t`. Requires :math:`S \geq 3` for
-    :math:`\Sigma_t` to be a.s. full-rank on :math:`\mathbb{R}^2`; for
-    :math:`S \leq 2` the score is undefined (singular covariance).
+    the ensemble at time :math:`t`. Requires :math:`S \geq C + 1` for
+    :math:`\Sigma_t` to be a.s. full-rank on :math:`\mathbb{R}^C`; for
+    :math:`S \leq C` the score is undefined (singular covariance).
 
     .. note::
         Not antimeridian-safe and has no kernel hook: the sample covariance and
@@ -143,8 +150,8 @@ def dawid_sebastiani(
         longitude convention, away from the seam — see the module-level warning.
 
     Args:
-        forecast: Ensemble forecast, shape ``(S, T, 2)``, with ``S >= 3``.
-        obs: Observed trajectory, shape ``(T, 2)``.
+        forecast: Ensemble forecast, shape ``(S, T, C)``, with ``S >= C + 1``.
+        obs: Observed trajectory, shape ``(T, C)``.
         reduce: See :func:`squared_error`. ``"joint"`` is NOT supported and
             raises :class:`ValueError` (the joint covariance of a flattened
             ``(T*C,)``-trajectory would require ``S >= T*C + 1`` members).
@@ -159,15 +166,17 @@ def dawid_sebastiani(
             "of a flattened (T*C,)-trajectory would require an ensemble of size "
             "S >= T*C + 1, which is impractically large for typical trajectories."
         )
-    if forecast.shape[0] < 3:
+    c = forecast.shape[-1]
+    if forecast.shape[0] < c + 1:
         raise ValueError(
-            "dawid_sebastiani requires an ensemble of size S >= 3 (the ddof=1 "
-            f"sample covariance is singular below that); got S = {forecast.shape[0]}."
+            "dawid_sebastiani requires an ensemble of size S >= C + 1 (the "
+            "ddof=1 sample covariance is singular below that; S >= 3 for the "
+            f"usual C = 2 lon/lat features); got S = {forecast.shape[0]}, C = {c}."
         )
 
     def _one_t(
-        fcst_t: Float[Array, "S 2"],
-        obs_t: Float[Array, "2"],
+        fcst_t: Float[Array, "S C"],
+        obs_t: Float[Array, "C"],
     ) -> Float[Array, ""]:
         s = fcst_t.shape[0]
         mu = fcst_t.mean(axis=0)
@@ -182,8 +191,8 @@ def dawid_sebastiani(
 
 
 def energy_score(
-    forecast: Float[Array, "S T 2"],
-    obs: Float[Array, "T 2"],
+    forecast: Float[Array, "S T C"],
+    obs: Float[Array, "T C"],
     *,
     kernel: Kernel = l2_distance,
     alpha: float = 1.0,
@@ -230,8 +239,8 @@ def energy_score(
         open hemisphere) the great-circle energy score is strictly proper.
 
     Args:
-        forecast: Ensemble forecast, shape ``(S, T, 2)``, with ``S >= 2``.
-        obs: Observed trajectory, shape ``(T, 2)``.
+        forecast: Ensemble forecast, shape ``(S, T, C)``, with ``S >= 2``.
+        obs: Observed trajectory, shape ``(T, C)``.
         kernel: Broadcasting distance kernel. Defaults to :func:`l2_distance`.
         alpha: Distance exponent (typically in ``(0, 2)``). Default ``1.0``.
         reduce: See :func:`squared_error`.
@@ -280,8 +289,8 @@ def energy_score(
 
 
 def squared_error(
-    forecast: Float[Array, "S T 2"],
-    obs: Float[Array, "T 2"],
+    forecast: Float[Array, "S T C"],
+    obs: Float[Array, "T C"],
     *,
     kernel: Kernel = l2_distance,
     reduce: Reduce = None,
@@ -305,8 +314,8 @@ def squared_error(
         ignored.
 
     Args:
-        forecast: Ensemble forecast, shape ``(S, T, 2)``.
-        obs: Observed trajectory, shape ``(T, 2)``.
+        forecast: Ensemble forecast, shape ``(S, T, C)``.
+        obs: Observed trajectory, shape ``(T, C)``.
         kernel: Broadcasting distance kernel. Defaults to :func:`l2_distance`.
         reduce: Time reduction. ``None`` returns the per-time vector;
             ``"last"`` returns the scalar at the final time; ``"sum"`` returns
@@ -338,8 +347,8 @@ def squared_error(
 
 
 def variogram_score(
-    forecast: Float[Array, "S T 2"],
-    obs: Float[Array, "T 2"],
+    forecast: Float[Array, "S T C"],
+    obs: Float[Array, "T C"],
     *,
     kernel: Kernel = l2_distance,
     p: float = 0.5,
@@ -398,8 +407,8 @@ def variogram_score(
         the complete joint trajectory distribution.
 
     Args:
-        forecast: Ensemble forecast, shape ``(S, T, 2)``, with ``S >= 2``.
-        obs: Observed trajectory, shape ``(T, 2)``.
+        forecast: Ensemble forecast, shape ``(S, T, C)``, with ``S >= 2``.
+        obs: Observed trajectory, shape ``(T, C)``.
         kernel: Broadcasting distance kernel between trajectory states.
             Defaults to :func:`l2_distance`.
         p: Variogram order, ``p > 0``. Defaults to ``0.5``.

@@ -57,6 +57,13 @@ class TestL2Distance:
         g = jax.grad(lambda a: l2_distance(a, y))(x)
         assert jnp.all(jnp.isfinite(g))
 
+    def test_three_features(self):
+        x = jnp.zeros((4, 3, 3))
+        y = jnp.ones((3, 3))
+        d = l2_distance(x, y)
+        assert d.shape == (4, 3)
+        assert jnp.allclose(d, jnp.sqrt(3.0))
+
 
 class TestSquaredError:
     F = jax.random.normal(jax.random.key(202), (5, 4, 2))
@@ -187,6 +194,15 @@ class TestSquaredError:
         expected = squared_error(self.F, self.O, reduce="joint")
         actual = jax.jit(lambda f_, o_: squared_error(f_, o_, reduce="joint"))(self.F, self.O)
         assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_three_features(self):
+        f = jax.random.normal(jax.random.key(210), (6, 4, 3))
+        o = jax.random.normal(jax.random.key(211), (4, 3))
+        per_time = squared_error(f, o)
+        assert per_time.shape == (4,)
+        joint = squared_error(f, o, reduce="joint")
+        expected_joint = l2_distance(f.mean(axis=0).reshape(-1), o.reshape(-1)) ** 2
+        assert float(joint) == pytest.approx(float(expected_joint), rel=1e-5, abs=1e-6)
 
 
 class TestDawidSebastiani:
@@ -465,6 +481,16 @@ class TestEnergyScore:
             energy_score(shifted, o, reduce="joint")
         )
 
+    def test_three_features_joint_and_pointwise(self):
+        f = jax.random.normal(jax.random.key(210), (6, 4, 3))
+        o = jax.random.normal(jax.random.key(211), (4, 3))
+        per_time = energy_score(f, o)
+        assert jnp.all(jnp.isfinite(per_time))
+        joint = energy_score(f, o, reduce="joint")
+        assert jnp.isfinite(joint)
+        expected_joint = _reference_joint_energy_score(f.reshape(6, -1), o.reshape(-1))
+        assert float(joint) == pytest.approx(float(expected_joint), rel=1e-5, abs=1e-6)
+
 
 class TestVariogramScore:
     def test_returns_scalar_and_default_lags(self):
@@ -721,6 +747,11 @@ class TestVariogramScore:
         with pytest.raises(ValueError):
             variogram_score(f, o, lags=(1, 2), lag_weights=jnp.array([-1.0, 2.0]))
 
+    def test_three_features_perfect_forecast_is_zero(self):
+        o = jnp.arange(12.0).reshape(4, 3)
+        f = jnp.broadcast_to(o, (4, 4, 3))
+        assert float(variogram_score(f, o)) == pytest.approx(0.0)
+
 def test_reduce_invalid_value_raises():
     f = jnp.ones((3, 2, 2))
     o = jnp.zeros((2, 2))
@@ -759,3 +790,11 @@ class TestEnsembleSizeValidation:
         obs = jnp.zeros((5, 2))
         with pytest.raises(ValueError, match="S >= 2"):
             variogram_score(forecast, obs)
+
+    def test_dawid_sebastiani_guard_scales_with_features(self):
+        vertices = 0.1 * jnp.array([[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]])
+        f = jnp.broadcast_to(vertices[:, None, :], (4, 3, 3))
+        obs = jnp.zeros((3, 3))
+        with pytest.raises(ValueError, match=r"C \+ 1"):
+            dawid_sebastiani(f[:3], obs)
+        assert jnp.all(jnp.isfinite(dawid_sebastiani(f, obs)))
