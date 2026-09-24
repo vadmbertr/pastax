@@ -1,5 +1,7 @@
 """Tests for score.py: proper scoring rules for ensemble trajectory forecasts."""
 
+import warnings
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -12,6 +14,20 @@ from pastax.score import (
     squared_error,
     variogram_score,
 )
+
+
+def _reference_joint_energy_score(forecast, observation, *, alpha=1.0):
+    """User-supplied reference: ES for one joint vector-valued outcome."""
+    members = forecast.shape[0]
+    if members < 2:
+        raise ValueError("joint_energy_score requires at least two ensemble members.")
+    observation_distances = l2_distance(forecast, observation) ** alpha
+    bias = jnp.mean(observation_distances)
+    pairwise_distances = (
+        l2_distance(forecast[:, None, :], forecast[None, :, :]) ** alpha
+    )
+    dispersion = jnp.mean(pairwise_distances) * members / (members - 1)
+    return bias - dispersion / 2.0
 
 
 class TestL2Distance:
@@ -43,6 +59,9 @@ class TestL2Distance:
 
 
 class TestSquaredError:
+    F = jax.random.normal(jax.random.key(202), (5, 4, 2))
+    O = jax.random.normal(jax.random.key(203), (4, 2))  # noqa: E741
+
     def test_shape_default(self):
         f = jnp.ones((5, 7, 2))
         o = jnp.zeros((7, 2))
@@ -115,6 +134,59 @@ class TestSquaredError:
         s_centered = float(squared_error(centered, o, reduce="sum"))
         s_shifted = float(squared_error(shifted, o, reduce="sum"))
         assert s_centered < s_shifted
+
+    def test_reduce_joint_is_scalar(self):
+        assert squared_error(self.F, self.O, reduce="joint").shape == ()
+
+    def test_reduce_joint_matches_reference(self):
+        expected = l2_distance(self.F.mean(axis=0).reshape(-1), self.O.reshape(-1)) ** 2
+        actual = squared_error(self.F, self.O, reduce="joint")
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_equals_unweighted_sum_for_l2(self):
+        expected = squared_error(self.F, self.O, reduce="sum", weights=None)
+        actual = squared_error(self.F, self.O, reduce="joint")
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_hand_value(self):
+        f = jnp.ones((5, 7, 2))
+        o = jnp.zeros((7, 2))
+        actual = squared_error(f, o, reduce="joint")
+        assert float(actual) == pytest.approx(14.0, rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_validates_shapes(self):
+        with pytest.raises(ValueError, match="matching"):
+            squared_error(self.F, jnp.zeros((6, 2)), reduce="joint")
+
+    def test_reduce_joint_ignores_custom_kernel_with_warning(self):
+        def raising_kernel(x, y):
+            raise RuntimeError("Should not be called")
+        expected = squared_error(self.F, self.O, reduce="joint")
+        with pytest.warns(UserWarning, match="kernel") as caught:
+            actual = squared_error(self.F, self.O, reduce="joint", kernel=raising_kernel)
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+        assert len(caught) == 1
+
+    def test_reduce_joint_no_warning_with_default_kernel(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            squared_error(self.F, self.O, reduce="joint")
+
+    def test_reduce_joint_weights_ignored(self):
+        expected = squared_error(self.F, self.O, reduce="joint")
+        actual = squared_error(self.F, self.O, reduce="joint", weights=jnp.full((4,), jnp.nan))
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_grad_finite(self):
+        f = jnp.ones((4, 3, 2)) * 0.5
+        o = jnp.zeros((3, 2))
+        g = jax.grad(lambda a: squared_error(a, o, reduce="joint"))(f)
+        assert jnp.all(jnp.isfinite(g))
+
+    def test_reduce_joint_jit_equivalence(self):
+        expected = squared_error(self.F, self.O, reduce="joint")
+        actual = jax.jit(lambda f_, o_: squared_error(f_, o_, reduce="joint"))(self.F, self.O)
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
 
 
 class TestDawidSebastiani:
@@ -189,6 +261,9 @@ class TestDawidSebastiani:
 
 
 class TestEnergyScore:
+    F = jax.random.normal(jax.random.key(202), (5, 4, 2))
+    O = jax.random.normal(jax.random.key(203), (4, 2))  # noqa: E741
+
     def test_shape_default(self):
         f = jnp.ones((5, 7, 2))
         o = jnp.zeros((7, 2))
@@ -283,6 +358,98 @@ class TestEnergyScore:
         shifted = centered + jnp.array([1.5, 1.5])
         assert float(energy_score(centered, o, reduce="sum")) < float(
             energy_score(shifted, o, reduce="sum")
+        )
+
+    def test_reduce_joint_is_scalar(self):
+        assert energy_score(self.F, self.O, reduce="joint").shape == ()
+
+    def test_reduce_joint_matches_reference(self):
+        f = jax.random.normal(jax.random.key(200), (6, 5, 2))
+        o = jax.random.normal(jax.random.key(201), (5, 2))
+        for alpha in (0.5, 1.0, 1.5):
+            expected = _reference_joint_energy_score(
+                f.reshape(f.shape[0], -1), o.reshape(-1), alpha=alpha
+            )
+            actual = energy_score(f, o, reduce="joint", alpha=alpha)
+            assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_hand_value(self):
+        f = jnp.array([[[0.0, 0.0], [0.0, 0.0]], [[2.0, 0.0], [2.0, 0.0]]])
+        o = jnp.array([[1.0, 0.0], [0.0, 0.0]])
+        expected = (1 + jnp.sqrt(5)) / 2 - jnp.sqrt(2)
+        actual = energy_score(f, o, reduce="joint")
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_validates_shapes(self):
+        with pytest.raises(ValueError, match="matching"):
+            energy_score(self.F, jnp.zeros((6, 2)), reduce="joint")
+        with pytest.raises(ValueError, match="matching"):
+            energy_score(jnp.zeros((4, 2, 3)), jnp.zeros((3, 2)), reduce="joint")
+        with pytest.raises(ValueError, match="matching"):
+            energy_score(jnp.zeros(6), jnp.zeros(6), reduce="joint")
+
+    def test_reduce_joint_ignores_custom_kernel_with_warning(self):
+        def raising_kernel(x, y):
+            raise RuntimeError("Should not be called")
+        expected = energy_score(self.F, self.O, reduce="joint")
+        with pytest.warns(UserWarning, match="kernel") as caught:
+            actual = energy_score(self.F, self.O, reduce="joint", kernel=raising_kernel)
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+        assert len(caught) == 1
+
+    def test_reduce_joint_no_warning_with_default_kernel(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            energy_score(self.F, self.O, reduce="joint")
+
+    def test_reduce_joint_weights_ignored(self):
+        expected = energy_score(self.F, self.O, reduce="joint")
+        actual = energy_score(self.F, self.O, reduce="joint", weights=jnp.full((4,), jnp.nan))
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_jit_equivalence(self):
+        expected = energy_score(self.F, self.O, reduce="joint")
+        actual = jax.jit(lambda f_, o_: energy_score(f_, o_, reduce="joint"))(self.F, self.O)
+        assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_warns_at_trace_time_under_jit(self):
+        jitted = jax.jit(lambda f_, o_: energy_score(f_, o_, reduce="joint", kernel=haversine))
+        with pytest.warns(UserWarning, match="kernel") as caught:
+            jitted(self.F, self.O)
+        assert len(caught) == 1
+
+    def test_reduce_joint_grad_finite(self):
+        f = jax.random.normal(jax.random.key(204), (6, 3, 2))
+        o = jnp.zeros((3, 2))
+        g = jax.grad(lambda a: energy_score(a, o, reduce="joint"))(f)
+        assert jnp.all(jnp.isfinite(g))
+
+    def test_reduce_joint_grad_finite_at_dirac_ensemble(self):
+        x = jnp.array([1.0, 2.0])
+        f = jnp.broadcast_to(x, (4, 1, 2))
+        o = jnp.array([[0.0, 0.0]])
+        g = jax.grad(lambda a: energy_score(a, o, reduce="joint"))(f)
+        assert jnp.all(jnp.isfinite(g))
+
+    def test_reduce_joint_dirac_value(self):
+        x = jnp.array([[3.0, 4.0], [1.0, 2.0]])
+        y = jnp.array([[0.0, 0.0], [0.0, 0.0]])
+        f = jnp.broadcast_to(x, (6, 2, 2))
+        o = y
+        x_flat = x.reshape(-1)
+        y_flat = y.reshape(-1)
+        for alpha in (1.0, 2.0):
+            expected = l2_distance(x_flat, y_flat) ** alpha
+            actual = energy_score(f, o, reduce="joint", alpha=alpha)
+            assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
+
+    def test_reduce_joint_propriety_smoke(self):
+        key = jax.random.key(15)
+        o = jnp.zeros((3, 2))
+        centered = jax.random.normal(key, (50, 3, 2)) * 0.3
+        shifted = centered + jnp.array([1.5, 1.5])
+        assert float(energy_score(centered, o, reduce="joint")) < float(
+            energy_score(shifted, o, reduce="joint")
         )
 
 
@@ -556,6 +723,12 @@ class TestEnsembleSizeValidation:
         obs = jnp.zeros((5, 2))
         with pytest.raises(ValueError, match="S >= 2"):
             energy_score(forecast, obs)
+
+    def test_energy_score_single_member_joint_raises(self):
+        forecast = jnp.zeros((1, 5, 2))
+        obs = jnp.zeros((5, 2))
+        with pytest.raises(ValueError, match="S >= 2"):
+            energy_score(forecast, obs, reduce="joint")
 
     def test_energy_score_two_members_ok(self):
         forecast = jnp.stack([jnp.zeros((5, 2)), jnp.ones((5, 2))])

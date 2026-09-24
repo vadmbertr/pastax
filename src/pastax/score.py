@@ -20,12 +20,18 @@ The pointwise scores (:func:`squared_error`, :func:`dawid_sebastiani`,
   uniform sum when ``weights`` is ``None``. By Proposition 2 of 
   `Pic et al., 2025`_,
   a non-negative-weighted sum of proper scoring rules is itself proper.
+- ``reduce="joint"`` returns the scalar joint score of the whole
+  trajectory, treated as one flattened ``(T*C,)`` vector; supported by
+  :func:`squared_error` and :func:`energy_score` only
+  (:func:`dawid_sebastiani` raises).
 
 The default distance kernel for :func:`squared_error`, :func:`energy_score`,
 and :func:`variogram_score` is the Euclidean distance. A user may pass any
 callable satisfying the broadcasting kernel contract — notably
 :func:`pastax.metric.separation_distance` for great-circle distances on the
-sphere.
+sphere. Under ``reduce="joint"`` the score always uses :func:`l2_distance` on
+flattened trajectories; a custom ``kernel`` is ignored with a
+:class:`UserWarning`.
 
 :func:`variogram_score` is trajectory-level rather than pointwise in time. It
 compares forecast and observed increments across selected temporal lags and
@@ -36,7 +42,9 @@ returns one scalar score.
     on raw ``[lon, lat]`` coordinates and is not antimeridian-safe. For
     :func:`energy_score` and :func:`variogram_score`, pass a great-circle kernel
     such as :func:`pastax.metric.separation_distance` for geographic
-    trajectories. :func:`squared_error` first computes the component-wise
+    trajectories. Under ``reduce="joint"`` the score always uses :func:`l2_distance` on
+    flattened trajectories; a custom ``kernel`` is ignored with a
+    :class:`UserWarning`. :func:`squared_error` first computes the component-wise
     ensemble mean, so it still requires a consistent longitude convention even
     when the final distance is geodesic. :func:`dawid_sebastiani` has no kernel
     hook and likewise operates directly on raw components.
@@ -45,6 +53,7 @@ returns one scalar score.
 .. _`Pic et al., 2025`: https://doi.org/10.5194/ascmo-11-23-2025
 """
 
+import warnings
 from collections.abc import Callable
 from typing import Literal
 
@@ -61,11 +70,20 @@ __all__ = [
     "variogram_score",
 ]
 
-Reduce = Literal["last", "sum"] | None
+Reduce = Literal["last", "sum", "joint"] | None
 Kernel = Callable[
     [Float[Array, "... 2"], Float[Array, "... 2"]],
     Float[Array, "..."],
 ]
+
+
+def _validate_joint_inputs(forecast, obs) -> None:
+    if forecast.ndim != 3 or obs.ndim != 2 or forecast.shape[1:] != obs.shape:
+        raise ValueError(
+            "reduce='joint' requires forecast of shape (S, T, C) and obs of "
+            "shape (T, C) with matching (T, C); got forecast "
+            f"{forecast.shape}, obs {obs.shape}."
+        )
 
 
 def l2_distance(
@@ -88,7 +106,10 @@ def _reduce(
         if weights is None:
             return score_per_t.sum()
         return (weights * score_per_t).sum()
-    raise ValueError(f"reduce must be None, 'last', or 'sum'; got {reduce!r}")
+    raise ValueError(
+        "reduce must be None, 'last', or 'sum' (or 'joint' for squared_error "
+        f"and energy_score); got {reduce!r}"
+    )
 
 
 def dawid_sebastiani(
@@ -173,6 +194,13 @@ def energy_score(
     zero diagonal) multiplied by ``S/(S-1)``, which recovers the unbiased
     off-diagonal estimator exactly.
 
+    With ``reduce="joint"``, the score is computed on trajectories flattened
+    to ``(S, T*C)`` / ``(T*C,)``: the mean ``l2_distance`` to the
+    observation minus half the ``S/(S-1)``-scaled mean pairwise
+    ``l2_distance``, each raised to ``alpha``. ``forecast`` and ``obs``
+    must have matching ``(T, C)`` trailing shapes. A custom ``kernel`` is
+    ignored (a :class:`UserWarning` is emitted) and ``weights`` is ignored.
+
     Let :math:`d_\alpha(x,y)=\operatorname{kernel}(x,y)^\alpha`. The energy
     score is proper when :math:`d_\alpha` is of negative type, and strictly
     proper when it is of strong negative type. For the Euclidean L2 kernel 
@@ -182,6 +210,8 @@ def energy_score(
         The default :func:`l2_distance` kernel is *not* antimeridian-safe. For
         geographic trajectories, pass a great-circle kernel such as
         :func:`pastax.metric.separation_distance`.
+        This does not apply under ``reduce="joint"``, where the kernel is
+        ignored.
 
         For :math:`\alpha=1`, great-circle (angular/haversine) distance on the
         sphere is of negative type, so the corresponding energy score is
@@ -202,6 +232,30 @@ def energy_score(
     Returns:
         Per-time fair energy score of shape ``(T,)`` or a scalar, per ``reduce``.
     """
+    if reduce == "joint":
+        _validate_joint_inputs(forecast, obs)
+        if kernel is not l2_distance:
+            warnings.warn(
+                "reduce='joint' scores flattened (T*C,) trajectories with the "
+                "L2 distance; the custom kernel is ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
+        s = forecast.shape[0]
+        if s < 2:
+            raise ValueError(
+                "energy_score requires an ensemble of size S >= 2 (the unbiased "
+                f"pairwise term divides by S - 1); got S = {s}."
+            )
+        flat_forecast = forecast.reshape(s, -1)
+        flat_obs = obs.reshape(-1)
+        observation_distances = l2_distance(flat_forecast, flat_obs) ** alpha
+        bias = jnp.mean(observation_distances)
+        pairwise_distances = (
+            l2_distance(flat_forecast[:, None, :], flat_forecast[None, :, :]) ** alpha
+        )
+        dispersion = jnp.mean(pairwise_distances) * s / (s - 1)
+        return bias - dispersion / 2.0
     s = forecast.shape[0]
     if s < 2:
         raise ValueError(
@@ -239,6 +293,8 @@ def squared_error(
         The default :func:`l2_distance` kernel is *not* antimeridian-safe. For
         geographic trajectories, pass a great-circle kernel such as
         :func:`pastax.metric.separation_distance`.
+        This does not apply under ``reduce="joint"``, where the kernel is
+        ignored.
 
     Args:
         forecast: Ensemble forecast, shape ``(S, T, 2)``.
@@ -246,12 +302,28 @@ def squared_error(
         kernel: Broadcasting distance kernel. Defaults to :func:`l2_distance`.
         reduce: Time reduction. ``None`` returns the per-time vector;
             ``"last"`` returns the scalar at the final time; ``"sum"`` returns
-            the (optionally weighted) sum over time.
+            the (optionally weighted) sum over time; ``"joint"`` returns the
+            scalar squared L2 distance between the ensemble-mean trajectory
+            and the observation, both flattened to ``(T*C,)`` (a custom
+            ``kernel`` is ignored with a :class:`UserWarning`; ``weights`` is
+            ignored). With the default L2 kernel, ``reduce="joint"`` equals
+            the UNWEIGHTED ``reduce="sum"``.
         weights: Per-time weights for ``reduce="sum"``; ignored otherwise.
 
     Returns:
         Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
     """
+    if reduce == "joint":
+        _validate_joint_inputs(forecast, obs)
+        if kernel is not l2_distance:
+            warnings.warn(
+                "reduce='joint' scores flattened (T*C,) trajectories with the "
+                "L2 distance; the custom kernel is ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
+        mu = forecast.mean(axis=0).reshape(-1)
+        return l2_distance(mu, obs.reshape(-1)) ** 2
     mu = forecast.mean(axis=0)
     score_per_t = kernel(mu, obs) ** 2
     return _reduce(score_per_t, reduce, weights)
