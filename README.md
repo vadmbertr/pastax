@@ -404,6 +404,10 @@ ds_agg = dawid_sebastiani(ens, ref, reduce="sum")  # scalar
 es_agg = energy_score(ens, ref, reduce="sum")      # scalar
 se_agg = squared_error(ens, ref, reduce="sum")     # scalar
 
+# Joint (whole-trajectory) scores: energy_score and squared_error only
+es_joint = energy_score(ens, ref, reduce="joint")   # scalar
+se_joint = squared_error(ens, ref, reduce="joint")  # scalar
+
 # Trajectory-level score: temporal dependence across lags
 vs = variogram_score(ens, ref)  # scalar
 
