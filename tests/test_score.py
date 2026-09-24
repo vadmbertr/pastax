@@ -190,6 +190,19 @@ class TestSquaredError:
 
 
 class TestDawidSebastiani:
+    def test_reduce_joint_raises(self):
+        key = jax.random.key(10)
+        f = jax.random.normal(key, (10, 5, 2))
+        o = jnp.zeros((5, 2))
+        with pytest.raises(ValueError, match="joint"):
+            dawid_sebastiani(f, o, reduce="joint")
+
+    def test_reduce_joint_raises_before_size_check(self):
+        f = jnp.zeros((2, 5, 2))
+        o = jnp.zeros((5, 2))
+        with pytest.raises(ValueError, match="joint"):
+            dawid_sebastiani(f, o, reduce="joint")
+
     def test_shape_default(self):
         key = jax.random.key(1)
         f = jax.random.normal(key, (10, 5, 2))

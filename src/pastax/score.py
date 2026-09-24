@@ -145,12 +145,20 @@ def dawid_sebastiani(
     Args:
         forecast: Ensemble forecast, shape ``(S, T, 2)``, with ``S >= 3``.
         obs: Observed trajectory, shape ``(T, 2)``.
-        reduce: See :func:`squared_error`.
+        reduce: See :func:`squared_error`. ``"joint"`` is NOT supported and
+            raises :class:`ValueError` (the joint covariance of a flattened
+            ``(T*C,)``-trajectory would require ``S >= T*C + 1`` members).
         weights: See :func:`squared_error`.
 
     Returns:
         Per-time score of shape ``(T,)`` or a scalar, per ``reduce``.
     """
+    if reduce == "joint":
+        raise ValueError(
+            "dawid_sebastiani does not support reduce='joint': the joint covariance "
+            "of a flattened (T*C,)-trajectory would require an ensemble of size "
+            "S >= T*C + 1, which is impractically large for typical trajectories."
+        )
     if forecast.shape[0] < 3:
         raise ValueError(
             "dawid_sebastiani requires an ensemble of size S >= 3 (the ddof=1 "
