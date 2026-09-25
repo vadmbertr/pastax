@@ -4,6 +4,7 @@ from ._safe_math import safe_abs_pow, safe_divide, safe_log, safe_sqrt
 from .forcing import Dataset, Field
 from .geo import (
     EARTH_RADIUS,
+    chordal_projection,
     degrees_to_meters,
     haversine,
     meters_to_degrees,
@@ -40,6 +41,7 @@ __all__ = [
     "safe_divide",
     # geo
     "EARTH_RADIUS",
+    "chordal_projection",
     "haversine",
     "meters_to_degrees",
     "degrees_to_meters",
