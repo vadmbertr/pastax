@@ -6,6 +6,7 @@ from ._safe_math import safe_divide, safe_sqrt
 from ._types import Array, Float
 
 __all__ = [
+    "chordal_projection",
     "EARTH_RADIUS",
     "haversine",
     "meters_to_degrees",
@@ -17,9 +18,39 @@ EARTH_RADIUS: float = 6_371_008.8
 """Mean Earth radius in metres (IUGG 2015 mean radius)."""
 
 
+def chordal_projection(x: Float[Array, "... 2"],) -> Float[Array, "... 3"]:
+    r"""Project ``[lon, lat]`` points onto a sphere of radius :data:`EARTH_RADIUS`.
+
+    The projection is defined as:
+
+    .. math::
+
+        x = R \cos(\varphi) \cos(\lambda) \\
+        y = R \cos(\varphi) \sin(\lambda) \\
+        z = R \sin(\varphi)
+
+    where :math:`R` is the Earth's radius, :math:`\varphi` is the latitude,
+    and :math:`\lambda` is the longitude (in radians).
+
+    Args:
+        x: Point(s) ``[lon, lat]`` in degrees, shape ``(..., 2)``.
+
+    Returns:
+        Point(s) ``[x, y, z]`` in metres, shape ``(..., 3)``.
+    """
+    lon =  jnp.radians(x[..., 0])
+    lat = jnp.radians(x[..., 1])
+
+    x_cartesian = EARTH_RADIUS * jnp.cos(lat) * jnp.cos(lon)
+    y_cartesian = EARTH_RADIUS * jnp.cos(lat) * jnp.sin(lon)
+    z_cartesian = EARTH_RADIUS * jnp.sin(lat)
+
+    return jnp.stack([x_cartesian, y_cartesian, z_cartesian], axis=-1)
+
+
 def haversine(
-    y1: Float[Array, "... 2"],
-    y2: Float[Array, "... 2"],
+    x1: Float[Array, "... 2"],
+    x2: Float[Array, "... 2"],
 ) -> Float[Array, "..."]:
     r"""Great-circle distance between ``[lon, lat]`` points.
 
@@ -40,16 +71,16 @@ def haversine(
     axes broadcast under standard NumPy/JAX rules.
 
     Args:
-        y1: First point(s) ``[lon, lat]`` in degrees, shape ``(..., 2)``.
-        y2: Second point(s) ``[lon, lat]`` in degrees, shape ``(..., 2)``.
+        x1: First point(s) ``[lon, lat]`` in degrees, shape ``(..., 2)``.
+        x2: Second point(s) ``[lon, lat]`` in degrees, shape ``(..., 2)``.
 
     Returns:
         Great-circle distance in metres, with shape matching the broadcast of
-        the leading axes of ``y1`` and ``y2``.
+        the leading axes of ``x1`` and ``x2``.
     """
-    lat1 = jnp.radians(y1[..., 1])
-    lat2 = jnp.radians(y2[..., 1])
-    d = jnp.radians(y1 - y2)
+    lat1 = jnp.radians(x1[..., 1])
+    lat2 = jnp.radians(x2[..., 1])
+    d = jnp.radians(x1 - x2)
     a = jnp.sin(d[..., 1] / 2) ** 2 + jnp.cos(lat1) * jnp.cos(lat2) * jnp.sin(d[..., 0] / 2) ** 2
     c = 2.0 * jnp.arctan2(safe_sqrt(a), safe_sqrt(1.0 - a))
     return EARTH_RADIUS * c

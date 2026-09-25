@@ -6,6 +6,7 @@ import pytest
 
 from pastax.geo import (
     EARTH_RADIUS,
+    chordal_projection,
     degrees_to_meters,
     haversine,
     meters_to_degrees,
@@ -17,7 +18,72 @@ def test_earth_radius():
     assert EARTH_RADIUS == pytest.approx(6_371_008.8)
 
 
+class TestChordalProjection:
+    def test_analytic_anchors(self):
+        points = jnp.array([
+            [0.0, 0.0],
+            [90.0, 0.0],
+            [180.0, 0.0],
+            [0.0, 90.0],
+            [0.0, -90.0],
+        ])
+        expected = jnp.array([
+            [EARTH_RADIUS, 0.0, 0.0],
+            [0.0, EARTH_RADIUS, 0.0],
+            [-EARTH_RADIUS, 0.0, 0.0],
+            [0.0, 0.0, EARTH_RADIUS],
+            [0.0, 0.0, -EARTH_RADIUS],
+        ])
+        got = chordal_projection(points)
+        assert jnp.allclose(got, expected, atol=1e-3)
+
+    def test_unit_sphere_norm(self):
+        points = jax.random.uniform(jax.random.PRNGKey(0), (100, 2), minval=-180, maxval=180)
+        lats = jax.random.uniform(jax.random.PRNGKey(1), (100,), minval=-90, maxval=90)
+        points = points.at[..., 1].set(lats)
+        proj = chordal_projection(points)
+        norms = jnp.linalg.norm(proj, axis=-1)
+        assert jnp.allclose(norms, EARTH_RADIUS, rtol=1e-6)
+
+    def test_shapes_and_broadcasting(self):
+        p1 = jnp.array([10.0, 20.0])
+        assert chordal_projection(p1).shape == (3,)
+        p2 = jnp.zeros((5, 10, 2))
+        assert chordal_projection(p2).shape == (5, 10, 3)
+
+    def test_haversine_chord_identity(self):
+        p1 = jnp.array([10.0, 20.0])
+        p2 = jnp.array([15.0, 25.0])
+        h_dist = haversine(p1, p2)
+        chord_dist = jnp.linalg.norm(chordal_projection(p1) - chordal_projection(p2))
+        expected = 2 * EARTH_RADIUS * jnp.sin(h_dist / (2 * EARTH_RADIUS))
+        assert chord_dist == pytest.approx(expected, rel=1e-4)
+
+    def test_round_trip_approx(self):
+        p = jnp.array([45.0, 30.0])
+        proj = chordal_projection(p)
+        p2 = jnp.array([46.0, 31.0])
+        assert not jnp.allclose(proj, chordal_projection(p2))
+
+    def test_antimeridian_equivalence(self):
+        p1 = jnp.array([180.0, 10.0])
+        p2 = jnp.array([-180.0, 10.0])
+        assert jnp.allclose(chordal_projection(p1), chordal_projection(p2), atol=1e-3)
+
+    def test_jax_transforms(self):
+        p = jnp.array([10.0, 20.0])
+        jit_proj = jax.jit(chordal_projection)
+        assert jnp.allclose(jit_proj(p), chordal_projection(p))
+        pts = jnp.array([[10.0, 20.0], [20.0, 30.0]])
+        vmap_proj = jax.vmap(chordal_projection)
+        assert jnp.allclose(vmap_proj(pts), chordal_projection(pts))
+        grad_fn = jax.grad(lambda x: jnp.sum(chordal_projection(x)**2))
+        g = grad_fn(p)
+        assert jnp.all(jnp.isfinite(g))
+
+
 class TestHaversine:
+
     def test_same_point_is_zero(self):
         y = jnp.array([2.0, 48.0])
         assert float(haversine(y, y)) == pytest.approx(0.0, abs=1e-3)
