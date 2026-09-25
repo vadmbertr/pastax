@@ -318,11 +318,14 @@ patches = dataset.neighborhood(t, lon, lat, lat_window=1, lon_window=1)
 ### Geographic conversions
 
 ```python
-from pastax import meters_to_degrees, degrees_to_meters
+from pastax import chordal_projection, degrees_to_meters, meters_to_degrees
 
 disp_m = jnp.array([500.0, 1000.0])            # [east, north] metres
 lat_ref = jnp.array(45.0)
 disp_deg = meters_to_degrees(disp_m, lat_ref)  # [dlon, dlat] degrees
+
+# Earth-centred coordinates for Euclidean operations on geographic points
+trajectory_xyz = chordal_projection(trajectory)  # (..., 3), metres
 ```
 
 ### Backwards-in-time integration
@@ -387,7 +390,13 @@ li_ens  = liu_index(ensemble, reference)            # (S, T)
 ### Scoring rules
 
 ```python
-from pastax import dawid_sebastiani, energy_score, squared_error, variogram_score
+from pastax import (
+    chordal_projection,
+    dawid_sebastiani,
+    energy_score,
+    squared_error,
+    variogram_score,
+)
 
 # Along trajectory scores
 ds_ts = dawid_sebastiani(ens, ref, reduce=None)  # (T,)
@@ -404,16 +413,19 @@ ds_agg = dawid_sebastiani(ens, ref, reduce="sum")  # scalar
 es_agg = energy_score(ens, ref, reduce="sum")      # scalar
 se_agg = squared_error(ens, ref, reduce="sum")     # scalar
 
-# Joint (whole-trajectory) scores: energy_score and squared_error only
-es_joint = energy_score(ens, ref, reduce="joint")   # scalar
-se_joint = squared_error(ens, ref, reduce="joint")  # scalar
+# Joint scores flatten each trajectory and use Euclidean distance.
+# Project geographic coordinates first to handle the antimeridian.
+ens_xyz = chordal_projection(ens)
+ref_xyz = chordal_projection(ref)
+es_joint = energy_score(ens_xyz, ref_xyz, reduce="joint")   # scalar
+se_joint = squared_error(ens_xyz, ref_xyz, reduce="joint")  # scalar
 
 # Trajectory-level score: temporal dependence across lags
 vs = variogram_score(ens, ref)  # scalar
 
 # Custom score kernel (squared error, energy score, and variogram score)
-es_agg = energy_score(ens, ref, kernel=separation_distance)
-se_agg = squared_error(ens, ref, kernel=separation_distance)
+es_agg = energy_score(ens, ref, kernel=separation_distance, reduce="sum")
+se_agg = squared_error(ens, ref, kernel=separation_distance, reduce="sum")
 variogram_score(ens, ref, kernel=separation_distance)
 ```
 

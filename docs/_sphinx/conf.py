@@ -34,8 +34,6 @@ napoleon_use_rtype = True
 
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
-# Render parameter defaults as their source token (``kernel=l2_distance``)
-# rather than the evaluated repr (``kernel=<function l2_distance>``).
 autodoc_preserve_defaults = True
 autodoc_default_options = {
     "members": True,
