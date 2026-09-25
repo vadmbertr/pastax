@@ -10,7 +10,7 @@ from pastax.geo import haversine
 from pastax.score import (
     dawid_sebastiani,
     energy_score,
-    l2_distance,
+    euclidean_distance,
     squared_error,
     variogram_score,
 )
@@ -21,10 +21,10 @@ def _reference_joint_energy_score(forecast, observation, *, alpha=1.0):
     members = forecast.shape[0]
     if members < 2:
         raise ValueError("joint_energy_score requires at least two ensemble members.")
-    observation_distances = l2_distance(forecast, observation) ** alpha
+    observation_distances = euclidean_distance(forecast, observation) ** alpha
     bias = jnp.mean(observation_distances)
     pairwise_distances = (
-        l2_distance(forecast[:, None, :], forecast[None, :, :]) ** alpha
+        euclidean_distance(forecast[:, None, :], forecast[None, :, :]) ** alpha
     )
     dispersion = jnp.mean(pairwise_distances) * members / (members - 1)
     return bias - dispersion / 2.0
@@ -34,33 +34,33 @@ class TestL2Distance:
     def test_broadcasts(self):
         x = jnp.zeros((4, 3, 2))
         y = jnp.ones((3, 2))
-        d = l2_distance(x, y)
+        d = euclidean_distance(x, y)
         assert d.shape == (4, 3)
         assert jnp.allclose(d, jnp.sqrt(2.0))
 
     def test_pairwise_broadcast(self):
         x = jnp.arange(6.0).reshape(3, 2)
-        pairwise = l2_distance(x[:, None], x[None])
+        pairwise = euclidean_distance(x[:, None], x[None])
         assert pairwise.shape == (3, 3)
         assert jnp.allclose(jnp.diag(pairwise), jnp.zeros(3))
         assert jnp.allclose(pairwise, pairwise.T)
 
     def test_grad_finite_at_zero(self):
         x = jnp.array([1.0, 2.0])
-        g = jax.grad(lambda a: l2_distance(a, x))(x)
+        g = jax.grad(lambda a: euclidean_distance(a, x))(x)
         assert jnp.all(jnp.isfinite(g))
         assert jnp.allclose(g, jnp.zeros_like(g))
 
     def test_grad_finite_away_from_zero(self):
         x = jnp.array([0.0, 0.0])
         y = jnp.array([3.0, 4.0])
-        g = jax.grad(lambda a: l2_distance(a, y))(x)
+        g = jax.grad(lambda a: euclidean_distance(a, y))(x)
         assert jnp.all(jnp.isfinite(g))
 
     def test_three_features(self):
         x = jnp.zeros((4, 3, 3))
         y = jnp.ones((3, 3))
-        d = l2_distance(x, y)
+        d = euclidean_distance(x, y)
         assert d.shape == (4, 3)
         assert jnp.allclose(d, jnp.sqrt(3.0))
 
@@ -146,7 +146,7 @@ class TestSquaredError:
         assert squared_error(self.F, self.O, reduce="joint").shape == ()
 
     def test_reduce_joint_matches_reference(self):
-        expected = l2_distance(self.F.mean(axis=0).reshape(-1), self.O.reshape(-1)) ** 2
+        expected = euclidean_distance(self.F.mean(axis=0).reshape(-1), self.O.reshape(-1)) ** 2
         actual = squared_error(self.F, self.O, reduce="joint")
         assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
 
@@ -201,7 +201,7 @@ class TestSquaredError:
         per_time = squared_error(f, o)
         assert per_time.shape == (4,)
         joint = squared_error(f, o, reduce="joint")
-        expected_joint = l2_distance(f.mean(axis=0).reshape(-1), o.reshape(-1)) ** 2
+        expected_joint = euclidean_distance(f.mean(axis=0).reshape(-1), o.reshape(-1)) ** 2
         assert float(joint) == pytest.approx(float(expected_joint), rel=1e-5, abs=1e-6)
 
 
@@ -468,7 +468,7 @@ class TestEnergyScore:
         x_flat = x.reshape(-1)
         y_flat = y.reshape(-1)
         for alpha in (1.0, 2.0):
-            expected = l2_distance(x_flat, y_flat) ** alpha
+            expected = euclidean_distance(x_flat, y_flat) ** alpha
             actual = energy_score(f, o, reduce="joint", alpha=alpha)
             assert float(actual) == pytest.approx(float(expected), rel=1e-5, abs=1e-6)
 
@@ -609,7 +609,7 @@ class TestVariogramScore:
         o = jnp.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
         f = jnp.broadcast_to(o, (4, 3, 2)) + jax.random.normal(jax.random.key(50), (4, 3, 2)) * 0.1
         s_l2 = variogram_score(f, o)
-        s_custom = variogram_score(f, o, kernel=lambda x, y: 2 * l2_distance(x, y))
+        s_custom = variogram_score(f, o, kernel=lambda x, y: 2 * euclidean_distance(x, y))
         assert float(s_l2) != float(s_custom)
         
         traj = jnp.array([[2.0, 48.0], [3.0, 49.0], [4.0, 50.0]])
